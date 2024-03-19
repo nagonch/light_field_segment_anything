@@ -1,0 +1,13 @@
+/venv
+*.ipynb
+*.mat
+/__pycache__
+/.ipynb_checkpoints
+*.jpeg
+*.png
+*.txt
+*.mp4
+*.npy
+*.pth
+*.pt
+*.pyc
