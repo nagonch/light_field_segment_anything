@@ -1,38 +1,14 @@
-from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 import numpy as np
-from PIL import Image
+
 import torch
 from tqdm import tqdm
 import yaml
 import os
 import imgviz
-from utils import unravel_index
+from utils import visualize_segments, get_sam, get_LF, CONFIG
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
-
-with open("segmentation_config.yaml") as f:
-    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-
-def get_sam():
-    sam = sam_model_registry["default"](checkpoint="SAM_model/sam_vit_h.pth")
-    sam.to(device="cuda")
-    mask_generator = SamAutomaticMaskGenerator(sam)
-
-    return mask_generator
-
-
-def get_LF(dir):
-    subviews = []
-    for img in list(sorted(os.listdir(dir))):
-        path = dir + "/" + img
-        subviews.append(np.array(Image.open(path))[:, :, :3])
-    n_apertures = int(np.sqrt(len(subviews)))
-    u, v, c = subviews[0].shape
-    LF = np.stack(subviews).reshape(n_apertures, n_apertures, u, v, c).astype(np.uint8)
-
-    return LF
 
 
 def segment_LF(mask_generator, LF):
@@ -137,10 +113,10 @@ def visualize_segments(segments, LF, st_border=None, filename=None):
 
 def main(
     LF_dir,
-    segments_filename="segments.pt",
-    merged_filename="merged.pt",
-    segments_checkpoint=False,
-    vis_filename=None,
+    segments_filename=CONFIG["segments-filename"],
+    merged_filename=CONFIG["merged-filename"],
+    segments_checkpoint=CONFIG["sam-segments-checkpoint"],
+    vis_filename=CONFIG["vis-filename"],
 ):
     LF = get_LF(LF_dir)
     mask_generator = get_sam()
@@ -163,4 +139,4 @@ def main(
 
 if __name__ == "__main__":
     dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
-    segments = main(dir, segments_checkpoint=True, vis_filename="plot.png")
+    segments = main(dir)
