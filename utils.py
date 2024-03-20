@@ -3,19 +3,10 @@ import imgviz
 from PIL import Image
 from matplotlib import pyplot as plt
 import os
-from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 import yaml
 
 with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-
-def get_sam():
-    sam = sam_model_registry["default"](checkpoint=CONFIG["model-path"])
-    sam.to(device="cuda")
-    mask_generator = SamAutomaticMaskGenerator(sam)
-
-    return mask_generator
 
 
 def get_LF(dir):
