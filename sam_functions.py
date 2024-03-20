@@ -1,14 +1,33 @@
 from utils import CONFIG
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
+from segment_anything.utils.amg import build_all_layer_point_grids
+import torch
 
 
-def get_sam():
+def get_sam(return_generator=True):
     sam = sam_model_registry["default"](checkpoint=CONFIG["model-path"])
-    sam.to(device="cuda")
+    sam = sam.to(device="cuda")
+    if not return_generator:
+        return sam
     mask_generator = SamAutomaticMaskGenerator(sam)
 
     return mask_generator
 
 
+def get_prompt_embeddings(sam, n_points_per_side=32):
+    input_points = torch.tensor(
+        build_all_layer_point_grids(n_points_per_side, 0, 1)[0]
+    ).cuda()
+    input_labels = torch.tensor([1 for _ in range(input_points.shape[0])]).cuda()[None]
+    input_points = input_points[None]
+    sparse_prompt_embedding, dense_prompt_embedding = sam.prompt_encoder(
+        (input_points, input_labels), None, None
+    )
+
+    return sparse_prompt_embedding, dense_prompt_embedding
+
+
 if __name__ == "__main__":
-    pass
+    sam = get_sam(return_generator=False)
+    sparse_prompt_embedding, dense_prompt_embedding = get_prompt_embeddings(sam)
+    print(sparse_prompt_embedding.shape, dense_prompt_embedding.shape)
