@@ -6,7 +6,7 @@ from torch import nn
 
 
 def get_sam(return_generator=True):
-    sam = sam_model_registry["default"](checkpoint=CONFIG["model-path"])
+    sam = sam_model_registry["vit_b"](checkpoint=CONFIG["model-path"])
     sam = sam.to(device="cuda")
     if not return_generator:
         return sam
@@ -35,12 +35,26 @@ class SimpleSAM(nn.Module):
 
         return sparse_prompt_embedding, dense_prompt_embedding
 
+    def forward(self, imgs):
+        imgs = torch.stack([self.sam.preprocess(x) for x in imgs], dim=0)
+        image_embeddings = self.sam.image_encoder(imgs)
+
+        return image_embeddings
+
 
 if __name__ == "__main__":
     sam = get_sam(return_generator=False)
     simp_sam = SimpleSAM(sam)
-    sparse_prompt_embedding, dense_prompt_embedding = (
-        simp_sam.sparse_prompt_emb,
-        simp_sam.dense_prompt_emb,
-    )
-    print(sparse_prompt_embedding.shape, dense_prompt_embedding.shape)
+    import os
+    from PIL import Image
+    import numpy as np
+
+    dir = "/home/cedaradmin/data/lf_angular/LFPlane/f00051/png"
+    subviews = []
+    for img in list(sorted(os.listdir(dir))):
+        path = dir + "/" + img
+        subviews.append(np.array(Image.open(path))[:, :, :3])
+    LF = np.stack(subviews).reshape(17, 17, 128, 128, 3).astype(np.uint8)
+    batch = torch.tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float().cuda()[:1]
+    embs = simp_sam.forward(batch)
+    print(embs.shape)
