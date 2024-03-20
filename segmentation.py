@@ -106,7 +106,6 @@ def visualize_segments(segments, LF, st_border=None, filename=None):
         colormap=imgviz.label_colormap(segments.max() + 1),
     )
     plt.imshow(vis)
-    plt.show()
     if filename:
         plt.savefig(filename)
     plt.close()
