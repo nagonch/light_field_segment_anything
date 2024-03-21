@@ -17,8 +17,9 @@ def get_sam(return_generator=True):
 
 
 class SimpleSAM(nn.Module):
-    def __init__(self, sam):
+    def __init__(self, sam, img_size=(128, 128)):
         super().__init__()
+        self.img_size = img_size
         self.sam = sam
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
@@ -30,6 +31,10 @@ class SimpleSAM(nn.Module):
         input_labels = torch.tensor([1 for _ in range(input_points.shape[0])]).cuda()[
             None
         ]
+        new_w, new_h = (1024, 1024)
+        old_w, old_h = (1, 1)
+        input_points[..., 0] = input_points[..., 0] * (new_w / old_w)
+        input_points[..., 1] = input_points[..., 1] * (new_h / old_h)
         input_points = input_points[None]
         sparse_prompt_embedding, dense_prompt_embedding = self.sam.prompt_encoder(
             (input_points, input_labels), None, None
@@ -51,7 +56,6 @@ class SimpleSAM(nn.Module):
         self,
         batch,
     ):
-        img_original_size = batch.shape[-2:]
         batch = self.preprocess_batch(batch)
         image_embeddings = self.sam.image_encoder(batch)
         low_res_masks, iou_predictions = self.sam.mask_decoder(
@@ -64,7 +68,7 @@ class SimpleSAM(nn.Module):
         masks = self.sam.postprocess_masks(
             low_res_masks,
             input_size=batch.shape[-2:],
-            original_size=img_original_size,
+            original_size=self.img_size,
         )
         masks = masks > self.sam.mask_threshold
         return {
