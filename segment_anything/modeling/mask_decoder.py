@@ -79,7 +79,6 @@ class MaskDecoder(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
-        reduce_output=True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
@@ -101,7 +100,6 @@ class MaskDecoder(nn.Module):
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
-            reduce_output=reduce_output,
         )
 
         # Select the correct mask or masks for output
@@ -121,7 +119,6 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
-        reduce_output=True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -132,44 +129,34 @@ class MaskDecoder(nn.Module):
             sparse_prompt_embeddings.size(0), -1, -1
         )
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
-        masks_batches = []
-        iou_pred_batches = []
-        for i in range(image_embeddings.shape[0]):
-            # Expand per-image data in batch direction to be per-mask
-            # src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
-            src = torch.repeat_interleave(
-                image_embeddings[i][None], tokens.shape[0], dim=0
+
+        # Expand per-image data in batch direction to be per-mask
+        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        src = src + dense_prompt_embeddings
+        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        b, c, h, w = src.shape
+
+        # Run the transformer
+        hs, src = self.transformer(src, pos_src, tokens)
+        iou_token_out = hs[:, 0, :]
+        mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
+
+        # Upscale mask embeddings and predict masks using the mask tokens
+        src = src.transpose(1, 2).view(b, c, h, w)
+        upscaled_embedding = self.output_upscaling(src)
+        hyper_in_list: List[torch.Tensor] = []
+        for i in range(self.num_mask_tokens):
+            hyper_in_list.append(
+                self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :])
             )
-            src = src + dense_prompt_embeddings
-            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
-            # pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
-            b, c, h, w = src.shape
+        hyper_in = torch.stack(hyper_in_list, dim=1)
+        b, c, h, w = upscaled_embedding.shape
+        masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
 
-            # Run the transformer
-            hs, src = self.transformer(src, pos_src, tokens)
-            iou_token_out = hs[:, 0, :]
-            mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
+        # Generate mask quality predictions
+        iou_pred = self.iou_prediction_head(iou_token_out)
 
-            # Upscale mask embeddings and predict masks using the mask tokens
-            src = src.transpose(1, 2).view(b, c, h, w)
-            upscaled_embedding = self.output_upscaling(src)
-            hyper_in_list: List[torch.Tensor] = []
-            for i in range(self.num_mask_tokens):
-                hyper_in_list.append(
-                    self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :])
-                )
-            hyper_in = torch.stack(hyper_in_list, dim=1)
-            b, c, h, w = upscaled_embedding.shape
-            masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
-
-            # Generate mask quality predictions
-            iou_pred = self.iou_prediction_head(iou_token_out)
-            masks_batches.append(masks)
-            iou_pred_batches.append(iou_pred)
-        if image_embeddings.shape[0] == 1 and reduce_output:
-            return masks, iou_pred
-        else:
-            return torch.stack(masks_batches), torch.stack(iou_pred_batches)
+        return masks, iou_pred
 
 
 # Lightly adapted from
