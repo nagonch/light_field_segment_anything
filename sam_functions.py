@@ -28,14 +28,16 @@ class SimpleSAM(nn.Module):
         input_points = torch.tensor(
             build_all_layer_point_grids(n_points_per_side, 0, 1)[0]
         ).cuda()
-        input_labels = torch.tensor([1 for _ in range(input_points.shape[0])]).cuda()[
-            None
-        ]
+        input_labels = (
+            torch.tensor([1 for _ in range(input_points.shape[0])])
+            .cuda()[None]
+            .permute(1, 0)
+        )
         new_w, new_h = (1024, 1024)
         old_w, old_h = (1, 1)
         input_points[..., 0] = input_points[..., 0] * (new_w / old_w)
         input_points[..., 1] = input_points[..., 1] * (new_h / old_h)
-        input_points = input_points[None]
+        input_points = input_points[None].permute(1, 0, 2)
         sparse_prompt_embedding, dense_prompt_embedding = self.sam.prompt_encoder(
             (input_points, input_labels), None, None
         )
@@ -55,14 +57,17 @@ class SimpleSAM(nn.Module):
     def forward(
         self,
         batch,
+        return_logits=False,
     ):
         batch = self.preprocess_batch(batch)
         image_embeddings = self.sam.image_encoder(batch)
+        sparse_emb = self.sparse_prompt_emb[:64]
+        dense_emb = self.dense_prompt_emb[:64]
         low_res_masks, iou_predictions = self.sam.mask_decoder(
             image_embeddings=image_embeddings,
             image_pe=self.sam.prompt_encoder.get_dense_pe(),
-            sparse_prompt_embeddings=self.sparse_prompt_emb,
-            dense_prompt_embeddings=self.dense_prompt_emb,
+            sparse_prompt_embeddings=sparse_emb,
+            dense_prompt_embeddings=dense_emb,
             multimask_output=True,
         )
         masks = self.sam.postprocess_masks(
@@ -70,7 +75,8 @@ class SimpleSAM(nn.Module):
             input_size=batch.shape[-2:],
             original_size=self.img_size,
         )
-        masks = masks > self.sam.mask_threshold
+        if not return_logits:
+            masks = masks > self.sam.mask_threshold
         return {
             "masks": masks,
             "iou_predictions": iou_predictions,
@@ -86,26 +92,15 @@ if __name__ == "__main__":
     from torchvision.transforms.functional import resize
     from matplotlib import pyplot as plt
     import imgviz
+    from utils import get_LF
 
     sam = get_sam(return_generator=False)
     simple_sam = SimpleSAM(sam)
-    dir = "/home/cedaradmin/data/lf_angular/LFPlane/f00051/png"
-    subviews = []
-    for img in list(sorted(os.listdir(dir))):
-        path = dir + "/" + img
-        subviews.append(np.array(Image.open(path))[:, :, :3])
-    LF = np.stack(subviews).reshape(17, 17, 128, 128, 3).astype(np.uint8)
+    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
+    LF = get_LF(dir)
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
     result = simple_sam(batch)
-    masks = result["masks"].to(torch.int32)
-    img1 = batch[1].permute(1, 2, 0).detach().cpu().numpy()
-    masks1 = masks[1].detach().cpu().numpy()
-    for mask in masks1:
+    masks = result["masks"].to(torch.int32).flatten(0, 1).detach().cpu().numpy()
+    for mask in masks:
         plt.imshow(mask, cmap="gray")
-        # vis = imgviz.label2rgb(
-        #     label=mask,
-        #     image=img1 * (mask == 1)[:, :, None],
-        #     colormap=imgviz.label_colormap(mask.max() + 1),
-        # )
-        # plt.imshow(vis)
         plt.show()
