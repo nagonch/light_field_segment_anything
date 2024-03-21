@@ -37,9 +37,23 @@ class SimpleSAM(nn.Module):
         return sparse_prompt_embedding, dense_prompt_embedding
 
     @torch.no_grad()
-    def forward(self, imgs):
-        imgs = torch.stack([self.sam.preprocess(x) for x in imgs], dim=0)
-        image_embeddings = self.sam.image_encoder(imgs)
+    def preprocess_batch(self, batch):
+        batch = resize(
+            batch.reshape(-1, batch.shape[-2], batch.shape[-1]),
+            (1024, 1024),
+            antialias=True,
+        ).reshape(batch.shape[0], 3, 1024, 1024)
+        batch = torch.stack([self.sam.preprocess(x) for x in batch], dim=0)
+        return batch
+
+    @torch.no_grad()
+    def forward(
+        self,
+        batch,
+    ):
+        img_original_size = batch.shape[-2:]
+        batch = self.preprocess_batch(batch)
+        image_embeddings = self.sam.image_encoder(batch)
         low_res_masks, iou_predictions = self.sam.mask_decoder(
             image_embeddings=image_embeddings,
             image_pe=self.sam.prompt_encoder.get_dense_pe(),
@@ -47,7 +61,17 @@ class SimpleSAM(nn.Module):
             dense_prompt_embeddings=self.dense_prompt_emb,
             multimask_output=True,
         )
-        return low_res_masks, iou_predictions
+        masks = self.sam.postprocess_masks(
+            low_res_masks,
+            input_size=batch.shape[-2:],
+            original_size=img_original_size,
+        )
+        masks = masks > self.sam.mask_threshold
+        return {
+            "masks": masks,
+            "iou_predictions": iou_predictions,
+            "low_res_logits": low_res_masks,
+        }
 
 
 if __name__ == "__main__":
@@ -67,11 +91,6 @@ if __name__ == "__main__":
     LF = np.stack(subviews).reshape(17, 17, 128, 128, 3).astype(np.uint8)
     img = LF[0][0]
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
-    batch = resize(
-        batch.reshape(-1, batch.shape[-2], batch.shape[-1]),
-        (1024, 1024),
-        antialias=True,
-    ).reshape(batch.shape[0], 3, 1024, 1024)
-    low_res_masks, iou_predictions = simple_sam(batch)
-    print(low_res_masks)
-    print(iou_predictions)
+    result = simple_sam(batch)
+    print(result.keys())
+    print(result)
