@@ -3,6 +3,7 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
+from torchvision.transforms.functional import resize
 
 
 def get_sam(return_generator=True):
@@ -43,18 +44,34 @@ class SimpleSAM(nn.Module):
 
 
 if __name__ == "__main__":
-    sam = get_sam(return_generator=False)
-    simp_sam = SimpleSAM(sam)
     import os
     from PIL import Image
     import numpy as np
+    from segment_anything import SamPredictor
+    from torchvision.transforms.functional import resize
 
+    sam = get_sam(return_generator=False)
+    predictor = SamPredictor(sam)
     dir = "/home/cedaradmin/data/lf_angular/LFPlane/f00051/png"
     subviews = []
     for img in list(sorted(os.listdir(dir))):
         path = dir + "/" + img
         subviews.append(np.array(Image.open(path))[:, :, :3])
     LF = np.stack(subviews).reshape(17, 17, 128, 128, 3).astype(np.uint8)
-    batch = torch.tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float().cuda()[:1]
-    embs = simp_sam.forward(batch)
-    print(embs.shape)
+    img = LF[0][0]
+    batch = (
+        torch.as_tensor(LF[0:2, 0], device=predictor.device)
+        .permute(0, -1, 1, 2)
+        .float()[:1]
+    )
+    batch = resize(
+        batch.reshape(-1, batch.shape[-2], batch.shape[-1]),
+        (1024, 1024),
+        antialias=True,
+    ).reshape(batch.shape[0], 3, 1024, 1024)
+    batch = batch.contiguous()
+    batch = predictor.model.preprocess(batch)
+    predictor.original_size = (128, 128)
+    with torch.no_grad():
+        feature = predictor.model.image_encoder(batch)
+    print(feature.shape)
