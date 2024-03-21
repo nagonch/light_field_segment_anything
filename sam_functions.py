@@ -80,6 +80,8 @@ if __name__ == "__main__":
     import numpy as np
     from segment_anything import SamPredictor
     from torchvision.transforms.functional import resize
+    from matplotlib import pyplot as plt
+    import imgviz
 
     sam = get_sam(return_generator=False)
     simple_sam = SimpleSAM(sam)
@@ -89,8 +91,17 @@ if __name__ == "__main__":
         path = dir + "/" + img
         subviews.append(np.array(Image.open(path))[:, :, :3])
     LF = np.stack(subviews).reshape(17, 17, 128, 128, 3).astype(np.uint8)
-    img = LF[0][0]
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
     result = simple_sam(batch)
-    print(result.keys())
-    print(result)
+    masks = result["masks"].to(torch.int32)
+    img1 = batch[1].permute(1, 2, 0).detach().cpu().numpy()
+    masks1 = masks[1].detach().cpu().numpy()
+    for mask in masks1:
+        plt.imshow(mask, cmap="gray")
+        # vis = imgviz.label2rgb(
+        #     label=mask,
+        #     image=img1 * (mask == 1)[:, :, None],
+        #     colormap=imgviz.label_colormap(mask.max() + 1),
+        # )
+        # plt.imshow(vis)
+        plt.show()
