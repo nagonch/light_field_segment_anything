@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torchvision.transforms.functional import resize
 from segment_anything.utils.amg import batch_iterator
+from utils import CONFIG
 
 
 def get_sam(return_generator=True):
@@ -18,7 +19,9 @@ def get_sam(return_generator=True):
 
 
 class SimpleSAM(nn.Module):
-    def __init__(self, sam, img_size=(128, 128), points_per_batch=64):
+    def __init__(
+        self, sam, img_size=(128, 128), points_per_batch=CONFIG["points-per-batch"]
+    ):
         super().__init__()
         self.img_size = img_size
         self.sam = sam
@@ -26,7 +29,7 @@ class SimpleSAM(nn.Module):
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
     @torch.no_grad()
-    def get_prompt_embeddings(self, n_points_per_side=32):
+    def get_prompt_embeddings(self, n_points_per_side=CONFIG["points-per-side"]):
         input_points = torch.tensor(
             build_all_layer_point_grids(n_points_per_side, 0, 1)[0]
         ).cuda()
@@ -69,7 +72,6 @@ class SimpleSAM(nn.Module):
         )
         masks_batches = []
         iou_predictions_batches = []
-        low_res_logits_batches = []
         for sparse_emb, dense_emb in batch_iteration:
             low_res_masks, iou_predictions = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
@@ -77,6 +79,7 @@ class SimpleSAM(nn.Module):
                 sparse_prompt_embeddings=sparse_emb[0],
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
+                reduce_output=False,
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
@@ -84,32 +87,21 @@ class SimpleSAM(nn.Module):
                 input_size=batch.shape[-2:],
                 original_size=self.img_size,
             )
-            masks = masks.reshape(
-                batch_shape, n_points, c, masks.shape[-2], masks.shape[-1]
-            )
+            masks = masks.reshape(batch_shape, -1, masks.shape[-2], masks.shape[-1])
             if not return_logits:
                 masks = masks > self.sam.mask_threshold
             masks_batches.append(masks)
-            iou_predictions_batches.append(iou_predictions)
-            low_res_logits_batches.append(low_res_masks)
-        masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4, 5)
-        iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2, 3)
-        low_res_logits = torch.stack(low_res_logits_batches).permute(1, 0, 2, 3, 4, 5)
+            iou_predictions_batches.append(iou_predictions.reshape(batch_shape, -1))
+        masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4)
+        iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2)
         masks = masks.reshape(masks.shape[0], -1, masks.shape[-2], masks.shape[-1])
         iou_predictions = iou_predictions.reshape(
             iou_predictions.shape[0],
             -1,
         )
-        low_res_logits = low_res_logits.reshape(
-            low_res_logits.shape[0],
-            -1,
-            low_res_logits.shape[-2],
-            low_res_logits.shape[-1],
-        )
         return {
             "masks": masks,
             "iou_predictions": iou_predictions,
-            "low_res_logits": low_res_logits,
         }
 
 
@@ -127,9 +119,11 @@ if __name__ == "__main__":
     simple_sam = SimpleSAM(sam)
     dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
     LF = get_LF(dir)
-    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
+    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:2]
     result = simple_sam(batch)
-    masks = result["masks"].to(torch.int32)[0].detach().cpu().numpy()
+    masks = result["masks"].to(torch.int32).detach().cpu().numpy()
+    print(masks.shape)
+    raise
     for mask in masks:
         plt.imshow(mask, cmap="gray")
         plt.show()

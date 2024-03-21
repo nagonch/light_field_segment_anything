@@ -5,3 +5,5 @@ segments-filename: "segments.pt"
 merged-filename: "merged.pt"
 vis-filename: "plot.png"
 sam-segments-checkpoint: True
+points-per-side: 16
+points-per-batch: 64
