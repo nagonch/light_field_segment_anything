@@ -163,7 +163,10 @@ class MaskDecoder(nn.Module):
             iou_pred = self.iou_prediction_head(iou_token_out)
             masks_batches.append(masks)
             iou_pred_batches.append(iou_pred)
-        return torch.stack(masks_batches), torch.stack(iou_pred_batches)
+        if image_embeddings.shape[0] == 1:
+            return masks, iou_pred
+        else:
+            return torch.stack(masks_batches), torch.stack(iou_pred_batches)
 
 
 # Lightly adapted from
