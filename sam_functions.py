@@ -34,15 +34,20 @@ class SimpleSAM(nn.Module):
         sparse_prompt_embedding, dense_prompt_embedding = self.sam.prompt_encoder(
             (input_points, input_labels), None, None
         )
-
         return sparse_prompt_embedding, dense_prompt_embedding
 
     @torch.no_grad()
     def forward(self, imgs):
         imgs = torch.stack([self.sam.preprocess(x) for x in imgs], dim=0)
         image_embeddings = self.sam.image_encoder(imgs)
-
-        return image_embeddings
+        low_res_masks, iou_predictions = self.sam.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_pe=self.sam.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=self.sparse_prompt_emb,
+            dense_prompt_embeddings=self.dense_prompt_emb,
+            multimask_output=True,
+        )
+        return low_res_masks, iou_predictions
 
 
 if __name__ == "__main__":
@@ -67,5 +72,6 @@ if __name__ == "__main__":
         (1024, 1024),
         antialias=True,
     ).reshape(batch.shape[0], 3, 1024, 1024)
-    embeddings = simple_sam(batch)
-    print(embeddings.shape)
+    low_res_masks, iou_predictions = simple_sam(batch)
+    print(low_res_masks)
+    print(iou_predictions)
