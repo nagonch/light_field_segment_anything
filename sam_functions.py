@@ -4,7 +4,15 @@ from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
 from torchvision.transforms.functional import resize
-from segment_anything.utils.amg import batch_iterator, MaskData
+from segment_anything.utils.amg import (
+    batch_iterator,
+    MaskData,
+    calculate_stability_score,
+    batched_mask_to_box,
+    mask_to_rle_pytorch,
+    rle_to_mask,
+)
+from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
 
 
@@ -23,15 +31,15 @@ class SimpleSAM(nn.Module):
     def __init__(
         self,
         sam,
-        points_per_batch=CONFIG["points-per-batch"],
-        points_per_batch_filtering=CONFIG["points-per-batch-filtering"],
-        pred_iou_thresh=CONFIG["pred-iou-thresh"],
     ):
         super().__init__()
         self.sam = sam
-        self.pred_iou_thresh = pred_iou_thresh
-        self.points_per_batch = points_per_batch
-        self.points_per_batch_filtering = points_per_batch_filtering
+        self.pred_iou_thresh = CONFIG["pred-iou-thresh"]
+        self.stability_score_offset = CONFIG["stability-score-offset"]
+        self.stability_score_thresh = CONFIG["stability-score-thresh"]
+        self.points_per_batch = CONFIG["points-per-batch"]
+        self.points_per_batch_filtering = CONFIG["points-per-batch-filtering"]
+        self.box_nms_thresh = CONFIG["box-nms-thresh"]
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
     @torch.no_grad()
@@ -126,6 +134,8 @@ class SimpleSAM(nn.Module):
 
     @torch.no_grad()
     def postprocess_masks(self, masks, iou_predictions, mask_tokens):
+        u, v = masks.shape[-2:]
+        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
         result = []
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
@@ -135,7 +145,7 @@ class SimpleSAM(nn.Module):
                 batch_iterator(self.points_per_batch_filtering, iou_pred_batch),
                 batch_iterator(self.points_per_batch_filtering, mask_token_batch),
             )
-            result_batch = {"masks": [], "iou_predictions": [], "mask_tokens": []}
+            batch_data = MaskData()
             for mask_batched, iou_pred_batched, mask_token_batched in batch_iteration:
                 data = MaskData(
                     masks=mask_batched[0],
@@ -150,10 +160,40 @@ class SimpleSAM(nn.Module):
                 if self.pred_iou_thresh > 0.0:
                     keep_mask = data["iou_preds"] > self.pred_iou_thresh
                     data.filter(keep_mask)
-                result_batch["masks"].extend(data["masks"])
-                result_batch["iou_predictions"].extend(data["iou_preds"])
-                result_batch["mask_tokens"].extend(data["mask_token_batch"])
+                data["stability_score"] = calculate_stability_score(
+                    data["masks"],
+                    self.sam.mask_threshold,
+                    self.stability_score_offset,
+                )
+                if self.stability_score_thresh > 0.0:
+                    keep_mask = data["stability_score"] >= self.stability_score_thresh
+                    data.filter(keep_mask)
+                data["masks"] = data["masks"] > self.sam.mask_threshold
+                data["boxes"] = batched_mask_to_box(data["masks"])
+                data["rles"] = mask_to_rle_pytorch(data["masks"])
+                del data["masks"]
+                batch_data.cat(data)
                 del data
+                del keep_mask
+            keep_by_nms = batched_nms(
+                batch_data["boxes"].float(),
+                batch_data["iou_preds"],
+                torch.zeros_like(batch_data["boxes"][:, 0]),  # categories
+                iou_threshold=self.box_nms_thresh,
+            )
+            batch_data.filter(keep_by_nms)
+            batch_data.to_numpy()
+            batch_data = SamAutomaticMaskGenerator.postprocess_small_regions(
+                batch_data,
+                min_mask_area,
+                self.box_nms_thresh,
+            )
+            batch_data["masks"] = [rle_to_mask(rle) for rle in batch_data["rles"]]
+            result_batch = {
+                "masks": batch_data["masks"],
+                "iou_predictions": batch_data["iou_preds"],
+                "mask_tokens": batch_data["mask_token_batch"],
+            }
             result.append(result_batch)
             del result_batch
         return result
@@ -175,8 +215,14 @@ if __name__ == "__main__":
     LF = get_LF(dir)
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
     result = simple_sam(batch)
-    print(result)
-    raise
-    for mask in masks[0]:
-        plt.imshow(mask, cmap="gray")
-        plt.show()
+    print(len(result[0]["masks"]))
+    # # for mask in result[0]["masks"]:
+    # #     plt.imshow(mask, cmap="gray")
+    # #     plt.show()
+    masks_gen = SamAutomaticMaskGenerator(sam)
+    masks = masks_gen.generate(LF[0, 0])
+    print(len(masks))
+    # for mask in masks:
+    #     plt.imshow(mask["segmentation"], cmap="gray")
+    #     plt.show()
+    # print(len(masks))

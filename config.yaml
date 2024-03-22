@@ -9,3 +9,6 @@ points-per-side: 16
 points-per-batch: 64
 points-per-batch-filtering: 64
 pred-iou-thresh: 0.88
+stability-score-offset: 1.0
+stability-score-thresh: 0.95
+box-nms-thresh: 0.7
