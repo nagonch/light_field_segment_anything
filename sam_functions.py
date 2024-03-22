@@ -24,12 +24,14 @@ class SimpleSAM(nn.Module):
         self,
         sam,
         points_per_batch=CONFIG["points-per-batch"],
+        points_per_batch_filtering=CONFIG["points-per-batch-filtering"],
         pred_iou_thresh=CONFIG["pred-iou-thresh"],
     ):
         super().__init__()
         self.sam = sam
         self.pred_iou_thresh = pred_iou_thresh
         self.points_per_batch = points_per_batch
+        self.points_per_batch_filtering = points_per_batch_filtering
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
     @torch.no_grad()
@@ -113,6 +115,11 @@ class SimpleSAM(nn.Module):
         )
         mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
         mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
+        del masks_batches
+        del iou_predictions_batches
+        del low_res_masks
+        del mask_tokens_out
+        del batch_iteration
         result = self.postprocess_masks(masks, iou_predictions, mask_tokens)
 
         return result
@@ -123,26 +130,32 @@ class SimpleSAM(nn.Module):
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
         ):
-            data = MaskData(
-                masks=mask_batch[:64],
-                iou_preds=iou_pred_batch[:64],
-                mask_token_batch=mask_token_batch[:64],
+            batch_iteration = zip(
+                batch_iterator(self.points_per_batch_filtering, mask_batch),
+                batch_iterator(self.points_per_batch_filtering, iou_pred_batch),
+                batch_iterator(self.points_per_batch_filtering, mask_token_batch),
             )
-            del mask_batch
-            del iou_pred_batch
-            del mask_token_batch
+            result_batch = {"masks": [], "iou_predictions": [], "mask_tokens": []}
+            for mask_batched, iou_pred_batched, mask_token_batched in batch_iteration:
+                data = MaskData(
+                    masks=mask_batched[0],
+                    iou_preds=iou_pred_batched[0],
+                    mask_token_batch=mask_token_batched[0],
+                )
+                del mask_batched
+                del iou_pred_batched
+                del mask_token_batched
 
-            # Filter by predicted IoU
-            if self.pred_iou_thresh > 0.0:
-                keep_mask = data["iou_preds"] > self.pred_iou_thresh
-                data.filter(keep_mask)
-            result.append(
-                {
-                    "masks": data["masks"],
-                    "iou_predictions": data["iou_preds"],
-                    "mask_tokens": data["mask_token_batch"],
-                }
-            )
+                # Filter by predicted IoU
+                if self.pred_iou_thresh > 0.0:
+                    keep_mask = data["iou_preds"] > self.pred_iou_thresh
+                    data.filter(keep_mask)
+                result_batch["masks"].extend(data["masks"])
+                result_batch["iou_predictions"].extend(data["iou_preds"])
+                result_batch["mask_tokens"].extend(data["mask_token_batch"])
+                del data
+            result.append(result_batch)
+            del result_batch
         return result
 
 
