@@ -123,11 +123,24 @@ class SimpleSAM(nn.Module):
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
         ):
+            data = MaskData(
+                masks=mask_batch[:64],
+                iou_preds=iou_pred_batch[:64],
+                mask_token_batch=mask_token_batch[:64],
+            )
+            del mask_batch
+            del iou_pred_batch
+            del mask_token_batch
+
+            # Filter by predicted IoU
+            if self.pred_iou_thresh > 0.0:
+                keep_mask = data["iou_preds"] > self.pred_iou_thresh
+                data.filter(keep_mask)
             result.append(
                 {
-                    "masks": mask_batch,
-                    "iou_predictions": iou_pred_batch,
-                    "mask_tokens": mask_token_batch,
+                    "masks": data["masks"],
+                    "iou_predictions": data["iou_preds"],
+                    "mask_tokens": data["mask_token_batch"],
                 }
             )
         return result
