@@ -19,9 +19,16 @@ def get_sam(return_generator=True):
 
 
 class SimpleSAM(nn.Module):
-    def __init__(self, sam, points_per_batch=CONFIG["points-per-batch"]):
+
+    def __init__(
+        self,
+        sam,
+        points_per_batch=CONFIG["points-per-batch"],
+        pred_iou_thresh=CONFIG["pred-iou-thresh"],
+    ):
         super().__init__()
         self.sam = sam
+        self.pred_iou_thresh = pred_iou_thresh
         self.points_per_batch = points_per_batch
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
