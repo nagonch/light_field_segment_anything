@@ -106,20 +106,24 @@ class SimpleSAM(nn.Module):
         )
         mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
         mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
-        masks, iou_predictions, mask_tokens = self.postprocess_masks(
-            masks, iou_predictions, mask_tokens
-        )
-        result = {
-            "masks": masks,
-            "iou_predictions": iou_predictions,
-            "mask_tokens": mask_tokens,
-        }
+        result = self.postprocess_masks(masks, iou_predictions, mask_tokens)
 
         return result
 
     @torch.no_grad()
     def postprocess_masks(self, masks, iou_predictions, mask_tokens):
-        return masks, iou_predictions, mask_tokens
+        result = []
+        for mask_batch, iou_pred_batch, mask_token_batch in zip(
+            masks, iou_predictions, mask_tokens
+        ):
+            result.append(
+                {
+                    "masks": mask_batch,
+                    "iou_predictions": iou_pred_batch,
+                    "mask_tokens": mask_token_batch,
+                }
+            )
+        return result
 
 
 if __name__ == "__main__":
@@ -138,8 +142,7 @@ if __name__ == "__main__":
     LF = get_LF(dir)
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
     result = simple_sam(batch)
-    masks = result["masks"].to(torch.int32).detach().cpu().numpy()
-    print(masks.shape)
+    print(result)
     raise
     for mask in masks[0]:
         plt.imshow(mask, cmap="gray")
