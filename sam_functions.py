@@ -63,6 +63,7 @@ class SimpleSAM(nn.Module):
         self,
         batch,
         return_logits=True,
+        include_mask_tokens=True,
     ):
         batch = self.preprocess_batch(batch)
         image_embeddings = self.sam.image_encoder(batch)
@@ -72,8 +73,9 @@ class SimpleSAM(nn.Module):
         )
         masks_batches = []
         iou_predictions_batches = []
+        mask_tokens = []
         for sparse_emb, dense_emb in batch_iteration:
-            low_res_masks, iou_predictions = self.sam.mask_decoder(
+            low_res_masks, iou_predictions, mask_tokens_out = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
                 image_pe=torch.repeat_interleave(
                     self.sam.prompt_encoder.get_dense_pe(),
@@ -95,6 +97,9 @@ class SimpleSAM(nn.Module):
                 masks = masks > self.sam.mask_threshold
             masks_batches.append(masks)
             iou_predictions_batches.append(iou_predictions.reshape(batch_shape, -1))
+            if include_mask_tokens:
+                batch_shape, _, _, emb_shape = mask_tokens_out.shape
+                mask_tokens.append(mask_tokens_out.reshape(batch_shape, -1, emb_shape))
         masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4)
         iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2)
         masks = masks.reshape(masks.shape[0], -1, masks.shape[-2], masks.shape[-1])
@@ -102,10 +107,16 @@ class SimpleSAM(nn.Module):
             iou_predictions.shape[0],
             -1,
         )
-        return {
+        result = {
             "masks": masks,
             "iou_predictions": iou_predictions,
         }
+        if include_mask_tokens:
+            mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
+            mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
+            result["mask_tokens"] = mask_tokens
+
+        return result
 
 
 if __name__ == "__main__":
@@ -125,8 +136,6 @@ if __name__ == "__main__":
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:2]
     result = simple_sam(batch)
     masks = result["masks"].to(torch.int32).detach().cpu().numpy()
-    print(masks.shape)
-    raise
-    for mask in masks:
+    for mask in masks[0]:
         plt.imshow(mask, cmap="gray")
         plt.show()
