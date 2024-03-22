@@ -19,11 +19,8 @@ def get_sam(return_generator=True):
 
 
 class SimpleSAM(nn.Module):
-    def __init__(
-        self, sam, img_size=(128, 128), points_per_batch=CONFIG["points-per-batch"]
-    ):
+    def __init__(self, sam, points_per_batch=CONFIG["points-per-batch"]):
         super().__init__()
-        self.img_size = img_size
         self.sam = sam
         self.points_per_batch = points_per_batch
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
@@ -65,6 +62,7 @@ class SimpleSAM(nn.Module):
         return_logits=True,
         include_mask_tokens=True,
     ):
+        img_size = (batch.shape[-2], batch.shape[-1])
         batch = self.preprocess_batch(batch)
         image_embeddings = self.sam.image_encoder(batch)
         batch_iteration = zip(
@@ -91,7 +89,7 @@ class SimpleSAM(nn.Module):
             masks = self.sam.postprocess_masks(
                 low_res_masks.reshape(-1, c, w, h),
                 input_size=batch.shape[-2:],
-                original_size=self.img_size,
+                original_size=img_size,
             )
             masks = masks.reshape(batch_shape, -1, masks.shape[-2], masks.shape[-1])
             if not return_logits:
@@ -134,7 +132,7 @@ if __name__ == "__main__":
     simple_sam = SimpleSAM(sam)
     dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
     LF = get_LF(dir)
-    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:2]
+    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
     result = simple_sam(batch)
     masks = result["masks"].to(torch.int32).detach().cpu().numpy()
     for mask in masks[0]:
