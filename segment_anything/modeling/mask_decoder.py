@@ -131,9 +131,14 @@ class MaskDecoder(nn.Module):
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
+        batch_dim = image_embeddings.shape[0]
         src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        dense_prompt_embeddings = torch.repeat_interleave(
+            dense_prompt_embeddings, batch_dim, dim=0
+        )
         src = src + dense_prompt_embeddings
         pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        tokens = torch.repeat_interleave(tokens, batch_dim, dim=0)
         b, c, h, w = src.shape
 
         # Run the transformer
@@ -155,7 +160,9 @@ class MaskDecoder(nn.Module):
 
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
-
+        _, n_masks, mask_w, mask_h = masks.shape
+        masks = masks.reshape(batch_dim, -1, n_masks, mask_w, mask_h)
+        iou_pred = iou_pred.reshape(batch_dim, -1, n_masks)
         return masks, iou_pred
 
 

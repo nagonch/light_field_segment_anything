@@ -75,11 +75,14 @@ class SimpleSAM(nn.Module):
         for sparse_emb, dense_emb in batch_iteration:
             low_res_masks, iou_predictions = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
-                image_pe=self.sam.prompt_encoder.get_dense_pe(),
+                image_pe=torch.repeat_interleave(
+                    self.sam.prompt_encoder.get_dense_pe(),
+                    image_embeddings.shape[0],
+                    dim=0,
+                ),
                 sparse_prompt_embeddings=sparse_emb[0],
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
-                reduce_output=False,
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
