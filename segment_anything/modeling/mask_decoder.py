@@ -79,6 +79,7 @@ class MaskDecoder(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
+        output_tokens: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
@@ -107,12 +108,14 @@ class MaskDecoder(nn.Module):
             mask_slice = slice(1, None)
         else:
             mask_slice = slice(0, 1)
-        masks = masks[:, mask_slice, :, :]
-        iou_pred = iou_pred[:, mask_slice]
-        mask_tokens_out = mask_tokens_out[:, mask_slice]
-
+        masks = masks[:, :, mask_slice, :, :]
+        iou_pred = iou_pred[:, :, mask_slice]
+        mask_tokens_out = mask_tokens_out[:, :, mask_slice]
+        result = (masks, iou_pred)
+        if output_tokens:
+            result += (mask_tokens_out,)
         # Prepare output
-        return masks, iou_pred, mask_tokens_out
+        return result
 
     def predict_masks(
         self,
