@@ -4,7 +4,7 @@ from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
 from torchvision.transforms.functional import resize
-from segment_anything.utils.amg import batch_iterator
+from segment_anything.utils.amg import batch_iterator, MaskData
 from utils import CONFIG
 
 
@@ -60,7 +60,6 @@ class SimpleSAM(nn.Module):
         self,
         batch,
         return_logits=True,
-        include_mask_tokens=True,
     ):
         img_size = (batch.shape[-2], batch.shape[-1])
         batch = self.preprocess_batch(batch)
@@ -96,9 +95,8 @@ class SimpleSAM(nn.Module):
                 masks = masks > self.sam.mask_threshold
             masks_batches.append(masks)
             iou_predictions_batches.append(iou_predictions.reshape(batch_shape, -1))
-            if include_mask_tokens:
-                batch_shape, _, _, emb_shape = mask_tokens_out.shape
-                mask_tokens.append(mask_tokens_out.reshape(batch_shape, -1, emb_shape))
+            batch_shape, _, _, emb_shape = mask_tokens_out.shape
+            mask_tokens.append(mask_tokens_out.reshape(batch_shape, -1, emb_shape))
         masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4)
         iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2)
         masks = masks.reshape(masks.shape[0], -1, masks.shape[-2], masks.shape[-1])
@@ -106,16 +104,22 @@ class SimpleSAM(nn.Module):
             iou_predictions.shape[0],
             -1,
         )
+        mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
+        mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
+        masks, iou_predictions, mask_tokens = self.postprocess_masks(
+            masks, iou_predictions, mask_tokens
+        )
         result = {
             "masks": masks,
             "iou_predictions": iou_predictions,
+            "mask_tokens": mask_tokens,
         }
-        if include_mask_tokens:
-            mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
-            mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
-            result["mask_tokens"] = mask_tokens
 
         return result
+
+    @torch.no_grad()
+    def postprocess_masks(self, masks, iou_predictions, mask_tokens):
+        return masks, iou_predictions, mask_tokens
 
 
 if __name__ == "__main__":
@@ -135,6 +139,8 @@ if __name__ == "__main__":
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
     result = simple_sam(batch)
     masks = result["masks"].to(torch.int32).detach().cpu().numpy()
+    print(masks.shape)
+    raise
     for mask in masks[0]:
         plt.imshow(mask, cmap="gray")
         plt.show()
