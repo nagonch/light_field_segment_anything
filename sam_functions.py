@@ -134,8 +134,6 @@ class SimpleSAM(nn.Module):
 
     @torch.no_grad()
     def postprocess_masks(self, masks, iou_predictions, mask_tokens):
-        u, v = masks.shape[-2:]
-        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
         result = []
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
@@ -155,7 +153,6 @@ class SimpleSAM(nn.Module):
                 del mask_batched
                 del iou_pred_batched
                 del mask_token_batched
-
                 # Filter by predicted IoU
                 if self.pred_iou_thresh > 0.0:
                     keep_mask = data["iou_preds"] > self.pred_iou_thresh
@@ -181,21 +178,20 @@ class SimpleSAM(nn.Module):
                 torch.zeros_like(batch_data["boxes"][:, 0]),  # categories
                 iou_threshold=self.box_nms_thresh,
             )
+            print(keep_by_nms)
             batch_data.filter(keep_by_nms)
             batch_data.to_numpy()
-            batch_data = SamAutomaticMaskGenerator.postprocess_small_regions(
-                batch_data,
-                min_mask_area,
-                self.box_nms_thresh,
-            )
             batch_data["masks"] = [rle_to_mask(rle) for rle in batch_data["rles"]]
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
                 "mask_tokens": batch_data["mask_token_batch"],
             }
+            print(len(batch_data["masks"]))
             result.append(result_batch)
             del result_batch
+            del batch_data
+            del keep_by_nms
         return result
 
 
@@ -211,18 +207,21 @@ if __name__ == "__main__":
 
     sam = get_sam(return_generator=False)
     simple_sam = SimpleSAM(sam)
-    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
+    dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
     LF = get_LF(dir)
-    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()[:1]
-    result = simple_sam(batch)
-    print(len(result[0]["masks"]))
-    # # for mask in result[0]["masks"]:
-    # #     plt.imshow(mask, cmap="gray")
-    # #     plt.show()
-    masks_gen = SamAutomaticMaskGenerator(sam)
-    masks = masks_gen.generate(LF[0, 0])
-    print(len(masks))
+    # masks_generator = SamAutomaticMaskGenerator(sam)
+    # masks = masks_generator.generate(LF[0, 1])
     # for mask in masks:
     #     plt.imshow(mask["segmentation"], cmap="gray")
     #     plt.show()
-    # print(len(masks))
+    # raisez
+    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
+    # temp = torch.clone(batch[0])
+    # batch[0] = batch[1]
+    # batch[1] = temp
+    result = simple_sam(batch)
+    # print(len(result))
+    # raise
+    # for mask in result[1]["masks"]:
+    #     plt.imshow(mask, cmap="gray")
+    #     plt.show()
