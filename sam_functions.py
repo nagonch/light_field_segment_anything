@@ -189,7 +189,9 @@ class SimpleSAM(nn.Module):
 
 def segment_LF(simple_sam, LF):
     result_masks = []
-    result_embeddings = []
+    max_segment_num = -1
+    s, t, u, v, c = LF.shape
+    min_mask_area = int(CONFIG["min-mask-area"] * u * v)
     LF = (
         torch.tensor(LF)
         .cuda()
@@ -199,10 +201,22 @@ def segment_LF(simple_sam, LF):
     iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
     for batch in iterator:
         result = simple_sam(batch[0])
-        result_masks.extend([result[i]["masks"] for i in range(len(result))])
-        result_embeddings.extend([result[i]["mask_tokens"] for i in range(len(result))])
-    print(len(result_masks), len(result_embeddings))
-    return result_masks, result_embeddings
+        for item in result:
+            masks = sorted(item["masks"], key=(lambda x: x.sum()), reverse=True)
+            masks = filter(lambda mask: mask.sum() >= min_mask_area, masks)
+            segments = torch.stack(
+                [
+                    torch.tensor(mask).cuda() * (mask_i + 1)
+                    for mask_i, mask in enumerate(masks)
+                ]
+            )
+            segments = segments.permute(1, 2, 0).argmax(axis=-1) + max_segment_num + 1
+            max_segment_num = segments.max()
+            result_masks.append(segments)
+            embeddings = item["mask_tokens"]
+    result_masks = torch.stack(result_masks).reshape(s, t, u, v)
+    print(result_masks.shape)
+    return result_masks  # , result_embeddings
 
 
 if __name__ == "__main__":

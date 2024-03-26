@@ -1,5 +1,5 @@
 distance-threshold: 0.5
-min-mask-area: 0.1
+min-mask-area: 0.0
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 merged-filename: "merged.pt"
