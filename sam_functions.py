@@ -174,7 +174,6 @@ class SimpleSAM(nn.Module):
                 torch.zeros_like(batch_data["boxes"][:, 0]),  # categories
                 iou_threshold=self.box_nms_thresh,
             )
-            print(keep_by_nms)
             batch_data.filter(keep_by_nms)
             batch_data.to_numpy()
             batch_data["masks"] = [rle_to_mask(rle) for rle in batch_data["rles"]]
@@ -183,7 +182,6 @@ class SimpleSAM(nn.Module):
                 "iou_predictions": batch_data["iou_preds"],
                 "mask_tokens": batch_data["mask_token_batch"],
             }
-            print(len(batch_data["masks"]))
             result.append(result_batch)
             del result_batch
             del batch_data
