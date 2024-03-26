@@ -91,11 +91,7 @@ class SimpleSAM(nn.Module):
         for sparse_emb, dense_emb in batch_iteration:
             low_res_masks, iou_predictions, mask_tokens_out = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
-                image_pe=torch.repeat_interleave(
-                    self.sam.prompt_encoder.get_dense_pe(),
-                    image_embeddings.shape[0],
-                    dim=0,
-                ),
+                image_pe=self.sam.prompt_encoder.get_dense_pe(),
                 sparse_prompt_embeddings=sparse_emb[0],
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
@@ -216,12 +212,13 @@ if __name__ == "__main__":
     #     plt.show()
     # raisez
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
-    # temp = torch.clone(batch[0])
-    # batch[0] = batch[1]
-    # batch[1] = temp
+    temp = torch.clone(batch[0])
+    batch[0] = batch[1]
+    batch[1] = temp
     result = simple_sam(batch)
     # print(len(result))
     # raise
-    # for mask in result[1]["masks"]:
-    #     plt.imshow(mask, cmap="gray")
-    #     plt.show()
+    for i, mask in enumerate(result[0]["masks"]):
+        plt.imshow(mask, cmap="gray")
+        plt.savefig(f"imgs/{str(i).zfill(4)}.jpeg")
+        # plt.show()
