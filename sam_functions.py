@@ -16,14 +16,12 @@ from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
 
 
-def get_sam(return_generator=True):
+def get_sam():
     sam = sam_model_registry["vit_b"](checkpoint=CONFIG["model-path"])
     sam = sam.to(device="cuda")
-    if not return_generator:
-        return sam
-    mask_generator = SamAutomaticMaskGenerator(sam)
+    model = SimpleSAM(sam)
 
-    return mask_generator
+    return model
 
 
 class SimpleSAM(nn.Module):
@@ -199,23 +197,11 @@ if __name__ == "__main__":
     import imgviz
     from utils import get_LF
 
-    sam = get_sam(return_generator=False)
-    simple_sam = SimpleSAM(sam)
+    simple_sam = get_sam()
     dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
     LF = get_LF(dir)
-    # masks_generator = SamAutomaticMaskGenerator(sam)
-    # masks = masks_generator.generate(LF[0, 1])
-    # for mask in masks:
-    #     plt.imshow(mask["segmentation"], cmap="gray")
-    #     plt.show()
-    # raisez
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
-    temp = torch.clone(batch[0])
-    batch[0] = batch[1]
-    batch[1] = temp
     result = simple_sam(batch)
-    # print(len(result))
-    # raise
     for i, mask in enumerate(result[0]["masks"]):
         plt.imshow(mask, cmap="gray")
         plt.savefig(f"imgs/{str(i).zfill(4)}.jpeg")
