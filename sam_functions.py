@@ -187,6 +187,24 @@ class SimpleSAM(nn.Module):
         return result
 
 
+def segment_LF(simple_sam, LF):
+    result_masks = []
+    result_embeddings = []
+    LF = (
+        torch.tensor(LF)
+        .cuda()
+        .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
+        .permute(0, 3, 1, 2)
+    )
+    iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+    for batch in iterator:
+        result = simple_sam(batch[0])
+        result_masks.extend([result[i]["masks"] for i in range(len(result))])
+        result_embeddings.extend([result[i]["mask_tokens"] for i in range(len(result))])
+    print(len(result_masks), len(result_embeddings))
+    return result_masks, result_embeddings
+
+
 if __name__ == "__main__":
     import os
     from PIL import Image
@@ -199,7 +217,17 @@ if __name__ == "__main__":
 
     simple_sam = get_sam()
     dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
-    LF = get_LF(dir)
+    LF = get_LF(dir)[7:-7, 7:-7]
+    segment_LF(simple_sam, LF)
+    raise
+    iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+    from tqdm import tqdm
+
+    for batch in tqdm(iterator):
+        result = simple_sam(batch[0])
+    raise
+    print(LF.shape)
+    raise
     batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
     result = simple_sam(batch)
     for i, mask in enumerate(result[0]["masks"]):
