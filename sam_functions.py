@@ -14,6 +14,7 @@ from segment_anything.utils.amg import (
 )
 from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
+from tqdm import tqdm
 
 
 def get_sam():
@@ -200,7 +201,7 @@ def segment_LF(simple_sam, LF):
         .permute(0, 3, 1, 2)
     )
     iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
-    for batch in iterator:
+    for batch in tqdm(iterator):
         result = simple_sam(batch[0])
         for item in result:
             item = zip(item["masks"], item["mask_tokens"])
@@ -225,31 +226,4 @@ def segment_LF(simple_sam, LF):
 
 
 if __name__ == "__main__":
-    import os
-    from PIL import Image
-    import numpy as np
-    from segment_anything import SamPredictor
-    from torchvision.transforms.functional import resize
-    from matplotlib import pyplot as plt
-    import imgviz
-    from utils import get_LF
-
-    simple_sam = get_sam()
-    dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
-    LF = get_LF(dir)[7:-7, 7:-7]
-    segment_LF(simple_sam, LF)
-    raise
-    iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
-    from tqdm import tqdm
-
-    for batch in tqdm(iterator):
-        result = simple_sam(batch[0])
-    raise
-    print(LF.shape)
-    raise
-    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
-    result = simple_sam(batch)
-    for i, mask in enumerate(result[0]["masks"]):
-        plt.imshow(mask, cmap="gray")
-        plt.savefig(f"imgs/{str(i).zfill(4)}.jpeg")
-        # plt.show()
+    pass

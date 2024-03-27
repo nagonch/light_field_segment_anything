@@ -6,43 +6,10 @@ import yaml
 import os
 import imgviz
 from utils import visualize_segments, get_LF, CONFIG
-from sam_functions import get_sam
+from sam_functions import get_sam, segment_LF
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
-
-
-def segment_LF(mask_generator, LF):
-    max_segment_num = -1
-    s, t, u, v, c = LF.shape
-    segments = torch.zeros(
-        (
-            s,
-            t,
-            u,
-            v,
-        )
-    )
-    min_mask_area = int(CONFIG["min-mask-area"] * u * v)
-    mask_generator.min_mask_region_area = min_mask_area
-    for i in tqdm(range(LF.shape[0])):
-        for j in range(LF.shape[1]):
-            seg_mask = mask_generator.generate(LF[i][j])
-            seg_mask = sorted(seg_mask, key=(lambda x: x["area"]), reverse=True)
-            seg_mask = filter(lambda mask: mask["area"] >= min_mask_area, seg_mask)
-            segments_ij = torch.stack(
-                [
-                    torch.tensor(mask["segmentation"]).cuda() * (mask_i + 1)
-                    for mask_i, mask in enumerate(seg_mask)
-                ]
-            )
-            segments_ij = (
-                segments_ij.permute(1, 2, 0).argmax(axis=-1) + max_segment_num + 1
-            )
-            max_segment_num = segments_ij.max()
-            segments[i][j] = segments_ij
-    segments = segments.to(torch.int32)
-    return segments.cuda()
 
 
 def get_segments_metric(segments, i, j, metric=BinaryJaccardIndex().cuda()):
@@ -118,12 +85,12 @@ def main(
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
-    LF = get_LF(LF_dir)
-    mask_generator = get_sam()
+    LF = get_LF(LF_dir)[7:-7, 7:-7]
+    simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
     else:
-        segments = segment_LF(mask_generator, LF)
+        segments, _ = segment_LF(simple_sam, LF)
         torch.save(segments, segments_filename)
     mapping = get_merge_segments_mapping(segments)
     segments = segments.cpu().numpy()
@@ -138,5 +105,5 @@ def main(
 
 
 if __name__ == "__main__":
-    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
+    dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
     segments = main(dir)
