@@ -210,10 +210,10 @@ def segment_LF(simple_sam, LF):
             segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
             embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
             segments_result = torch.ones((u, v)).cuda().long()
-            segment_num = 0
+            segment_num = 1
             for segment in segments:
-                segments_result[segment] = segment_num
-                segment_num += 1
+                segments_result[segment] += segment_num
+                segment_num = torch.max(segments_result)
             segments = segments_result
             segments += max_segment_num + 1
             segment_number_to_embedding = dict(
