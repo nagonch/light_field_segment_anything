@@ -1,11 +1,11 @@
 distance-threshold: 0.5
-min-mask-area: 0.1
+min-mask-area: 0.005
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 merged-filename: "merged.pt"
 vis-filename: "plot.png"
 sam-segments-checkpoint: True
-points-per-side: 16
+points-per-side: 32
 points-per-batch: 64
 points-per-batch-filtering: 64
 pred-iou-thresh: 0.88

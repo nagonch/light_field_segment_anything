@@ -24,15 +24,15 @@ def get_segments_metric(segments, i, j, metric=BinaryJaccardIndex().cuda()):
 def get_merge_segments_mapping(segments):
     metric = BinaryJaccardIndex().cuda()
     s, t = segments.shape[0], segments.shape[1]
-    central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))
+    central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))[1:]
     graphs = []
     mapping = {}
-    for s_ in range(s):
+    for s_ in tqdm(range(s)):
         for t_ in range(t):
             if s_ == s // 2 and t_ == t // 2:
                 continue
             graph = nx.Graph()
-            segments_st = torch.unique(segments[s_][t_].reshape(-1))
+            segments_st = torch.unique(segments[s_][t_].reshape(-1))[1:]
             top_nodes = segments_st.cpu().detach().numpy()
             bottom_nodes = central_inds.cpu().detach().numpy()
             graph.add_nodes_from(
@@ -78,6 +78,17 @@ def visualize_segments(segments, LF, st_border=None, filename=None):
     plt.close()
 
 
+def post_process_segments(segments):
+    u, v = segments.shape[-2:]
+    result_segments = []
+    min_mask_area = int(CONFIG["min-mask-area"] * u * v)
+    for i in np.unique(segments)[1:]:
+        seg_i = segments == i
+        if seg_i.sum(axis=(2, 3)).mean() >= min_mask_area:
+            result_segments.append(seg_i)
+    return result_segments
+
+
 def main(
     LF_dir,
     segments_filename=CONFIG["segments-filename"],
@@ -96,11 +107,18 @@ def main(
     segments = segments.cpu().numpy()
     segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
     torch.save(segments, merged_filename)
+    segments = post_process_segments(segments)
     visualize_segments(
-        segments,
+        np.stack(segments).sum(axis=0),
         LF,
         filename=vis_filename,
     )
+    for i, segment in enumerate(segments):
+        visualize_segments(
+            segment.astype(np.uint32),
+            LF * (segment).astype(np.int32)[:, :, :, :, None],
+            filename=f"imgs/{str(i).zfill(3)}.png",
+        )
     return segments
 
 
