@@ -6,7 +6,7 @@ import yaml
 import os
 import imgviz
 from utils import visualize_segments, get_LF, CONFIG
-from sam_functions import get_sam, segment_LF
+from sam_functions import get_sam
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
@@ -101,7 +101,7 @@ def main(
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
     else:
-        segments, _ = segment_LF(simple_sam, LF)
+        segments, _ = simple_sam.segment_LF(LF)
         torch.save(segments, segments_filename)
     mapping = get_merge_segments_mapping(segments)
     segments = segments.cpu().numpy()

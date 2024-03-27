@@ -187,43 +187,43 @@ class SimpleSAM(nn.Module):
             del keep_by_nms
         return result
 
-
-def segment_LF(simple_sam, LF):
-    result_masks = []
-    result_embeddings = {}
-    max_segment_num = -1
-    s, t, u, v, c = LF.shape
-    min_mask_area = int(CONFIG["min-mask-area"] * u * v)
-    LF = (
-        torch.tensor(LF)
-        .cuda()
-        .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
-        .permute(0, 3, 1, 2)
-    )
-    iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
-    for batch in tqdm(iterator):
-        result = simple_sam(batch[0])
-        for item in result:
-            item = zip(item["masks"], item["mask_tokens"])
-            masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
-            masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
-            segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
-            embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
-            segments_result = torch.ones((u, v)).cuda().long()
-            segment_num = 1
-            for segment in segments:
-                segments_result[segment] += segment_num
-                segment_num = torch.max(segments_result)
-            segments = segments_result - 1
-            segments[segments != 0] += max_segment_num + 1
-            segment_number_to_embedding = dict(
-                zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
-            )
-            result_embeddings.update(segment_number_to_embedding)
-            max_segment_num = segments.max()
-            result_masks.append(segments)
-    result_masks = torch.stack(result_masks).reshape(s, t, u, v)
-    return result_masks, result_embeddings
+    @torch.no_grad()
+    def segment_LF(self, LF):
+        result_masks = []
+        result_embeddings = {}
+        max_segment_num = -1
+        s, t, u, v, c = LF.shape
+        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
+        LF = (
+            torch.tensor(LF)
+            .cuda()
+            .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
+            .permute(0, 3, 1, 2)
+        )
+        iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+        for batch in tqdm(iterator):
+            result = self.forward(batch[0])
+            for item in result:
+                item = zip(item["masks"], item["mask_tokens"])
+                masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
+                masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
+                segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
+                embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
+                segments_result = torch.ones((u, v)).cuda().long()
+                segment_num = 1
+                for segment in segments:
+                    segments_result[segment] += segment_num
+                    segment_num = torch.max(segments_result)
+                segments = segments_result - 1
+                segments[segments != 0] += max_segment_num + 1
+                segment_number_to_embedding = dict(
+                    zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
+                )
+                result_embeddings.update(segment_number_to_embedding)
+                max_segment_num = segments.max()
+                result_masks.append(segments)
+        result_masks = torch.stack(result_masks).reshape(s, t, u, v)
+        return result_masks, result_embeddings
 
 
 if __name__ == "__main__":
