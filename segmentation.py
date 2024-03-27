@@ -85,7 +85,7 @@ def main(
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
-    LF = get_LF(LF_dir)[7:-7, 7:-7]
+    LF = get_LF(LF_dir)
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
@@ -105,5 +105,5 @@ def main(
 
 
 if __name__ == "__main__":
-    dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
+    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
     segments = main(dir)

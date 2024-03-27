@@ -1,5 +1,5 @@
 distance-threshold: 0.5
-min-mask-area: 0.0
+min-mask-area: 0.1
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 merged-filename: "merged.pt"
@@ -13,3 +13,4 @@ stability-score-offset: 1.0
 stability-score-thresh: 0.95
 box-nms-thresh: 0.7
 subviews-batch-size: 2
+lf-subview-max-size: 128
