@@ -206,15 +206,16 @@ def segment_LF(simple_sam, LF):
         for item in result:
             item = zip(item["masks"], item["mask_tokens"])
             masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
-            masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
-            segments = torch.stack(  # TODO: check if the stack is correct (by visualizing the masks before and after)
-                [
-                    torch.tensor(mask[0]).cuda() * (mask_i + 1)
-                    for mask_i, mask in enumerate(masks)
-                ]
-            )
+            masks = filter(lambda mask: mask[0].sum() >= min_mask_area, masks)
+            segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
             embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
-            segments = segments.permute(1, 2, 0).argmax(axis=-1) + max_segment_num + 1
+            segments_result = torch.ones((u, v)).cuda().long()
+            segment_num = 0
+            for segment in segments:
+                segments_result[segment] = segment_num
+                segment_num += 1
+            segments = segments_result
+            segments += max_segment_num + 1
             segment_number_to_embedding = dict(
                 zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
             )
