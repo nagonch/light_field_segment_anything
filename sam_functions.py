@@ -189,6 +189,7 @@ class SimpleSAM(nn.Module):
 
 def segment_LF(simple_sam, LF):
     result_masks = []
+    result_embeddings = {}
     max_segment_num = -1
     s, t, u, v, c = LF.shape
     min_mask_area = int(CONFIG["min-mask-area"] * u * v)
@@ -202,21 +203,25 @@ def segment_LF(simple_sam, LF):
     for batch in iterator:
         result = simple_sam(batch[0])
         for item in result:
-            masks = sorted(item["masks"], key=(lambda x: x.sum()), reverse=True)
-            masks = filter(lambda mask: mask.sum() >= min_mask_area, masks)
-            segments = torch.stack(
+            item = zip(item["masks"], item["mask_tokens"])
+            masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
+            masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
+            segments = torch.stack(  # TODO: check if the stack is correct (by visualizing the masks before and after)
                 [
-                    torch.tensor(mask).cuda() * (mask_i + 1)
+                    torch.tensor(mask[0]).cuda() * (mask_i + 1)
                     for mask_i, mask in enumerate(masks)
                 ]
             )
+            embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
             segments = segments.permute(1, 2, 0).argmax(axis=-1) + max_segment_num + 1
+            segment_number_to_embedding = dict(
+                zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
+            )
+            result_embeddings.update(segment_number_to_embedding)
             max_segment_num = segments.max()
             result_masks.append(segments)
-            embeddings = item["mask_tokens"]
     result_masks = torch.stack(result_masks).reshape(s, t, u, v)
-    print(result_masks.shape)
-    return result_masks  # , result_embeddings
+    return result_masks, result_embeddings
 
 
 if __name__ == "__main__":
