@@ -190,7 +190,7 @@ class SimpleSAM(nn.Module):
     @torch.no_grad()
     def segment_LF(self, LF):
         result_masks = []
-        result_embeddings = {}
+        result_embeddings = []
         max_segment_num = -1
         s, t, u, v, c = LF.shape
         min_mask_area = int(CONFIG["min-mask-area"] * u * v)
@@ -210,19 +210,30 @@ class SimpleSAM(nn.Module):
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
                 embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
                 segments_result = torch.zeros((u, v)).cuda().long()
+                normalization_map = torch.zeros((u, v)).cuda().long()
+                emb_size = embeddings[0].shape[-1]
+                embeddings_map = torch.zeros(
+                    (
+                        u,
+                        v,
+                        emb_size,
+                    )
+                ).cuda()
                 segment_num = 0
+                emb_num = 0
                 for segment in segments:
                     segments_result[segment] += segment_num + 1
-                    segment_num = torch.max(segments_result)
+                    embeddings_map[segment] += embeddings[emb_num]
+                    normalization_map[segment] += 1
+                    segment_num += 1
+                    emb_num += 1
                 segments = segments_result
                 segments[segments != 0] += max_segment_num + 1
-                segment_number_to_embedding = dict(
-                    zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
-                )
-                result_embeddings.update(segment_number_to_embedding)
+                result_embeddings.append(embeddings_map)
                 max_segment_num = segments.max()
                 result_masks.append(segments)
         result_masks = torch.stack(result_masks).reshape(s, t, u, v)
+        result_embeddings = torch.stack(result_embeddings).reshape(s, t, u, v, emb_size)
         return result_masks, result_embeddings
 
 

@@ -1,6 +1,7 @@
 min-mask-area: 0.1
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
+embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "plot.png"
 sam-segments-checkpoint: True

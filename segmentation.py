@@ -74,6 +74,7 @@ def post_process_segments(segments):
 def main(
     LF_dir,
     segments_filename=CONFIG["segments-filename"],
+    embeddings_filename=CONFIG["embeddings-filename"],
     merged_filename=CONFIG["merged-filename"],
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
@@ -82,9 +83,11 @@ def main(
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
+        embeddings = torch.load(embeddings_filename).cuda()
     else:
-        segments, _ = simple_sam.segment_LF(LF)
+        segments, embeddings = simple_sam.segment_LF(LF)
         torch.save(segments, segments_filename)
+        torch.save(embeddings, embeddings_filename)
     mapping = get_merge_segments_mapping(segments)
     segments = segments.cpu().numpy()
     segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
