@@ -10,18 +10,29 @@ from sam_functions import get_sam
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
+import torch.nn.functional as F
 
 
-def get_segments_metric(segments, i, j, metric=BinaryJaccardIndex().cuda()):
+def calculate_segments_metric(segments, embeddings, i, j):
     mask_i = (segments == i).to(torch.int32)
     mask_j = (segments == j).to(torch.int32)
-    segments_i = mask_i.sum(axis=(0, 1))
-    segments_j = mask_j.sum(axis=(0, 1))
-    metric_val = metric(segments_i, segments_j)
+    if CONFIG["edge-metric"] == "cosine":
+        embs_i = (embeddings * (segments == i)[:, :, :, :, None].to(torch.int32)).mean(
+            axis=(0, 1, 2, 3)
+        )
+        embs_j = (embeddings * (segments == j)[:, :, :, :, None].to(torch.int32)).mean(
+            axis=(0, 1, 2, 3)
+        )
+        metric_val = F.cosine_similarity(embs_i[None], embs_j[None])
+    elif CONFIG["edge-metric"] == "iou":
+        iou_metric = BinaryJaccardIndex().cuda()
+        segments_i = mask_i.sum(axis=(0, 1))
+        segments_j = mask_j.sum(axis=(0, 1))
+        metric_val = iou_metric(segments_i, segments_j)
     return metric_val.item()
 
 
-def get_merge_segments_mapping(segments):
+def get_merge_segments_mapping(segments, embeddings):
     metric = BinaryJaccardIndex().cuda()
     s, t = segments.shape[0], segments.shape[1]
     central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))[1:]
@@ -45,7 +56,7 @@ def get_merge_segments_mapping(segments):
             )
             for i in central_inds:
                 for j in segments_st:
-                    metric_val = get_segments_metric(segments, i, j, metric)
+                    metric_val = calculate_segments_metric(segments, embeddings, i, j)
                     graph.add_edges_from(
                         [(j.item(), i.item())], weight=(1 - metric_val)
                     )
@@ -88,7 +99,7 @@ def main(
         segments, embeddings = simple_sam.segment_LF(LF)
         torch.save(segments, segments_filename)
         torch.save(embeddings, embeddings_filename)
-    mapping = get_merge_segments_mapping(segments)
+    mapping = get_merge_segments_mapping(segments, embeddings)
     segments = segments.cpu().numpy()
     segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
     torch.save(segments, merged_filename)
@@ -102,7 +113,7 @@ def main(
         visualize_segments(
             segment.astype(np.uint32),
             LF * (segment).astype(np.int32)[:, :, :, :, None],
-            filename=f"imgs_iou/{str(i).zfill(3)}.png",
+            filename=f"imgs/{str(i).zfill(3)}.png",
         )
     return segments
 

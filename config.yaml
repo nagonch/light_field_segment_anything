@@ -1,4 +1,5 @@
-min-mask-area: 0.1
+min-mask-area: 0.005
+edge-metric: "cosine"
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
