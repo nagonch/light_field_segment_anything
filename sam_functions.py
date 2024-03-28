@@ -209,12 +209,12 @@ class SimpleSAM(nn.Module):
                 masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
                 embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
-                segments_result = torch.ones((u, v)).cuda().long()
-                segment_num = 1
+                segments_result = torch.zeros((u, v)).cuda().long()
+                segment_num = 0
                 for segment in segments:
-                    segments_result[segment] += segment_num
+                    segments_result[segment] += segment_num + 1
                     segment_num = torch.max(segments_result)
-                segments = segments_result - 1
+                segments = segments_result
                 segments[segments != 0] += max_segment_num + 1
                 segment_number_to_embedding = dict(
                     zip(torch.unique(segments).detach().cpu().numpy(), embeddings)
