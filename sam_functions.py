@@ -210,7 +210,6 @@ class SimpleSAM(nn.Module):
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
                 embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
                 segments_result = torch.zeros((u, v)).cuda().long()
-                normalization_map = torch.zeros((u, v)).cuda().long()
                 emb_size = embeddings[0].shape[-1]
                 embeddings_map = torch.zeros(
                     (
@@ -224,7 +223,6 @@ class SimpleSAM(nn.Module):
                 for segment in segments:
                     segments_result[segment] += segment_num + 1
                     embeddings_map[segment] += embeddings[emb_num]
-                    normalization_map[segment] += 1
                     segment_num += 1
                     emb_num += 1
                 segments = segments_result
