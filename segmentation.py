@@ -88,6 +88,7 @@ def main(
     embeddings_filename=CONFIG["embeddings-filename"],
     merged_filename=CONFIG["merged-filename"],
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
+    merged_checkpoint=CONFIG["merged-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
     LF = get_LF(LF_dir)
@@ -99,16 +100,19 @@ def main(
         segments, embeddings = simple_sam.segment_LF(LF)
         torch.save(segments, segments_filename)
         torch.save(embeddings, embeddings_filename)
-    mapping = get_merge_segments_mapping(segments, embeddings)
-    segments = segments.cpu().numpy()
-    segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
-    torch.save(segments, merged_filename)
-    segments = post_process_segments(segments)
+    if merged_checkpoint and os.path.exists(merged_filename):
+        segments = torch.load(merged_filename)
+    else:
+        mapping = get_merge_segments_mapping(segments, embeddings)
+        segments = segments.cpu().numpy()
+        segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
+        torch.save(segments, merged_filename)
     visualize_segments(
-        np.stack(segments).sum(axis=0),
+        segments,
         LF,
         filename=vis_filename,
     )
+    segments = post_process_segments(segments)
     for i, segment in enumerate(segments):
         visualize_segments(
             segment.astype(np.uint32),
