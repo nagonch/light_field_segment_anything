@@ -33,7 +33,7 @@ def calculate_segments_metric(segments, embeddings, i, j):
         iou = iou_metric(segments_i, segments_j).item()
         if CONFIG["edge-metric"] == "iou":
             return iou
-    return 0.5 * cosine_sim + 0.5 * iou
+    return CONFIG["cosine-weight"] * cosine_sim + (1 - CONFIG["cosine-weight"]) * iou
 
 
 def get_merge_segments_mapping(segments, embeddings):

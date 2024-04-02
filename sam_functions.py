@@ -221,13 +221,11 @@ class SimpleSAM(nn.Module):
                     )
                 ).cuda()
                 segment_num = 0
-                emb_num = 0
-                for segment in segments:
+                for embedding, segment in zip(embeddings, segments):
                     segments_result[segment] += segment_num + 1
-                    embeddings_map[segment] += embeddings[emb_num]
+                    embeddings_map[segment] += embedding
                     normalization_map[segment] += 1
-                    segment_num += 1
-                    emb_num += 1
+                    segment_num = segments_result.max() + 1
                 embeddings_map /= normalization_map[:, :, None]
                 del normalization_map
                 segments = segments_result
