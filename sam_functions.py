@@ -95,6 +95,7 @@ class SimpleSAM(nn.Module):
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
                 output_tokens=True,
+                token_size=CONFIG["token-size"],
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
