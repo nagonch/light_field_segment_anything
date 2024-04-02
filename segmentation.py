@@ -60,6 +60,8 @@ def get_merge_segments_mapping(segments, embeddings):
             for i in central_inds:
                 for j in segments_st:
                     metric_val = calculate_segments_metric(segments, embeddings, i, j)
+                    if metric_val < CONFIG["metric-threshold"]:
+                        metric_val = 0.0
                     graph.add_edges_from(
                         [(j.item(), i.item())], weight=(1 - metric_val)
                     )
