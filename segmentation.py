@@ -16,24 +16,27 @@ import torch.nn.functional as F
 def calculate_segments_metric(segments, embeddings, i, j):
     mask_i = (segments == i).to(torch.int32)
     mask_j = (segments == j).to(torch.int32)
-    if CONFIG["edge-metric"] == "cosine":
+    if CONFIG["edge-metric"] in ["cosine", "combination"]:
         embs_i = (embeddings * (segments == i)[:, :, :, :, None].to(torch.int32)).mean(
             axis=(0, 1, 2, 3)
         )
         embs_j = (embeddings * (segments == j)[:, :, :, :, None].to(torch.int32)).mean(
             axis=(0, 1, 2, 3)
         )
-        metric_val = F.cosine_similarity(embs_i[None], embs_j[None])
-    elif CONFIG["edge-metric"] == "iou":
+        cosine_sim = F.cosine_similarity(embs_i[None], embs_j[None])[0].item()
+        if CONFIG["edge-metric"] == "cosine":
+            return cosine_sim
+    if CONFIG["edge-metric"] in ["iou", "combination"]:
         iou_metric = BinaryJaccardIndex().cuda()
         segments_i = mask_i.sum(axis=(0, 1))
         segments_j = mask_j.sum(axis=(0, 1))
-        metric_val = iou_metric(segments_i, segments_j)
-    return metric_val.item()
+        iou = iou_metric(segments_i, segments_j).item()
+        if CONFIG["edge-metric"] == "iou":
+            return iou
+    return 0.5 * cosine_sim + 0.5 * iou
 
 
 def get_merge_segments_mapping(segments, embeddings):
-    metric = BinaryJaccardIndex().cuda()
     s, t = segments.shape[0], segments.shape[1]
     central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))[1:]
     graphs = []
@@ -91,7 +94,10 @@ def main(
     merged_checkpoint=CONFIG["merged-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
-    LF = get_LF(LF_dir)
+    from scipy.io import loadmat
+
+    # LF = get_LF(LF_dir)
+    LF = loadmat("lego_128.mat")["LF"].astype(np.int32)
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()

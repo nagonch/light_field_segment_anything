@@ -1,12 +1,12 @@
 min-mask-area: 0.005
-edge-metric: "cosine"
+edge-metric: "iou"
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "plot.png"
 sam-segments-checkpoint: True
-merged-checkpoint: True
+merged-checkpoint: False
 points-per-side: 32
 points-per-batch: 64
 points-per-batch-filtering: 64
