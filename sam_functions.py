@@ -131,6 +131,8 @@ class SimpleSAM(nn.Module):
     @torch.no_grad()
     def postprocess_masks(self, masks, iou_predictions, mask_tokens):
         result = []
+        u, v = masks.shape[-2:]
+        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
         ):
@@ -176,6 +178,12 @@ class SimpleSAM(nn.Module):
             )
             batch_data.filter(keep_by_nms)
             batch_data.to_numpy()
+            if min_mask_area > 0.0:
+                batch_data = SamAutomaticMaskGenerator.postprocess_small_regions(
+                    batch_data,
+                    min_mask_area,
+                    self.box_nms_thresh,
+                )
             batch_data["masks"] = [rle_to_mask(rle) for rle in batch_data["rles"]]
             result_batch = {
                 "masks": batch_data["masks"],
