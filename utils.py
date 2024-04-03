@@ -68,10 +68,10 @@ def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=1024):
     im.save(filename)
 
 
-def shift_binary_mask(binary_mask, u, v):
+def shift_binary_mask(binary_mask, uv_shift):
     mask_u, mask_v = torch.where(binary_mask == 1)
-    mask_u += u
-    mask_v += v
+    mask_u += uv_shift[0]
+    mask_v += uv_shift[1]
     filtering_mask = torch.ones_like(mask_u).to(torch.bool)
     for mask in [
         mask_u >= 0,
