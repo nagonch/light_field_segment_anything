@@ -215,7 +215,6 @@ class SimpleSAM(nn.Module):
             for item in result:
                 item = zip(item["masks"], item["mask_tokens"])
                 masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
-                masks = list(filter(lambda mask: mask[0].sum() >= min_mask_area, masks))
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
                 embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
                 segments_result = torch.zeros((u, v)).cuda().long()

@@ -79,7 +79,7 @@ def get_merge_segments_mapping(segments, embeddings):
 def post_process_segments(segments):
     u, v = segments.shape[-2:]
     result_segments = []
-    min_mask_area = int(CONFIG["min-mask-area"] * u * v)
+    min_mask_area = int(CONFIG["min-mask-area-final"] * u * v)
     for i in np.unique(segments)[1:]:
         seg_i = segments == i
         if seg_i.sum(axis=(2, 3)).mean() >= min_mask_area:
@@ -99,7 +99,7 @@ def main(
     from scipy.io import loadmat
 
     # LF = get_LF(LF_dir)
-    LF = loadmat("lego_128.mat")["LF"].astype(np.int32)
+    LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
