@@ -80,6 +80,7 @@ class MaskDecoder(nn.Module):
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
         output_tokens: bool = False,
+        token_size: int = 256,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
@@ -101,6 +102,7 @@ class MaskDecoder(nn.Module):
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
+            token_size=token_size,
         )
 
         # Select the correct mask or masks for output
@@ -123,6 +125,7 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
+        token_size: int = 256,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -169,7 +172,12 @@ class MaskDecoder(nn.Module):
         del mask_tokens_out
         iou_preds_result = torch.stack(iou_preds_result)
         masks_result = torch.stack(masks_result)
-        mask_tokens_result = torch.stack(mask_tokens_result)
+        mask_tokens_result = torch.stack(mask_tokens_result)[
+            :,
+            :,
+            :,
+            :token_size,
+        ]
         return masks_result, iou_preds_result, mask_tokens_result
 
 

@@ -14,16 +14,15 @@ from segment_anything.utils.amg import (
 )
 from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
+from tqdm import tqdm
 
 
-def get_sam(return_generator=True):
+def get_sam():
     sam = sam_model_registry["vit_b"](checkpoint=CONFIG["model-path"])
     sam = sam.to(device="cuda")
-    if not return_generator:
-        return sam
-    mask_generator = SamAutomaticMaskGenerator(sam)
+    model = SimpleSAM(sam)
 
-    return mask_generator
+    return model
 
 
 class SimpleSAM(nn.Module):
@@ -96,6 +95,7 @@ class SimpleSAM(nn.Module):
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
                 output_tokens=True,
+                token_size=CONFIG["token-size"],
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
@@ -131,6 +131,8 @@ class SimpleSAM(nn.Module):
     @torch.no_grad()
     def postprocess_masks(self, masks, iou_predictions, mask_tokens):
         result = []
+        u, v = masks.shape[-2:]
+        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
         for mask_batch, iou_pred_batch, mask_token_batch in zip(
             masks, iou_predictions, mask_tokens
         ):
@@ -176,6 +178,12 @@ class SimpleSAM(nn.Module):
             )
             batch_data.filter(keep_by_nms)
             batch_data.to_numpy()
+            if min_mask_area > 0.0:
+                batch_data = SamAutomaticMaskGenerator.postprocess_small_regions(
+                    batch_data,
+                    min_mask_area,
+                    self.box_nms_thresh,
+                )
             batch_data["masks"] = [rle_to_mask(rle) for rle in batch_data["rles"]]
             result_batch = {
                 "masks": batch_data["masks"],
@@ -188,35 +196,54 @@ class SimpleSAM(nn.Module):
             del keep_by_nms
         return result
 
+    @torch.no_grad()
+    def segment_LF(self, LF):
+        result_masks = []
+        result_embeddings = []
+        max_segment_num = -1
+        s, t, u, v, c = LF.shape
+        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
+        LF = (
+            torch.tensor(LF)
+            .cuda()
+            .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
+            .permute(0, 3, 1, 2)
+        )
+        iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+        for batch in tqdm(iterator):
+            result = self.forward(batch[0])
+            for item in result:
+                item = zip(item["masks"], item["mask_tokens"])
+                masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
+                segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
+                embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
+                segments_result = torch.zeros((u, v)).cuda().long()
+                emb_size = embeddings[0].shape[-1]
+                normalization_map = torch.zeros((u, v)).cuda() + 1e-9
+                embeddings_map = torch.zeros(
+                    (
+                        u,
+                        v,
+                        emb_size,
+                    )
+                ).cuda()
+                segment_num = 0
+                for embedding, segment in zip(embeddings, segments):
+                    segments_result[segment] += segment_num + 1
+                    embeddings_map[segment] += embedding
+                    normalization_map[segment] += 1
+                    segment_num = segments_result.max() + 1
+                embeddings_map /= normalization_map[:, :, None]
+                del normalization_map
+                segments = segments_result
+                segments[segments != 0] += max_segment_num + 1
+                result_embeddings.append(embeddings_map)
+                max_segment_num = segments.max()
+                result_masks.append(segments)
+        result_masks = torch.stack(result_masks).reshape(s, t, u, v)
+        result_embeddings = torch.stack(result_embeddings).reshape(s, t, u, v, emb_size)
+        return result_masks, result_embeddings
+
 
 if __name__ == "__main__":
-    import os
-    from PIL import Image
-    import numpy as np
-    from segment_anything import SamPredictor
-    from torchvision.transforms.functional import resize
-    from matplotlib import pyplot as plt
-    import imgviz
-    from utils import get_LF
-
-    sam = get_sam(return_generator=False)
-    simple_sam = SimpleSAM(sam)
-    dir = "/home/cedaradmin/data/lf_nonun/LFPlane/f00032/png"
-    LF = get_LF(dir)
-    # masks_generator = SamAutomaticMaskGenerator(sam)
-    # masks = masks_generator.generate(LF[0, 1])
-    # for mask in masks:
-    #     plt.imshow(mask["segmentation"], cmap="gray")
-    #     plt.show()
-    # raisez
-    batch = (torch.as_tensor(LF[0:2, 0]).permute(0, -1, 1, 2).float()).cuda()
-    temp = torch.clone(batch[0])
-    batch[0] = batch[1]
-    batch[1] = temp
-    result = simple_sam(batch)
-    # print(len(result))
-    # raise
-    for i, mask in enumerate(result[0]["masks"]):
-        plt.imshow(mask, cmap="gray")
-        plt.savefig(f"imgs/{str(i).zfill(4)}.jpeg")
-        # plt.show()
+    pass
