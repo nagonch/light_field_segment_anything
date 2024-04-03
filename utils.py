@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import os
 import yaml
 import cv2
+import torch
 
 with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -65,6 +66,25 @@ def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=1024):
         )
     im = Image.fromarray(im)
     im.save(filename)
+
+
+def shift_binary_mask(binary_mask, u, v):
+    mask_u, mask_v = torch.where(binary_mask == 1)
+    mask_u += u
+    mask_v += v
+    filtering_mask = torch.ones_like(mask_u).to(torch.bool)
+    for mask in [
+        mask_u >= 0,
+        mask_u < binary_mask.shape[0],
+        mask_v >= 0,
+        mask_v < binary_mask.shape[1],
+    ]:
+        filtering_mask = torch.logical_and(filtering_mask, mask)
+    mask_u = mask_u[filtering_mask]
+    mask_v = mask_v[filtering_mask]
+    new_binary_mask = torch.zeros_like(binary_mask)
+    new_binary_mask[mask_u, mask_v] = 1
+    return new_binary_mask
 
 
 if __name__ == "__main__":
