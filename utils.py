@@ -11,13 +11,11 @@ with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segments(segments, LF, st_border=None, filename=None):
+def visualize_segments(segments, st_border=None, filename=None):
     if st_border:
-        LF = LF[st_border:-st_border, st_border:-st_border]
         segments = segments[st_border:-st_border, st_border:-st_border]
-    s, t, u, v, c = LF.shape
+    s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
-    LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, c)
     vis = imgviz.label2rgb(
         label=segments,
         colormap=imgviz.label_colormap(segments.max() + 1),

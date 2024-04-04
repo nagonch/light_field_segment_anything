@@ -18,5 +18,5 @@ stability-score-offset: 1.0
 stability-score-thresh: 0.95
 box-nms-thresh: 0.7
 subviews-batch-size: 1
-lf-subview-max-size: 256
+mask-mask-side-size: 256
 token-size: 1

@@ -77,7 +77,15 @@ class SimpleSAM(nn.Module):
         batch,
         return_logits=True,
     ):
-        img_size = (batch.shape[-2], batch.shape[-1])
+        u, v = (batch.shape[-2], batch.shape[-1])
+        if u < v:
+            aspect = v / u
+            new_u = CONFIG["mask-mask-side-size"]
+            new_v = new_u * aspect
+        else:
+            aspect = u / v
+            new_v = CONFIG["mask-mask-side-size"]
+            new_u = new_v * aspect
         batch = self.preprocess_batch(batch)
         image_embeddings = self.sam.image_encoder(batch)
         batch_iteration = zip(
@@ -101,7 +109,7 @@ class SimpleSAM(nn.Module):
             masks = self.sam.postprocess_masks(
                 low_res_masks.reshape(-1, c, w, h),
                 input_size=batch.shape[-2:],
-                original_size=img_size,
+                original_size=(int(new_u), int(new_v)),
             )
             masks = masks.reshape(batch_shape, -1, masks.shape[-2], masks.shape[-1])
             if not return_logits:
@@ -216,13 +224,15 @@ class SimpleSAM(nn.Module):
                 masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
                 embeddings = [torch.tensor(mask[1]).cuda() for mask in masks]
-                segments_result = torch.zeros((u, v)).cuda().long()
+                segments_result = (
+                    torch.zeros((segments.shape[-2], segments.shape[-1])).cuda().long()
+                )
                 emb_size = embeddings[0].shape[-1]
-                normalization_map = torch.zeros((u, v)).cuda() + 1e-9
+                normalization_map = torch.zeros_like(segments_result).cuda() + 1e-9
                 embeddings_map = torch.zeros(
                     (
-                        u,
-                        v,
+                        segments.shape[-2],
+                        segments.shape[-1],
                         emb_size,
                     )
                 ).cuda()
@@ -239,8 +249,12 @@ class SimpleSAM(nn.Module):
                 result_embeddings.append(embeddings_map)
                 max_segment_num = segments.max()
                 result_masks.append(segments)
-        result_masks = torch.stack(result_masks).reshape(s, t, u, v)
-        result_embeddings = torch.stack(result_embeddings).reshape(s, t, u, v, emb_size)
+        result_masks = torch.stack(result_masks).reshape(
+            s, t, segments_result.shape[-2], segments_result.shape[-1]
+        )
+        result_embeddings = torch.stack(result_embeddings).reshape(
+            s, t, embeddings_map.shape[-3], embeddings_map.shape[-2], emb_size
+        )
         return result_masks, result_embeddings
 
 

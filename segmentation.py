@@ -101,7 +101,7 @@ def main(
     from data import LFDataset
 
     dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[0][2:-2, 2:-2].detach().cpu().numpy()
+    LF = dataset[1][2:-2, 2:-2].detach().cpu().numpy()
     save_LF_image(np.array(LF), "input_LF.png")
     # LF = get_LF(LF_dir)
     # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
@@ -122,14 +122,12 @@ def main(
         torch.save(segments, merged_filename)
     visualize_segments(
         segments,
-        LF,
         filename=vis_filename,
     )
     segments = post_process_segments(segments)
     for i, segment in enumerate(segments):
         visualize_segments(
             segment.astype(np.uint32),
-            LF * (segment).astype(np.int32)[:, :, :, :, None],
             filename=f"imgs/{str(i).zfill(3)}.png",
         )
     return segments
