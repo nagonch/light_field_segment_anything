@@ -30,11 +30,13 @@ def visualize_segments(segments, LF, st_border=None, filename=None):
 
 
 def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=1024):
+    if isinstance(LF_image, torch.Tensor):
+        LF_image = LF_image.detach().cpu().numpy()
     LF_image = (LF_image - LF_image.min()) / (LF_image.max() - LF_image.min())
     LF_image = (LF_image * 255).astype(np.uint8)
-    N, N, M, M, _ = LF_image.shape
+    S, T, U, V, _ = LF_image.shape
     if ij is None:
-        LF = LF_image.transpose(0, 2, 1, 3, 4).reshape(N * M, N * M, 3)
+        LF = LF_image.transpose(0, 2, 1, 3, 4).reshape(S * U, V * T, 3)
     else:
         i, j = ij
         LF = LF_image[i][j]
@@ -42,7 +44,7 @@ def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=1024):
     if resize_to is not None:
         resize_to = max(LF.shape[2], resize_to)
         if ij is None:
-            resize_to *= N
+            resize_to *= S
         im = cv2.resize(
             im,
             (

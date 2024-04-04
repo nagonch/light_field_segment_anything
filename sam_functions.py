@@ -202,7 +202,6 @@ class SimpleSAM(nn.Module):
         result_embeddings = []
         max_segment_num = -1
         s, t, u, v, c = LF.shape
-        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
         LF = (
             torch.tensor(LF)
             .cuda()
