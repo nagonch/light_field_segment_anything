@@ -5,7 +5,7 @@ from tqdm import tqdm
 import yaml
 import os
 import imgviz
-from utils import visualize_segments, CONFIG
+from utils import visualize_segments, CONFIG, save_LF_image
 from data import get_LF
 from sam_functions import get_sam
 import matplotlib.pyplot as plt
@@ -98,9 +98,13 @@ def main(
     vis_filename=CONFIG["vis-filename"],
 ):
     from scipy.io import loadmat
+    from data import LFDataset
 
+    dataset = LFDataset("UrbanLF_Syn/test")
+    LF = dataset[0][2:-2, 2:-2].detach().cpu().numpy()
+    save_LF_image(np.array(LF), "input_LF.png")
     # LF = get_LF(LF_dir)
-    LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
+    # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()

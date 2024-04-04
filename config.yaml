@@ -1,5 +1,5 @@
 min-mask-area: 0.001
-min-mask-area-final: 0.001
+min-mask-area-final: 0.01
 edge-metric: "iou"
 cosine-weight: 0.2
 metric-threshold: 0.4
@@ -7,9 +7,9 @@ model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
-vis-filename: "plot.png"
+vis-filename: "segments.png"
 sam-segments-checkpoint: True
-merged-checkpoint: False
+merged-checkpoint: True
 points-per-side: 32
 points-per-batch: 64
 points-per-batch-filtering: 64
@@ -17,6 +17,6 @@ pred-iou-thresh: 0.88
 stability-score-offset: 1.0
 stability-score-thresh: 0.95
 box-nms-thresh: 0.7
-subviews-batch-size: 2
-lf-subview-max-size: 128
-token-size: 256
+subviews-batch-size: 1
+lf-subview-max-size: 256
+token-size: 1

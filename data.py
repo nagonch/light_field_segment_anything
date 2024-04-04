@@ -83,5 +83,6 @@ class LFDataset(Dataset):
 
 if __name__ == "__main__":
     dataset = LFDataset("UrbanLF_Syn/test")
-    img = dataset[0]
+    img = dataset[0][2:-2, 2:-2]
+    # print(img.shape)
     save_LF_image(img, resize_to=None)

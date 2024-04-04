@@ -1,7 +1,7 @@
 import numpy as np
 import imgviz
 from PIL import Image
-from matplotlib import pyplot as plt
+from matplotlib import cm, pyplot as plt
 import os
 import yaml
 import cv2
@@ -20,16 +20,13 @@ def visualize_segments(segments, LF, st_border=None, filename=None):
     LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, c)
     vis = imgviz.label2rgb(
         label=segments,
-        image=LF,
         colormap=imgviz.label_colormap(segments.max() + 1),
     )
-    plt.imshow(vis)
-    if filename:
-        plt.savefig(filename)
-    plt.close()
+    im = Image.fromarray(vis)
+    im.save(filename)
 
 
-def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=1024):
+def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
     if isinstance(LF_image, torch.Tensor):
         LF_image = LF_image.detach().cpu().numpy()
     LF_image = (LF_image - LF_image.min()) / (LF_image.max() - LF_image.min())
