@@ -6,6 +6,8 @@ import os
 from torch.utils.data import Dataset
 import math
 from utils import save_LF_image
+import cv2
+from torchvision.transforms.functional import resize
 
 
 def get_LF(dir):
@@ -36,19 +38,40 @@ class LFDataset(Dataset):
     def __len__(self):
         return self.size
 
+    def resize_img(self, img):
+        u, v = img.shape[:2]
+        if u < v:
+            aspect = v / u
+            u = CONFIG["lf-subview-max-size"]
+            v = u * aspect
+        else:
+            aspect = u / v
+            v = CONFIG["lf-subview-max-size"]
+            u = v * aspect
+        img = cv2.resize(
+            img,
+            (
+                int(v),
+                int(u),
+            ),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        return img
+
     def __getitem__(self, idx):
         frame = self.frames[idx]
         imgs = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
             if not filename.endswith(".png"):
                 continue
-            img = Image.open(f"{self.data_path}/{frame}/{filename}")
-            img = (torch.tensor(np.array(img)))[:, :, :3]
+            img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
+            img = self.resize_img(img)
+            img = (torch.tensor(img))[:, :, :3]
             imgs.append(img)
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
-        LF = torch.stack(imgs).reshape(
+        LF = LF.reshape(
             n_apertures,
             n_apertures,
             u,
