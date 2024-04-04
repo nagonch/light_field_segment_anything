@@ -5,7 +5,8 @@ from tqdm import tqdm
 import yaml
 import os
 import imgviz
-from utils import visualize_segments, get_LF, CONFIG
+from utils import visualize_segments, CONFIG
+from data import get_LF
 from sam_functions import get_sam
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
