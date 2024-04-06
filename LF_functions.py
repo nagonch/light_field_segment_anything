@@ -18,10 +18,10 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
     epipolar_line = (
         torch.tensor([s_central - s_subview, t_central - t_subview]).float().cuda()
     )
-    aspect_ratio_matrix = torch.diag(torch.tensor([u, v])).float().cuda()
+    aspect_ratio_matrix = torch.diag(torch.tensor([v, u])).float().cuda()
     epipolar_line = aspect_ratio_matrix @ epipolar_line
     epipolar_line = F.normalize(epipolar_line[None])[0]
-    # print(segments.shape)
+    print(epipolar_line)
     # linspace =
 
 
@@ -48,5 +48,5 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
 if __name__ == "__main__":
     segments = torch.tensor(torch.load("segments.pt")).cuda()
     segment_central = 31804
-    segment_subview = 3235
+    segment_subview = 597
     calculate_peak_metric(segments, segment_central, segment_subview)
