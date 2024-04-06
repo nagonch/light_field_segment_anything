@@ -7,6 +7,7 @@ from utils import shift_binary_mask
 
 
 def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
+    u, v = segments.shape[-2:]
     mask_central = (segments == i_central).to(torch.int32).sum(axis=(0, 1))
     mask_subview = (segments == i_subview).to(torch.int32).sum(axis=(0, 1))
     s_subview, t_subview = torch.where(
@@ -17,7 +18,11 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
     epipolar_line = (
         torch.tensor([s_central - s_subview, t_central - t_subview]).float().cuda()
     )
+    aspect_ratio_matrix = torch.diag(torch.tensor([u, v])).float().cuda()
+    epipolar_line = aspect_ratio_matrix @ epipolar_line
     epipolar_line = F.normalize(epipolar_line[None])[0]
+    # print(segments.shape)
+    # linspace =
 
 
 # def calculate_shifted_metric(
@@ -42,7 +47,6 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
 
 if __name__ == "__main__":
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    print(torch.unique(segments[0, 1]))
     segment_central = 31804
     segment_subview = 3235
     calculate_peak_metric(segments, segment_central, segment_subview)
