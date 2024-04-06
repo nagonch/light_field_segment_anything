@@ -21,6 +21,10 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
     aspect_ratio_matrix = torch.diag(torch.tensor([v, u])).float().cuda()
     epipolar_line = aspect_ratio_matrix @ epipolar_line
     epipolar_line = F.normalize(epipolar_line[None])[0]
+    mask_subview_cetroid = (
+        torch.stack(torch.where(mask_subview == 1)).float().mean(axis=-1)
+    )
+    print(mask_subview_cetroid)
     print(epipolar_line)
     # linspace =
 
