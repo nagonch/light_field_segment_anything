@@ -6,7 +6,7 @@ from torchvision.transforms.functional import affine
 from utils import shift_binary_mask
 
 
-def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
+def calculate_peak_metric(segments, i_central, i_subview, n_points=50, eps=1e-9):
     u, v = segments.shape[-2:]
     mask_central = (segments == i_central).to(torch.int32).sum(axis=(0, 1))
     mask_subview = (segments == i_subview).to(torch.int32).sum(axis=(0, 1))
@@ -15,17 +15,26 @@ def calculate_peak_metric(segments, i_central, i_subview, step=0.5, eps=1e-9):
     )
     s_subview, t_subview = s_subview[0].item(), t_subview[0].item()
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-    epipolar_line = (
+    epipolar_line_vector = (
         torch.tensor([s_central - s_subview, t_central - t_subview]).float().cuda()
     )
-    aspect_ratio_matrix = torch.diag(torch.tensor([v, u])).float().cuda()
-    epipolar_line = aspect_ratio_matrix @ epipolar_line
-    epipolar_line = F.normalize(epipolar_line[None])[0]
-    mask_subview_cetroid = (
+    aspect_ratio_matrix = torch.diag(torch.tensor([u, v])).float().cuda()
+    epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
+    epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
+    epipolar_line_point = (
         torch.stack(torch.where(mask_subview == 1)).float().mean(axis=-1)
     )
-    print(mask_subview_cetroid)
-    print(epipolar_line)
+    u_space = torch.linspace(
+        0, epipolar_line_point[0] / epipolar_line_vector[0], n_points
+    ).cuda()
+    v_space = (
+        (u_space - epipolar_line_point[0])
+        * epipolar_line_vector[1]
+        / epipolar_line_vector[0]
+    ) + epipolar_line_point[1]
+    plt.plot(u_space.detach().cpu().numpy(), v_space.detach().cpu().numpy())
+    plt.show()
+    plt.savefig("yo.png")
     # linspace =
 
 
