@@ -9,7 +9,7 @@ def calculate_peak_metric(
     segments,
     i_central,
     i_subview,
-    pixel_step=10,
+    pixel_step=50,
     metric=BinaryJaccardIndex().cuda(),
 ):
     u, v = segments.shape[-2:]
@@ -32,17 +32,17 @@ def calculate_peak_metric(
     )  # in case the image is non-square
     epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
     epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
-    ious = []
+    ious = [0]
     mask_new = torch.ones_like(mask_subview)
-    img_index = 0
     i = 0
     # shift the segment along the line until it disappears, calculate iou
     while mask_new.sum() > 0:
         vec = torch.round(epipolar_line_vector * i * -pixel_step).long()
         mask_new = shift_binary_mask(mask_subview, vec)
         iou = metric(mask_central, mask_new)
+        if iou < ious[-1]:
+            break
         ious.append(iou.item())
-        img_index += 1
         i += 1
     mask_new = torch.ones_like(mask_subview)
     i = 0
@@ -50,8 +50,9 @@ def calculate_peak_metric(
         vec = torch.round(epipolar_line_vector * i * pixel_step).long()
         mask_new = shift_binary_mask(mask_subview, vec)
         iou = metric(mask_central, mask_new)
+        if iou < ious[-1]:
+            break
         ious.append(iou.item())
-        img_index += 1
         i += 1
     result = torch.max(torch.tensor(ious)).item()
     return result

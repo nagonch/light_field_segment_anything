@@ -11,6 +11,7 @@ from sam_functions import get_sam
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
+from LF_functions import calculate_peak_metric
 import torch.nn.functional as F
 
 
@@ -42,8 +43,8 @@ def get_merge_segments_mapping(segments, embeddings):
     central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))[1:]
     graphs = []
     mapping = {}
-    for s_ in tqdm(range(s)):
-        for t_ in range(t):
+    for s_ in tqdm(range(s), leave=False):
+        for t_ in tqdm(range(t), leave=False):
             if s_ == s // 2 and t_ == t // 2:
                 continue
             graph = nx.Graph()
@@ -58,9 +59,9 @@ def get_merge_segments_mapping(segments, embeddings):
                 bottom_nodes,
                 bipartite=1,
             )
-            for i in central_inds:
+            for i in tqdm(central_inds, leave=False):
                 for j in segments_st:
-                    metric_val = calculate_segments_metric(segments, embeddings, i, j)
+                    metric_val = calculate_peak_metric(segments, i, j)
                     if metric_val < CONFIG["metric-threshold"]:
                         metric_val = 0.0
                     graph.add_edges_from(
@@ -101,7 +102,7 @@ def main(
     from data import LFDataset
 
     dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[1][2:-2, 2:-2].detach().cpu().numpy()
+    LF = dataset[2][2:-2, 2:-2].detach().cpu().numpy()
     save_LF_image(np.array(LF), "input_LF.png")
     # LF = get_LF(LF_dir)
     # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
