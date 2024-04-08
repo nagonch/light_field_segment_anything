@@ -53,7 +53,8 @@ def calculate_peak_metric(
         ious.append(iou.item())
         img_index += 1
         i += 1
-    return torch.max(torch.tensor(ious))
+    result = torch.max(torch.tensor(ious)).item()
+    return result
 
 
 if __name__ == "__main__":
