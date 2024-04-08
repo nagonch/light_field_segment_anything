@@ -5,11 +5,23 @@ import torch.nn.functional as F
 from utils import shift_binary_mask
 
 
+def project_point_onto_line(x, v, y):
+    # Calculate the vector from x to y
+    a = y - x
+
+    # Calculate the projection of a onto v
+    projection = torch.dot(a, v) / torch.dot(v, v) * v
+
+    # Calculate the scalar t
+    t = torch.dot(projection, v) / torch.dot(v, v)
+
+    return t
+
+
 def calculate_peak_metric(
     segments,
     i_central,
     i_subview,
-    pixel_step=50,
     metric=BinaryJaccardIndex().cuda(),
 ):
     u, v = segments.shape[-2:]
@@ -32,39 +44,42 @@ def calculate_peak_metric(
     )  # in case the image is non-square
     epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
     epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
-    ious = [0]
-    mask_new = torch.ones_like(mask_subview)
-    i = 0
-    # shift the segment along the line until it disappears, calculate iou
-    while mask_new.sum() > 0:
-        vec = torch.round(epipolar_line_vector * i * -pixel_step).long()
-        mask_new = shift_binary_mask(mask_subview, vec)
-        iou = metric(mask_central, mask_new)
-        if iou < ious[-1]:
-            break
-        ious.append(iou.item())
-        i += 1
-    mask_new = torch.ones_like(mask_subview)
-    i = 0
-    while mask_new.sum() > 0:
-        vec = torch.round(epipolar_line_vector * i * pixel_step).long()
-        mask_new = shift_binary_mask(mask_subview, vec)
-        iou = metric(mask_central, mask_new)
-        if iou < ious[-1]:
-            break
-        ious.append(iou.item())
-        i += 1
-    result = torch.max(torch.tensor(ious)).item()
-    return result
+    central_mask_x, central_mask_y = torch.where(mask_central == 1)
+    central_mask_centroid = torch.tensor(
+        [
+            central_mask_x.float().mean(),
+            central_mask_y.float().mean(),
+        ]
+    ).cuda()
+    subview_mask_x, subview_mask_y = torch.where(mask_subview == 1)
+    epipolar_line_point = torch.tensor(
+        [
+            subview_mask_x.float().mean(),
+            subview_mask_y.float().mean(),
+        ]
+    ).cuda()
+    displacement = project_point_onto_line(
+        epipolar_line_point, epipolar_line_vector, central_mask_centroid
+    )
+    vec = torch.round(epipolar_line_vector * displacement).long()
+    mask_new = shift_binary_mask(mask_subview, vec)
+    iou = metric(mask_central, mask_new).item()
+    return iou
 
 
 if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    unique_segments = torch.unique(segments[2, 2])
-    segment_central = 32723
-    # segment_central = unique_segments[randint(0, unique_segments.shape[0]) - 1]
+    unique_central_segments = torch.unique(segments[2, 2])
+    unique_corner_segments = torch.unique(segments[0, 0])
+    # segment_central = 32723
+    segment_central = unique_central_segments[
+        randint(0, unique_central_segments.shape[0]) - 1
+    ]
     print(segment_central)
-    segment_subview = 15397
+    segment_subview = unique_corner_segments[
+        randint(0, unique_corner_segments.shape[0]) - 1
+    ]
+    print(segment_subview)
     print(calculate_peak_metric(segments, segment_central, segment_subview))
