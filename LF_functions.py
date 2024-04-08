@@ -15,14 +15,12 @@ def calculate_peak_metric(
     u, v = segments.shape[-2:]
     mask_central = (segments == i_central).to(torch.int32).sum(axis=(0, 1))
     mask_subview = (segments == i_subview).to(torch.int32).sum(axis=(0, 1))
-    # plt.imshow(mask_central.detach().cpu().numpy())
-    # plt.show()
-    # plt.savefig("central.png")
-    # plt.close()
-    # plt.imshow(mask_subview.detach().cpu().numpy())
-    # plt.show()
-    # plt.savefig("subview.png")
-    # plt.close()
+    plt.imshow(mask_central.detach().cpu().numpy())
+    plt.savefig("central.png")
+    plt.close()
+    plt.imshow(mask_subview.detach().cpu().numpy())
+    plt.savefig("subview.png")
+    plt.close()
     s_subview, t_subview = torch.where(
         (segments == i_subview).to(torch.int32).sum(axis=(2, 3)) > 0
     )
@@ -39,33 +37,12 @@ def calculate_peak_metric(
     for i, magnitude in enumerate(magnitudes):
         vec = torch.round(epipolar_line_vector * magnitude).long()
         mask_new = shift_binary_mask(mask_subview, vec)
-        # plt.imshow(mask_new.detach().cpu().numpy())
-        # plt.show()
-        # plt.savefig(f"masks/{str(i).zfill(3)}.png")
-        # plt.close()
+        plt.imshow(mask_new.detach().cpu().numpy())
+        plt.savefig(f"masks/{str(i).zfill(3)}.png")
+        plt.close()
         iou = metric(mask_central, mask_new)
         ious.append(iou.item())
     return iou
-    # plt.plot(ious)
-    # plt.show()
-    # plt.savefig("ious.png")
-    # print(torch.tensor(ious).max())
-    # epipolar_line_point = (
-    #     torch.stack(torch.where(mask_subview == 1)).float().mean(axis=-1)
-    # )
-    # u_space = torch.linspace(
-    #     0, epipolar_line_point[0] / epipolar_line_vector[0], n_points
-    # ).cuda()
-    # v_space = (
-    #     (u_space - epipolar_line_point[0])
-    #     * epipolar_line_vector[1]
-    #     / epipolar_line_vector[0]
-    # ) + epipolar_line_point[1]
-    # print(epipolar_line_point)
-    # plt.scatter(u_space.detach().cpu().numpy(), v_space.detach().cpu().numpy())
-    # plt.show()
-    # plt.savefig("yo.png")
-    # linspace =
 
 
 if __name__ == "__main__":
