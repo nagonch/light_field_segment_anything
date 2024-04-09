@@ -71,20 +71,34 @@ def calculate_peak_metric(
     return iou
 
 
+def find_match(segments, central_segment_num, s, t):
+    u, v = segments.shape[-2:]
+    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    epipolar_line_vector = (
+        torch.tensor([s_central - s, t_central - t]).float().cuda()
+    )  # the direction of the epipolar line in this subview
+    aspect_ratio_matrix = (
+        torch.diag(torch.tensor([v, u])).float().cuda()
+    )  # in case the image is non-square
+    epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
+    epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
+    mask_central = (segments == central_segment_num)[s_central, t_central]
+    subview_mask_x, subview_mask_y = torch.where(mask_central == 1)
+    epipolar_line_point = torch.tensor(
+        [
+            subview_mask_x.float().mean(),
+            subview_mask_y.float().mean(),
+        ]
+    ).cuda()
+    print(epipolar_line_point, epipolar_line_vector)
+
+
 if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    central_test_segment = 32804
-    seg = (
-        (segments == central_test_segment)[2, 2].to(torch.int32).detach().cpu().numpy()
-    )
-    plt.imshow(
-        seg,
-        cmap="gray",
-    )
-    plt.show()
-    plt.close()
+    central_test_segment = 32862
+    print(find_match(segments, central_test_segment, 0, 0))
     raise
     segment_central = unique_central_segments[
         randint(0, unique_central_segments.shape[0]) - 1
