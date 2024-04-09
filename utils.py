@@ -125,5 +125,25 @@ def draw_line_in_mask(mask, start_point, end_point):
     return mask
 
 
+def line_image_boundaries(P, V, M, N):
+    Px, Py = P
+    Vx, Vy = V
+
+    t_left = -Px / Vx if Vx != 0 else float("inf")
+    t_right = (N - 1 - Px) / Vx if Vx != 0 else float("inf")
+    t_top = -Py / Vy if Vy != 0 else float("inf")
+    t_bottom = (M - 1 - Py) / Vy if Vy != 0 else float("inf")
+
+    Q_left = (Px + t_left * Vx, Py + t_left * Vy)
+    Q_right = (Px + t_right * Vx, Py + t_right * Vy)
+    Q_top = (Px + t_top * Vx, Py + t_top * Vy)
+    Q_bottom = (Px + t_bottom * Vx, Py + t_bottom * Vy)
+
+    points = [Q_left, Q_right, Q_top, Q_bottom]
+    valid_points = [(int(x), int(y)) for (x, y) in points if 0 <= x < N and 0 <= y < M]
+
+    return list(set(valid_points))
+
+
 if __name__ == "__main__":
     pass

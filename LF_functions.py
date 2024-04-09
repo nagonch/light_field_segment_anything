@@ -2,7 +2,12 @@ import torch
 from torchmetrics.classification import BinaryJaccardIndex
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from utils import shift_binary_mask, project_point_onto_line, draw_line_in_mask
+from utils import (
+    shift_binary_mask,
+    project_point_onto_line,
+    draw_line_in_mask,
+    line_image_boundaries,
+)
 
 
 def calculate_peak_metric(
@@ -77,23 +82,21 @@ def find_match(segments, central_segment_num, s, t):
             subview_mask_y.float().mean(),
         ]
     ).cuda()
-    print(epipolar_line_point, epipolar_line_vector)
-    # segments_result = []
-    # for segment_num in torch.unique(segments[s, t]):
-    #     seg = segments[s, t] == segment_num
-    #     centroid_x, centroid_y = torch.where(seg == 1)
-    #     centroid = torch.tensor(
-    #         [
-    #             centroid_x.float().mean(),
-    #             centroid_y.float().mean(),
-    #         ]
-    #     ).cuda()
-    #     if torch.norm(centroid - epipolar_line_point).item() < 15:
-    #         segments_result.append(seg)
-    # for segment in segments_result:
-    #     plt.imshow(segment.detach().cpu().numpy())
-    #     plt.show()
-    #     plt.close()
+    line_boundries = line_image_boundaries(
+        epipolar_line_point, epipolar_line_vector, u, v
+    )
+    epipolar_line = draw_line_in_mask(
+        torch.zeros_like(mask_central),
+        line_boundries[0],
+        line_boundries[1],
+    )
+    segments_result = []
+    for segment_num in torch.unique(segments[s, t]):
+        seg = segments[s, t] == segment_num
+        if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
+            segments_result.append(seg)
+    print(len(segments_result))
+    print(torch.unique(segments[s, t]).shape[0])
 
 
 if __name__ == "__main__":
