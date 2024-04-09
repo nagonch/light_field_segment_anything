@@ -73,11 +73,12 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
     central_test_segment = 32862
-    segment_match = find_match(segments, central_test_segment, 0, 0)
-    seg = (segments[0, 0] == segment_match).to(torch.int32) + (
-        segments[2, 2] == central_test_segment
-    ).to(torch.int32)
-    seg2 = (segments[2, 2] == central_test_segment).to(torch.int32)
-    plt.imshow(seg2.detach().cpu().numpy(), cmap="gray")
-    plt.show()
-    plt.close()
+    for s in range(segments.shape[0]):
+        for t in range(segments.shape[1]):
+            if s == 2 and t == 2:
+                continue
+            segment_match = find_match(segments, central_test_segment, s, t)
+            seg = (segments[s, t] == segment_match).to(torch.int32)
+            plt.imshow(seg.detach().cpu().numpy(), cmap="gray")
+            plt.show()
+            plt.close()

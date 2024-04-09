@@ -128,7 +128,7 @@ def draw_line_in_mask(mask, start_point, end_point):
 def line_image_boundaries(P, V, M, N):
     Px, Py = P
     Vx, Vy = V
-
+    (Vx, Vy) = (Vx.item(), Vy.item())
     t_left = -Px / Vx if Vx != 0 else float("inf")
     t_right = (N - 1 - Px) / Vx if Vx != 0 else float("inf")
     t_top = -Py / Vy if Vy != 0 else float("inf")
