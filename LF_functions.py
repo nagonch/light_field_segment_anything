@@ -2,20 +2,7 @@ import torch
 from torchmetrics.classification import BinaryJaccardIndex
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from utils import shift_binary_mask
-
-
-def project_point_onto_line(x, v, y):
-    # Calculate the vector from x to y
-    a = y - x
-
-    # Calculate the projection of a onto v
-    projection = torch.dot(a, v) / torch.dot(v, v) * v
-
-    # Calculate the scalar t
-    t = torch.dot(projection, v) / torch.dot(v, v)
-
-    return t
+from utils import shift_binary_mask, project_point_onto_line, draw_line_in_mask
 
 
 def calculate_peak_metric(
@@ -90,25 +77,32 @@ def find_match(segments, central_segment_num, s, t):
             subview_mask_y.float().mean(),
         ]
     ).cuda()
-    segments_result = []
-    for segment_num in torch.unique(segments[s, t]):
-        seg = segments[s, t] == segment_num
-        centroid_x, centroid_y = torch.where(seg == 1)
-        centroid = torch.tensor(
-            [
-                centroid_x.float().mean(),
-                centroid_y.float().mean(),
-            ]
-        ).cuda()
-        if torch.norm(centroid - epipolar_line_point).item() < 15:
-            segments_result.append(seg)
-    for segment in segments_result:
-        plt.imshow(segment.detach().cpu().numpy())
-        plt.show()
-        plt.close()
+    print(epipolar_line_point, epipolar_line_vector)
+    # segments_result = []
+    # for segment_num in torch.unique(segments[s, t]):
+    #     seg = segments[s, t] == segment_num
+    #     centroid_x, centroid_y = torch.where(seg == 1)
+    #     centroid = torch.tensor(
+    #         [
+    #             centroid_x.float().mean(),
+    #             centroid_y.float().mean(),
+    #         ]
+    #     ).cuda()
+    #     if torch.norm(centroid - epipolar_line_point).item() < 15:
+    #         segments_result.append(seg)
+    # for segment in segments_result:
+    #     plt.imshow(segment.detach().cpu().numpy())
+    #     plt.show()
+    #     plt.close()
 
 
 if __name__ == "__main__":
+    # mask = torch.zeros((256, 341))
+    # mask = draw_line_in_mask(mask, (0, 0), (230, 240))
+    # plt.imshow(mask)
+    # plt.show()
+    # plt.close()
+    # raise
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
