@@ -102,7 +102,7 @@ def main(
     from data import LFDataset
 
     dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[2][2:-2, 2:-2].detach().cpu().numpy()
+    LF = dataset[8][2:-2, 2:-2].detach().cpu().numpy()
     save_LF_image(np.array(LF), "input_LF.png")
     # LF = get_LF(LF_dir)
     # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]

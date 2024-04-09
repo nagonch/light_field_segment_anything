@@ -64,6 +64,10 @@ def calculate_peak_metric(
     vec = torch.round(epipolar_line_vector * displacement).long()
     mask_new = shift_binary_mask(mask_subview, vec)
     iou = metric(mask_central, mask_new).item()
+    # mask_ful = mask_new + mask_central
+    # plt.imshow(mask_ful.detach().cpu().numpy(), cmap="gray")
+    # plt.show()
+    # plt.close()
     return iou
 
 
@@ -71,15 +75,25 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    unique_central_segments = torch.unique(segments[2, 2])
-    unique_corner_segments = torch.unique(segments[0, 0])
-    # segment_central = 32723
+    central_test_segment = 32804
+    seg = (
+        (segments == central_test_segment)[2, 2].to(torch.int32).detach().cpu().numpy()
+    )
+    plt.imshow(
+        seg,
+        cmap="gray",
+    )
+    plt.show()
+    plt.close()
+    raise
     segment_central = unique_central_segments[
         randint(0, unique_central_segments.shape[0]) - 1
     ]
+    # segment_central = 43340
     print(segment_central)
     segment_subview = unique_corner_segments[
         randint(0, unique_corner_segments.shape[0]) - 1
     ]
+    # segment_subview = 290
     print(segment_subview)
     print(calculate_peak_metric(segments, segment_central, segment_subview))
