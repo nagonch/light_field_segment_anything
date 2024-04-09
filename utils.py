@@ -145,5 +145,16 @@ def line_image_boundaries(P, V, M, N):
     return list(set(valid_points))
 
 
+def binary_mask_centroid(mask):
+    nonzero_indices = torch.nonzero(mask)
+
+    # Calculate centroid
+    centroid_x = torch.mean(nonzero_indices[:, 1].float())
+    centroid_y = torch.mean(nonzero_indices[:, 0].float())
+
+    centroid = (centroid_x.item(), centroid_y.item())
+    return centroid
+
+
 if __name__ == "__main__":
     pass
