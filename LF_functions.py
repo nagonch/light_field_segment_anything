@@ -71,9 +71,6 @@ def get_result_masks(segments):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     central_segments = torch.unique(segments[s_central, t_central])[1:]
     segment_sums = [(segments == i).sum() for i in central_segments]
-    mapping = dict(
-        zip([x.item() for x in central_segments], [x.item() for x in segment_sums])
-    )
     central_segments = [
         segment
         for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
