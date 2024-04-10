@@ -88,10 +88,6 @@ def get_result_masks(segments):
                 if segment_match >= 0:
                     matches.append(segment_match)
         segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
-        visualize_segments(
-            (segments == segment_num).to(torch.int32).cpu().numpy(),
-            filename=f"imgs/{str(mapping[segment_num.item()]).zfill(3)}.png",
-        )
     segments[~torch.isin(segments, torch.unique(segments[s_central, t_central]))] = 0
     return segments
 
