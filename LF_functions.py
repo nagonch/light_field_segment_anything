@@ -9,8 +9,10 @@ from utils import (
     draw_line_in_mask,
     line_image_boundaries,
     binary_mask_centroid,
+    visualize_segments,
     CONFIG,
 )
+from tqdm import tqdm
 
 
 def calculate_peak_metric(
@@ -65,6 +67,35 @@ def find_match(segments, central_segment_num, s, t):
     return segments_result[np.argmax(max_ious_result)]
 
 
+def get_result_masks(segments):
+    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    central_segments = torch.unique(segments[s_central, t_central])[1:]
+    segment_sums = [(segments == i).sum() for i in central_segments]
+    mapping = dict(
+        zip([x.item() for x in central_segments], [x.item() for x in segment_sums])
+    )
+    central_segments = [
+        segment
+        for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
+    ]
+    for segment_num in tqdm(central_segments):
+        matches = []
+        for s in range(segments.shape[0]):
+            for t in range(segments.shape[1]):
+                if s == s_central and t == t_central:
+                    continue
+                segment_match = find_match(segments, segment_num, s, t)
+                if segment_match >= 0:
+                    matches.append(segment_match)
+        segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
+        visualize_segments(
+            (segments == segment_num).to(torch.int32).cpu().numpy(),
+            filename=f"imgs/{str(mapping[segment_num.item()]).zfill(3)}.png",
+        )
+    segments[~torch.isin(segments, torch.unique(segments[s_central, t_central]))] = 0
+    return segments
+
+
 if __name__ == "__main__":
     # mask = torch.zeros((256, 341))
     # mask = draw_line_in_mask(mask, (0, 0), (230, 240))
@@ -75,13 +106,6 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    central_test_segment = 32862
-    for s in range(segments.shape[0]):
-        for t in range(segments.shape[1]):
-            if s == 2 and t == 2:
-                continue
-            segment_match = find_match(segments, central_test_segment, s, t)
-            seg = (segments[s, t] == segment_match).to(torch.int32)
-            plt.imshow(seg.detach().cpu().numpy(), cmap="gray")
-            plt.show()
-            plt.close()
+    print(get_result_masks(segments))
+    # central_test_segment = 32862
+    # print(get_segmentation(segments, central_test_segment))

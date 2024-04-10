@@ -140,8 +140,11 @@ def line_image_boundaries(P, V, M, N):
     Q_bottom = (Px + t_bottom * Vx, Py + t_bottom * Vy)
 
     points = [Q_left, Q_right, Q_top, Q_bottom]
-    valid_points = [(int(x), int(y)) for (x, y) in points if 0 <= x < N and 0 <= y < M]
-
+    valid_points = [
+        (int(x), int(y))
+        for (x, y) in points
+        if 0 <= round(x, 0) < N and 0 <= round(y, 0) < M
+    ]
     return list(set(valid_points))
 
 

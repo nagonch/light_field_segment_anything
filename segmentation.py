@@ -11,7 +11,7 @@ from sam_functions import get_sam
 import matplotlib.pyplot as plt
 from torchmetrics.classification import BinaryJaccardIndex
 import networkx as nx
-from LF_functions import calculate_peak_metric
+from LF_functions import calculate_peak_metric, get_result_masks
 import torch.nn.functional as F
 
 
@@ -115,11 +115,9 @@ def main(
         torch.save(segments, segments_filename)
         torch.save(embeddings, embeddings_filename)
     if merged_checkpoint and os.path.exists(merged_filename):
-        segments = torch.load(merged_filename)
+        segments = torch.load(merged_filename).detach().cpu().numpy()
     else:
-        mapping = get_merge_segments_mapping(segments, embeddings)
-        segments = segments.cpu().numpy()
-        segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
+        segments = get_result_masks(segments).detach().cpu().numpy()
         torch.save(segments, merged_filename)
     visualize_segments(
         segments,

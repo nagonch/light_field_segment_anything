@@ -1,5 +1,5 @@
 min-mask-area: 0.001
-min-mask-area-final: 0.01
+min-mask-area-final: 0.001
 edge-metric: "iou"
 cosine-weight: 0.2
 metric-threshold: 0.1
