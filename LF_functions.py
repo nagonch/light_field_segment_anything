@@ -9,6 +9,7 @@ from utils import (
     draw_line_in_mask,
     line_image_boundaries,
     binary_mask_centroid,
+    CONFIG,
 )
 
 
@@ -52,13 +53,15 @@ def find_match(segments, central_segment_num, s, t):
     )
     segments_result = []
     max_ious_result = []
-    for segment_num in torch.unique(segments[s, t]):
+    for segment_num in torch.unique(segments[s, t])[1:]:
         seg = segments[s, t] == segment_num
         if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
             segments_result.append(segment_num.item())
             max_ious_result.append(
                 calculate_peak_metric(mask_central, seg, epipolar_line_vector)
             )
+    if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
+        return -1  # match not found
     return segments_result[np.argmax(max_ious_result)]
 
 

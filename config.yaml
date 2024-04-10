@@ -2,7 +2,7 @@ min-mask-area: 0.001
 min-mask-area-final: 0.01
 edge-metric: "iou"
 cosine-weight: 0.2
-metric-threshold: 0.4
+metric-threshold: 0.1
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
