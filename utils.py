@@ -5,6 +5,10 @@ import yaml
 import cv2
 import torch
 from scipy.io import savemat
+from plenpy.lightfields import LightField
+import logging
+
+logging.getLogger("plenpy").setLevel(logging.WARNING)
 
 with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -24,6 +28,8 @@ def visualize_segmentation_mask(segments, LF, filename, include_LF=False):
         filename,
         {"LF": vis},
     )
+    segments = LightField.from_mat_file(filename, key="LF")
+    segments.show()
 
 
 def visualize_segments(segments, filename):
