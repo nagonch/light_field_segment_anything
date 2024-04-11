@@ -17,4 +17,4 @@ if [ -z "$filename" ]; then
   exit 1
 fi
 
-matlab -nosplash -nodesktop -r "run('LFToolbox/LFMatlabPathSetup.m'); load('$filename','LF'); LFDispMousePan(LF);waitfor(gcf);exit"
+python -c "from plenpy.lightfields import LightField; LF = LightField.from_mat_file('segments.mat', key='LF'); LF.show();"
