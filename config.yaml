@@ -7,7 +7,7 @@ model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
-vis-filename: "segments.png"
+vis-filename: "segments.mat"
 sam-segments-checkpoint: True
 merged-checkpoint: True
 points-per-side: 32
