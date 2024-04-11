@@ -35,7 +35,7 @@ def main(
     from data import LFDataset
 
     dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[20].detach().cpu().numpy()
+    LF = dataset[2].detach().cpu().numpy()
     LF_vis = LightField(LF)
     LF_vis.show()
     save_LF_image(np.array(LF), "input_LF.png")
