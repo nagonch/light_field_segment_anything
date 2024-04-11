@@ -1,27 +1,29 @@
 import numpy as np
 import imgviz
 from PIL import Image
-from matplotlib import cm, pyplot as plt
-import os
 import yaml
 import cv2
 import torch
+from scipy.io import savemat
 
 with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segments(segments, st_border=None, filename=None):
-    if st_border:
-        segments = segments[st_border:-st_border, st_border:-st_border]
+def visualize_segments(segments, filename):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
-    vis = imgviz.label2rgb(
-        label=segments,
-        colormap=imgviz.label_colormap(segments.max() + 1),
+    vis = np.transpose(
+        imgviz.label2rgb(
+            label=segments,
+            colormap=imgviz.label_colormap(segments.max() + 1),
+        ).reshape(s, u, t, v, 3),
+        (0, 2, 1, 3, 4),
     )
-    im = Image.fromarray(vis)
-    im.save(filename)
+    savemat(
+        filename,
+        {"LF": vis},
+    )
 
 
 def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):

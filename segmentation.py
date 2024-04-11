@@ -56,7 +56,7 @@ def main(
     for i, segment in enumerate(segments):
         visualize_segments(
             segment.astype(np.uint32),
-            filename=f"imgs/{str(i).zfill(3)}.png",
+            f"imgs/{str(i).zfill(3)}.png",
         )
     return segments
 

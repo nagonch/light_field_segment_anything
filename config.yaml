@@ -9,7 +9,7 @@ embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "segments.png"
 sam-segments-checkpoint: True
-merged-checkpoint: False
+merged-checkpoint: True
 points-per-side: 32
 points-per-batch: 64
 points-per-batch-filtering: 64
