@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import os
-from utils import visualize_segments, CONFIG, save_LF_image
+from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
 from data import get_LF
 from sam_functions import get_sam
 from LF_functions import get_result_masks
@@ -48,9 +48,10 @@ def main(
     else:
         segments = get_result_masks(segments).detach().cpu().numpy()
         torch.save(segments, merged_filename)
-    visualize_segments(
+    visualize_segmentation_mask(
         segments,
-        filename=vis_filename,
+        LF,
+        vis_filename,
     )
     segments = post_process_segments(segments)
     for i, segment in enumerate(segments):

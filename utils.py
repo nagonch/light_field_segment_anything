@@ -10,7 +10,7 @@ with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segments(segments, filename):
+def visualize_segmentation_mask(segments, LF, filename, include_LF=False):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
     vis = np.transpose(
@@ -24,6 +24,17 @@ def visualize_segments(segments, filename):
         filename,
         {"LF": vis},
     )
+
+
+def visualize_segments(segments, filename):
+    s, t, u, v = segments.shape
+    segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
+    vis = imgviz.label2rgb(
+        label=segments,
+        colormap=imgviz.label_colormap(segments.max() + 1),
+    )
+    im = Image.fromarray(vis)
+    im.save(filename)
 
 
 def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
