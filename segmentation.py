@@ -5,6 +5,10 @@ from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentat
 from data import get_LF
 from sam_functions import get_sam
 from LF_functions import get_result_masks
+from plenpy.lightfields import LightField
+import logging
+
+logging.getLogger("plenpy").setLevel(logging.WARNING)
 
 
 def post_process_segments(segments):
@@ -32,6 +36,8 @@ def main(
 
     dataset = LFDataset("UrbanLF_Syn/test")
     LF = dataset[20].detach().cpu().numpy()
+    LF_vis = LightField(LF)
+    LF_vis.show()
     save_LF_image(np.array(LF), "input_LF.png")
     # LF = get_LF(LF_dir)
     # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
@@ -50,7 +56,6 @@ def main(
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,
-        LF,
         vis_filename,
     )
     segments = post_process_segments(segments)

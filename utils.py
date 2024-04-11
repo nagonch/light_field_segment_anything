@@ -14,7 +14,7 @@ with open("config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, LF, filename, include_LF=False):
+def visualize_segmentation_mask(segments, filename):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
     vis = np.transpose(
@@ -28,7 +28,7 @@ def visualize_segmentation_mask(segments, LF, filename, include_LF=False):
         filename,
         {"LF": vis},
     )
-    segments = LightField.from_mat_file(filename, key="LF")
+    segments = LightField(vis)
     segments.show()
 
 
