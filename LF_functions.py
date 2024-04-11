@@ -67,6 +67,19 @@ def find_match(segments, central_segment_num, s, t):
     return segments_result[np.argmax(max_ious_result)]
 
 
+def find_matches(segments, segment_num):
+    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    matches = []
+    for s in range(segments.shape[0]):
+        for t in range(segments.shape[1]):
+            if s == s_central and t == t_central:
+                continue
+            segment_match = find_match(segments, segment_num, s, t)
+            if segment_match >= 0:
+                matches.append(segment_match)
+    return matches
+
+
 def get_result_masks(segments):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     central_segments = torch.unique(segments[s_central, t_central])[1:]
@@ -76,14 +89,7 @@ def get_result_masks(segments):
         for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
     ]
     for segment_num in tqdm(central_segments):
-        matches = []
-        for s in range(segments.shape[0]):
-            for t in range(segments.shape[1]):
-                if s == s_central and t == t_central:
-                    continue
-                segment_match = find_match(segments, segment_num, s, t)
-                if segment_match >= 0:
-                    matches.append(segment_match)
+        matches = find_matches(segments, segment_num)
         segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
     segments[~torch.isin(segments, torch.unique(segments[s_central, t_central]))] = 0
     return segments

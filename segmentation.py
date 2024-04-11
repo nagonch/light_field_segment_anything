@@ -34,8 +34,9 @@ def main(
     from scipy.io import loadmat
     from data import LFDataset
 
-    dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[2].detach().cpu().numpy()
+    # dataset = LFDataset("UrbanLF_Syn/test")
+    # LF = dataset[2].detach().cpu().numpy()
+    LF = loadmat("Lego.256.mat")["LF"][4:-4, 4:-4]
     LF_vis = LightField(LF)
     LF_vis.show()
     save_LF_image(np.array(LF), "input_LF.png")
