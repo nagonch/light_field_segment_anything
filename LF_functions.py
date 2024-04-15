@@ -20,20 +20,22 @@ def calculate_peak_metric(
     mask_central,
     mask_subview,
     epipolar_line_vector,
+    displacement=None,
     metric=BinaryJaccardIndex().cuda(),
 ):
-    central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
-    epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
-    displacement = project_point_onto_line(
-        epipolar_line_point, epipolar_line_vector, central_mask_centroid
-    )
+    if not displacement:
+        central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
+        epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
+        displacement = project_point_onto_line(
+            epipolar_line_point, epipolar_line_vector, central_mask_centroid
+        )
     vec = torch.round(epipolar_line_vector * displacement).long()
     mask_new = shift_binary_mask(mask_subview, vec)
     iou = metric(mask_central, mask_new).item()
-    return iou
+    return iou, torch.abs(displacement)
 
 
-def find_match(segments, central_segment_num, s, t):
+def find_match(segments, central_segment_num, s, t, displacement=None):
     u, v = segments.shape[-2:]
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     epipolar_line_vector = (
@@ -56,16 +58,27 @@ def find_match(segments, central_segment_num, s, t):
     )
     segments_result = []
     max_ious_result = []
+    disparities = []
     for segment_num in torch.unique(segments[s, t])[1:]:
         seg = segments[s, t] == segment_num
         if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
             segments_result.append(segment_num.item())
-            max_ious_result.append(
-                calculate_peak_metric(mask_central, seg, epipolar_line_vector)
+            max_iou, disparity = calculate_peak_metric(
+                mask_central,
+                seg,
+                epipolar_line_vector,
+                displacement=displacement,
             )
-    if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
-        return -1  # match not found
-    return segments_result[np.argmax(max_ious_result)]
+            max_ious_result.append(max_iou)
+            disparities.append(disparity)
+    if not segments_result:
+        return (-1, 0, 0)  # match not found
+    best_match_indx = np.argmax(max_ious_result)
+    return (
+        segments_result[best_match_indx],
+        disparities[best_match_indx],
+        max_ious_result[best_match_indx],
+    )
 
 
 def find_matches(segments, segment_num):
@@ -75,7 +88,7 @@ def find_matches(segments, segment_num):
         for t in range(segments.shape[1]):
             if s == s_central and t == t_central:
                 continue
-            segment_match = find_match(segments, segment_num, s, t)
+            segment_match, _, _ = find_match(segments, segment_num, s, t)
             if segment_match >= 0:
                 matches.append(segment_match)
     return matches
@@ -94,13 +107,23 @@ def find_matches_RANSAC(segments, segment_num, n_iterations=20, n_data_points=2)
     best_matches = []
     best_matches_score = 0
     for i in range(n_iterations):
-        matches = []
-        epipolar_line_distances = []
+        ious = []
+        disparities = []
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         estimation_points = indices_permuted[:n_data_points]
         fitting_points = indices_permuted[n_data_points:]
-        print(estimation_points)
-        print(fitting_points)
+        for point in estimation_points:
+            _, iou, disparity = find_match(
+                segments, segment_num, point[0].item(), point[1].item()
+            )
+            ious.append(iou)
+            disparities.append(disparity)
+        disparities = torch.stack([torch.tensor(x) for x in disparities]).cuda()
+        ious = F.normalize(torch.stack(ious)[None], p=1)[0]
+        disparity_parameter = (disparities * ious).sum()  # weighted sum by ious
+        print(disparity_parameter)
+        # for point in fitting_points:
+
         raise
 
 
@@ -129,7 +152,7 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    find_matches_RANSAC(segments, 110651, n_data_points=2)
-    # print(get_result_masks(segments))
+    # find_matches_RANSAC(segments, 331750, n_data_points=2)
+    print(get_result_masks(segments))
     # central_test_segment = 32862
     # print(get_segmentation(segments, central_test_segment))
