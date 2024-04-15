@@ -75,7 +75,7 @@ def shift_binary_mask(binary_mask, uv_shift):
     mask_u, mask_v = torch.where(binary_mask == 1)
     mask_u += uv_shift[0]
     mask_v += uv_shift[1]
-    filtering_mask = torch.ones_like(mask_u).to(torch.bool)
+    filtering_mask = torch.ones_like(mask_u).to(torch.bool).cuda()
     for mask in [
         mask_u >= 0,
         mask_u < binary_mask.shape[0],
@@ -85,7 +85,7 @@ def shift_binary_mask(binary_mask, uv_shift):
         filtering_mask = torch.logical_and(filtering_mask, mask)
     mask_u = mask_u[filtering_mask]
     mask_v = mask_v[filtering_mask]
-    new_binary_mask = torch.zeros_like(binary_mask)
+    new_binary_mask = torch.zeros_like(binary_mask).cuda()
     new_binary_mask[mask_u, mask_v] = 1
     return new_binary_mask
 
@@ -182,7 +182,7 @@ def get_subview_indices(s_size, t_size):
     rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
     cols = torch.arange(t_size).repeat(s_size)
 
-    indices = torch.stack((rows, cols), dim=-1)
+    indices = torch.stack((rows, cols), dim=-1).cuda()
     return indices
 
 

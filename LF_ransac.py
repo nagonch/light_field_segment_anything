@@ -120,8 +120,12 @@ def LF_ransac(
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     indices = get_subview_indices(segments.shape[0], segments.shape[1])
     indices = torch.stack(
-        [ind for ind in indices if (ind != torch.tensor([s_central, t_central])).any()]
-    )
+        [
+            ind
+            for ind in indices
+            if (ind != torch.tensor([s_central, t_central]).cuda()).any()
+        ]
+    ).cuda()
     for i in range(n_iterations):
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         fitting_points = indices_permuted[:n_fitting_points]
