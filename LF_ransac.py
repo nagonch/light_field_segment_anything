@@ -22,18 +22,19 @@ def calculate_peak_metric(
     displacement=None,
     metric=BinaryJaccardIndex().cuda(),
 ):
-    central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
-    epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
-    displacement = project_point_onto_line(
-        epipolar_line_point, epipolar_line_vector, central_mask_centroid
-    )
+    if not displacement:
+        central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
+        epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
+        displacement = project_point_onto_line(
+            epipolar_line_point, epipolar_line_vector, central_mask_centroid
+        )
     vec = torch.round(epipolar_line_vector * displacement).long()
     mask_new = shift_binary_mask(mask_subview, vec)
     iou = metric(mask_central, mask_new).item()
     return iou, torch.abs(displacement)
 
 
-def fit_point_to_LF(segments, central_segment_num, point):
+def fit_point_to_LF(segments, segment_num, point, disparity=None):
     s, t = point
     u, v = segments.shape[-2:]
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
@@ -45,7 +46,7 @@ def fit_point_to_LF(segments, central_segment_num, point):
     )  # in case the image is non-square
     epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
     epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
-    mask_central = (segments == central_segment_num)[s_central, t_central]
+    mask_central = (segments == segment_num)[s_central, t_central]
     epipolar_line_point = binary_mask_centroid(mask_central)
     line_boundries = line_image_boundaries(
         epipolar_line_point, epipolar_line_vector, u, v
@@ -66,6 +67,7 @@ def fit_point_to_LF(segments, central_segment_num, point):
                 mask_central,
                 seg,
                 epipolar_line_vector,
+                displacement=disparity,
             )
             max_ious_result.append(max_iou)
             disparities.append(disparity)
@@ -96,13 +98,22 @@ def fit_points_to_LF(segments, segment_num, point):
     return disparity_parameter
 
 
+def get_inliers_for_disparity(segments, segment_num, points, disparity):
+    inliers = []
+    for point in points:
+        _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point, disparity)
+        if max_iou >= CONFIG["metric-threshold"]:
+            inliers.append(point)
+    return inliers
+
+
 def LF_ransac(
     segments,
     segment_num,
-    n_fitting_points=50,
+    n_fitting_points=2,
     n_iterations=20,
     error_threshold=0.05,
-    min_inliers=50,
+    min_inliers=20,
 ):
     best_error = torch.inf
     best_match = []
@@ -115,10 +126,23 @@ def LF_ransac(
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         fitting_points = indices_permuted[:n_fitting_points]
         disparity_parameter = fit_points_to_LF(segments, segment_num, fitting_points)
-        print(disparity_parameter)
-        raise
+        inlier_points = get_inliers_for_disparity(
+            segments,
+            segment_num,
+            indices_permuted,
+            disparity_parameter,
+        )
+        if len(inlier_points) >= min_inliers:
+            disparity_parameter = fit_points_to_LF(
+                segments,
+                segment_num,
+                torch.stack(inlier_points),
+            )
+            print(disparity_parameter)
 
 
 if __name__ == "__main__":
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    LF_ransac(segments, 331232)
+    # print(torch.unique(segments[4, 4]))
+    # raise
+    LF_ransac(segments, 331026)
