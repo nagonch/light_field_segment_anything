@@ -10,6 +10,7 @@ from utils import (
     line_image_boundaries,
     binary_mask_centroid,
     visualize_segments,
+    get_subview_indices,
     CONFIG,
 )
 from tqdm import tqdm
@@ -80,6 +81,29 @@ def find_matches(segments, segment_num):
     return matches
 
 
+def find_matches_RANSAC(segments, segment_num, n_iterations=20, n_data_points=2):
+    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    indices = get_subview_indices(segments.shape[0], segments.shape[1])
+    indices = torch.stack(
+        [ind for ind in indices if (ind != torch.tensor([s_central, t_central])).any()]
+    )
+    if n_data_points >= indices.shape[0]:
+        raise ValueError(
+            f"n_data_points {n_data_points} too many for {indices.shape[0]} subviews"
+        )
+    best_matches = []
+    best_matches_score = 0
+    for i in range(n_iterations):
+        matches = []
+        epipolar_line_distances = []
+        indices_permuted = indices[torch.randperm(indices.shape[0])]
+        estimation_points = indices_permuted[:n_data_points]
+        fitting_points = indices_permuted[n_data_points:]
+        print(estimation_points)
+        print(fitting_points)
+        raise
+
+
 def get_result_masks(segments):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     central_segments = torch.unique(segments[s_central, t_central])[1:]
@@ -105,6 +129,7 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    print(get_result_masks(segments))
+    find_matches_RANSAC(segments, 110651, n_data_points=2)
+    # print(get_result_masks(segments))
     # central_test_segment = 32862
     # print(get_segmentation(segments, central_test_segment))

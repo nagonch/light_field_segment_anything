@@ -178,5 +178,13 @@ def binary_mask_centroid(mask):
     return centroid
 
 
+def get_subview_indices(s_size, t_size):
+    rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
+    cols = torch.arange(t_size).repeat(s_size)
+
+    indices = torch.stack((rows, cols), dim=-1)
+    return indices
+
+
 if __name__ == "__main__":
     pass
