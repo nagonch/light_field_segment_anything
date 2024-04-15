@@ -79,10 +79,27 @@ def fit_point_to_LF(segments, central_segment_num, point):
     )
 
 
+def fit_points_to_LF(segments, segment_num, point):
+    disparities = []
+    ious = []
+    for point in point:
+        _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point)
+        disparities.append(disparity)
+        ious.append(max_iou)
+    disparities_estimates = torch.stack(disparities).cuda()
+    ious_estimates = F.normalize(
+        torch.stack([torch.tensor(x) for x in ious]).cuda()[None], p=1
+    )[0]
+    disparity_parameter = (
+        disparities_estimates * ious_estimates
+    ).sum()  # weighted sum by ious
+    return disparity_parameter
+
+
 def LF_ransac(
     segments,
     segment_num,
-    n_fitting_points=2,
+    n_fitting_points=50,
     n_iterations=20,
     error_threshold=0.05,
     min_inliers=50,
@@ -97,10 +114,9 @@ def LF_ransac(
     for i in range(n_iterations):
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         fitting_points = indices_permuted[:n_fitting_points]
-        testing_points = indices_permuted[n_fitting_points:]
-        for point in fitting_points:
-            segment, disparity, max_iou = fit_point_to_LF(segments, segment_num, point)
-            print(segment, disparity, max_iou)
+        disparity_parameter = fit_points_to_LF(segments, segment_num, fitting_points)
+        print(disparity_parameter)
+        raise
 
 
 if __name__ == "__main__":
