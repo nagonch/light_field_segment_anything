@@ -19,4 +19,5 @@ stability-score-thresh: 0.95
 box-nms-thresh: 0.7
 subviews-batch-size: 1
 mask-mask-side-size: 256
+std-iou-error-weight: 0.1
 token-size: 1

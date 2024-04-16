@@ -13,6 +13,7 @@ from utils import (
     get_subview_indices,
     CONFIG,
 )
+from tqdm import tqdm
 
 
 def calculate_peak_metric(
@@ -81,26 +82,39 @@ def fit_point_to_LF(segments, segment_num, point, disparity=None):
     )
 
 
-def fit_points_to_LF(segments, segment_num, point):
+def fit_points_to_LF(segments, segment_num, point, eval=False):
     disparities = []
     ious = []
+    matches = []
     for point in point:
-        _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point)
+        match, disparity, max_iou = fit_point_to_LF(segments, segment_num, point)
         disparities.append(disparity)
         ious.append(max_iou)
+        matches.append(match)
     disparities_estimates = torch.stack(disparities).cuda()
-    ious_estimates = F.normalize(
-        torch.stack([torch.tensor(x) for x in ious]).cuda()[None], p=1
-    )[0]
+    ious = torch.stack([torch.tensor(x) for x in ious]).cuda()
+    ious_estimates = F.normalize(ious[None], p=1)[0]
     disparity_parameter = (
         disparities_estimates * ious_estimates
     ).sum()  # weighted sum by ious
-    return disparity_parameter
+    if eval:
+        result_matches = []
+        mean_ious = ious.mean()
+        std_ious = ious.std()
+        for match, iou in zip(matches, ious):
+            if iou >= mean_ious - 3 * std_ious and iou <= mean_ious + 3 * std_ious:
+                result_matches.append(match)
+        return (
+            disparity_parameter,
+            result_matches,
+        )
+    else:
+        return disparity_parameter
 
 
 def get_inliers_for_disparity(segments, segment_num, points, disparity):
     inliers = []
-    for point in points:
+    for point in tqdm(points):
         _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point, disparity)
         if max_iou >= CONFIG["metric-threshold"]:
             inliers.append(point)
@@ -112,11 +126,10 @@ def LF_ransac(
     segment_num,
     n_fitting_points=2,
     n_iterations=20,
-    error_threshold=0.05,
     min_inliers=20,
 ):
-    best_error = torch.inf
     best_match = []
+    best_disparity = torch.nan
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     indices = get_subview_indices(segments.shape[0], segments.shape[1])
     indices = torch.stack(
@@ -126,7 +139,7 @@ def LF_ransac(
             if (ind != torch.tensor([s_central, t_central]).cuda()).any()
         ]
     ).cuda()
-    for i in range(n_iterations):
+    for i in tqdm(range(n_iterations)):
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         fitting_points = indices_permuted[:n_fitting_points]
         disparity_parameter = fit_points_to_LF(segments, segment_num, fitting_points)
@@ -137,16 +150,20 @@ def LF_ransac(
             disparity_parameter,
         )
         if len(inlier_points) >= min_inliers:
-            disparity_parameter = fit_points_to_LF(
+            disparity_parameter, segment_matches = fit_points_to_LF(
                 segments,
                 segment_num,
                 torch.stack(inlier_points),
+                eval=True,
             )
-            print(disparity_parameter)
+            best_match = segment_matches
+            best_disparity = disparity_parameter
+            break
+    return best_match, best_disparity
 
 
 if __name__ == "__main__":
     segments = torch.tensor(torch.load("segments.pt")).cuda()
     # print(torch.unique(segments[4, 4]))
     # raise
-    LF_ransac(segments, 331026)
+    print(LF_ransac(segments, 331026))
