@@ -20,22 +20,20 @@ def calculate_peak_metric(
     mask_central,
     mask_subview,
     epipolar_line_vector,
-    displacement=None,
     metric=BinaryJaccardIndex().cuda(),
 ):
-    if not displacement:
-        central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
-        epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
-        displacement = project_point_onto_line(
-            epipolar_line_point, epipolar_line_vector, central_mask_centroid
-        )
+    central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
+    epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
+    displacement = project_point_onto_line(
+        epipolar_line_point, epipolar_line_vector, central_mask_centroid
+    )
     vec = torch.round(epipolar_line_vector * displacement).long()
     mask_new = shift_binary_mask(mask_subview, vec)
     iou = metric(mask_central, mask_new).item()
     return iou, torch.abs(displacement)
 
 
-def find_match(segments, central_segment_num, s, t, displacement=None):
+def find_match(segments, central_segment_num, s, t):
     u, v = segments.shape[-2:]
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     epipolar_line_vector = (
@@ -67,18 +65,12 @@ def find_match(segments, central_segment_num, s, t, displacement=None):
                 mask_central,
                 seg,
                 epipolar_line_vector,
-                displacement=displacement,
             )
             max_ious_result.append(max_iou)
             disparities.append(disparity)
     if not segments_result:
-        return (-1, 0, 0)  # match not found
-    best_match_indx = np.argmax(max_ious_result)
-    return (
-        segments_result[best_match_indx],
-        disparities[best_match_indx],
-        max_ious_result[best_match_indx],
-    )
+        return -1  # match not found
+    return segments_result[np.argmax(max_ious_result)]
 
 
 def find_matches(segments, segment_num):
@@ -88,76 +80,10 @@ def find_matches(segments, segment_num):
         for t in range(segments.shape[1]):
             if s == s_central and t == t_central:
                 continue
-            segment_match, _, _ = find_match(segments, segment_num, s, t)
+            segment_match = find_match(segments, segment_num, s, t)
             if segment_match >= 0:
                 matches.append(segment_match)
     return matches
-
-
-def find_matches_RANSAC(
-    segments,
-    segment_num,
-    n_iterations=20,
-    n_data_points=2,
-    required_inliers=50,
-):
-    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-    indices = get_subview_indices(segments.shape[0], segments.shape[1])
-    indices = torch.stack(
-        [ind for ind in indices if (ind != torch.tensor([s_central, t_central])).any()]
-    )
-    if n_data_points >= indices.shape[0]:
-        raise ValueError(
-            f"n_data_points {n_data_points} too many for {indices.shape[0]} subviews"
-        )
-    best_matches = []
-    best_matches_score = 0
-    best_disparity = torch.nan
-    for i in range(n_iterations):
-        ious = []
-        disparities = []
-        matched_segment_nums = []
-        indices_permuted = indices[torch.randperm(indices.shape[0])]
-        estimation_points = indices_permuted[:n_data_points]
-        fitting_points = indices_permuted[n_data_points:]
-        for point in estimation_points:
-            matched_segment_num, disparity, iou = find_match(
-                segments, segment_num, point[0].item(), point[1].item()
-            )
-            ious.append(iou)
-            matched_segment_nums.append(matched_segment_num)
-            disparities.append(disparity)
-        disparities_estimates = torch.stack(disparities).cuda()
-        ious_estimates = F.normalize(
-            torch.stack([torch.tensor(x) for x in ious]).cuda()[None], p=1
-        )[0]
-        disparity_parameter = (
-            disparities_estimates * ious_estimates
-        ).sum()  # weighted sum by ious
-        for point in fitting_points:
-            matched_segment_num, disparity, iou = find_match(
-                segments,
-                segment_num,
-                point[0].item(),
-                point[1].item(),
-                displacement=disparity_parameter,
-            )
-            matched_segment_nums.append(matched_segment_num)
-            ious.append(iou)
-        ious = torch.stack([torch.tensor(x) for x in ious])
-        print(ious.mean())
-        raise
-        # threshold_low =
-        # threshold_high =
-        ious_inliers = []
-        disparities_inliers = []
-        matched_segment_nums_inliers = []
-        score = -torch.std(torch.stack([torch.tensor(x) for x in ious_inliers]))
-        if score > best_matches_score:
-            best_matches_score = score
-            best_matches = matched_segment_nums
-            best_disparity = disparity_parameter
-    return best_matches, best_disparity
 
 
 def get_result_masks(segments):
@@ -185,7 +111,7 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    find_matches_RANSAC(segments, 331232, n_data_points=70)
-    # print(get_result_masks(segments))
+    # find_matches_RANSAC(segments, 331232, n_data_points=70)
+    print(get_result_masks(segments))
     # central_test_segment = 32862
     # print(get_segmentation(segments, central_test_segment))
