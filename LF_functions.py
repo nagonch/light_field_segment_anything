@@ -18,11 +18,11 @@ from tqdm import tqdm
 
 def calculate_peak_metric(
     mask_central,
+    central_mask_centroid,
     mask_subview,
     epipolar_line_vector,
     metric=BinaryJaccardIndex().cuda(),
 ):
-    central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
     epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
     displacement = project_point_onto_line(
         epipolar_line_point, epipolar_line_vector, central_mask_centroid
@@ -33,7 +33,7 @@ def calculate_peak_metric(
     return iou, torch.abs(displacement)
 
 
-def find_match(segments, central_segment_num, s, t):
+def find_match(main_mask, main_mask_centroid, s, t):
     u, v = segments.shape[-2:]
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     epipolar_line_vector = (
@@ -44,13 +44,11 @@ def find_match(segments, central_segment_num, s, t):
     )  # in case the image is non-square
     epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
     epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
-    mask_central = (segments == central_segment_num)[s_central, t_central]
-    epipolar_line_point = binary_mask_centroid(mask_central)
     line_boundries = line_image_boundaries(
-        epipolar_line_point, epipolar_line_vector, u, v
+        main_mask_centroid.detach().cpu().numpy(), epipolar_line_vector, u, v
     )
     epipolar_line = draw_line_in_mask(
-        torch.zeros_like(mask_central),
+        torch.zeros_like(main_mask),
         line_boundries[0],
         line_boundries[1],
     )
@@ -62,25 +60,29 @@ def find_match(segments, central_segment_num, s, t):
         if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
             segments_result.append(segment_num.item())
             max_iou, disparity = calculate_peak_metric(
-                mask_central,
+                main_mask,
+                main_mask_centroid,
                 seg,
                 epipolar_line_vector,
             )
             max_ious_result.append(max_iou)
             disparities.append(disparity)
-    if not segments_result:
+    max_iou = np.max(max_ious_result)
+    if not segments_result or max_iou <= CONFIG["metric-threshold"]:
         return -1  # match not found
     return segments_result[np.argmax(max_ious_result)]
 
 
 def find_matches(segments, segment_num):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    main_mask = (segments == segment_num)[s_central, t_central]
+    main_mask_centroid = torch.tensor(binary_mask_centroid(main_mask)).cuda()
     matches = []
     for s in range(segments.shape[0]):
         for t in range(segments.shape[1]):
             if s == s_central and t == t_central:
                 continue
-            segment_match = find_match(segments, segment_num, s, t)
+            segment_match = find_match(main_mask, main_mask_centroid, s, t)
             if segment_match >= 0:
                 matches.append(segment_match)
     return matches
