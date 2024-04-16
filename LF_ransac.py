@@ -13,7 +13,6 @@ from utils import (
     get_subview_indices,
     CONFIG,
 )
-from tqdm import tqdm
 
 
 def calculate_peak_metric(
@@ -114,7 +113,7 @@ def fit_points_to_LF(segments, segment_num, point, eval=False):
 
 def get_inliers_for_disparity(segments, segment_num, points, disparity):
     inliers = []
-    for point in tqdm(points):
+    for point in points:
         _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point, disparity)
         if max_iou >= CONFIG["metric-threshold"]:
             inliers.append(point)
@@ -124,9 +123,9 @@ def get_inliers_for_disparity(segments, segment_num, points, disparity):
 def LF_ransac(
     segments,
     segment_num,
-    n_fitting_points=2,
-    n_iterations=20,
-    min_inliers=20,
+    n_fitting_points=CONFIG["ransac-n-fitting-points"],
+    min_inliers=CONFIG["ransac-n-inliers"],
+    n_iterations=CONFIG["ransac-n-iterations"],
 ):
     best_match = []
     best_disparity = torch.nan
@@ -139,7 +138,7 @@ def LF_ransac(
             if (ind != torch.tensor([s_central, t_central]).cuda()).any()
         ]
     ).cuda()
-    for i in tqdm(range(n_iterations)):
+    for i in range(n_iterations):
         indices_permuted = indices[torch.randperm(indices.shape[0])]
         fitting_points = indices_permuted[:n_fitting_points]
         disparity_parameter = fit_points_to_LF(segments, segment_num, fitting_points)

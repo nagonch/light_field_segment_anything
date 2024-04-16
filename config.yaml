@@ -20,4 +20,7 @@ box-nms-thresh: 0.7
 subviews-batch-size: 1
 mask-mask-side-size: 256
 std-iou-error-weight: 0.1
+ransac-n-fitting-points: 2
+ransac-n-inliers: 50
+ransac-n-iterations: 10
 token-size: 1
