@@ -23,14 +23,14 @@ def calculate_peak_metric(
     epipolar_line_vector,
     metric=BinaryJaccardIndex().cuda(),
 ):
-    epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
+    epipolar_line_point = binary_mask_centroid(mask_subview)
     displacement = project_point_onto_line(
         epipolar_line_point, epipolar_line_vector, central_mask_centroid
     )
     vec = torch.round(epipolar_line_vector * displacement).long()
     mask_new = shift_binary_mask(mask_subview, vec)
     iou = metric(mask_central, mask_new).item()
-    return iou, torch.abs(displacement)
+    return iou
 
 
 def find_match(main_mask, main_mask_centroid, s, t):
@@ -92,7 +92,7 @@ def get_epipolar_line_vectors(segments):
 def find_matches(segments, segment_num):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     main_mask = (segments == segment_num)[s_central, t_central]
-    main_mask_centroid = torch.tensor(binary_mask_centroid(main_mask)).cuda()
+    main_mask_centroid = binary_mask_centroid(main_mask)
     matches = []
     for s in range(segments.shape[0]):
         for t in range(segments.shape[1]):
@@ -156,9 +156,71 @@ class LF_segment_merger:
         return central_segments
 
     @torch.no_grad()
-    def get_result_masks(self, segments):
+    def calculate_peak_metric(
+        mask_central,
+        central_mask_centroid,
+        mask_subview,
+        epipolar_line_vector,
+        metric=BinaryJaccardIndex().cuda(),
+    ):
+        epipolar_line_point = binary_mask_centroid(mask_subview)
+        displacement = project_point_onto_line(
+            epipolar_line_point, epipolar_line_vector, central_mask_centroid
+        )
+        vec = torch.round(epipolar_line_vector * displacement).long()
+        mask_new = shift_binary_mask(mask_subview, vec)
+        iou = metric(mask_central, mask_new).item()
+        return iou
+
+    @torch.no_grad()
+    def find_match(self, main_mask, main_mask_centroid, s, t):
+        line_boundries = line_image_boundaries(
+            main_mask_centroid.detach().cpu().numpy(),
+            self.epipolar_line_vectors[s, t],
+            self.u_size,
+            self.v_size,
+        )
+        epipolar_line = draw_line_in_mask(
+            torch.zeros_like(main_mask).cuda(),
+            line_boundries[0],
+            line_boundries[1],
+        )
+        segments_result = []
+        max_ious_result = []
+        for segment_num in torch.unique(segments[s, t])[1:]:
+            seg = segments[s, t] == segment_num
+            if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
+                segments_result.append(segment_num.item())
+                max_iou = calculate_peak_metric(
+                    main_mask,
+                    main_mask_centroid,
+                    seg,
+                    self.epipolar_line_vectors[s, t],
+                )
+                max_ious_result.append(max_iou)
+        max_iou = np.max(max_ious_result)
+        if not segments_result or max_iou <= CONFIG["metric-threshold"]:
+            return -1  # match not found
+        return segments_result[np.argmax(max_ious_result)]
+
+    @torch.no_grad()
+    def find_matches(self, main_mask, main_mask_centroid):
+        matches = []
+        for s in range(self.s_size):
+            for t in range(self.t_size):
+                if s == self.s_central and t == self.t_central:
+                    continue
+                segment_match = self.find_match(main_mask, main_mask_centroid, s, t)
+                if segment_match >= 0:
+                    matches.append(segment_match)
+        return matches
+
+    @torch.no_grad()
+    def get_result_masks(self):
         for segment_num in tqdm(self.central_segments):
-            matches = find_matches(segments, segment_num)
+            main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
+            main_mask_centroid = binary_mask_centroid(main_mask)
+            matches = self.find_matches(main_mask, main_mask_centroid)
             segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
         segments[
             ~torch.isin(
@@ -178,8 +240,10 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    segment_merger = LF_segment_merger(segments)
-    print(segment_merger)
+    merger = LF_segment_merger(segments)
+    merger.get_result_masks()
+    # segment_merger = LF_segment_merger(segments)
+    # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
     # print(get_result_masks(segments))
     # central_test_segment = 32862
