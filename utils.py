@@ -103,12 +103,11 @@ def project_point_onto_line(x, v, y):
     return t
 
 
-def test_mask(mask, p, v, eps=1e-9):
-    slope = v[1] / (v[0] + eps)
-    b = p[1] - slope * p[0]
-    u, v = torch.where(mask == 1)
-    error = torch.abs(v - (slope * u + b)).min()
-    return error <= CONFIG["mask-test-threshold"]
+def test_mask(mask, p, v):
+    v_len = torch.norm(v)
+    u_mask, v_mask = torch.where(mask == 1)
+    error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
+    return error.min() <= CONFIG["mask-test-threshold"]
 
 
 def binary_mask_centroid(mask):
