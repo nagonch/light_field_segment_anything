@@ -103,68 +103,12 @@ def project_point_onto_line(x, v, y):
     return t
 
 
-def draw_line_in_mask(mask, start_point, end_point):
-    # Extract x and y coordinates of start and end points
-    x0, y0 = start_point[0], start_point[1]
-    x1, y1 = end_point[0], end_point[1]
-
-    # Compute differences between start and end points
-    dx = abs(x1 - x0)
-    dy = abs(y1 - y0)
-
-    # Determine direction of the line
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-
-    # Compute the initial error
-    error = dx - dy
-
-    # Initialize the current position to the start point
-    x, y = x0, y0
-
-    # Loop until we reach the end point
-    while x != x1 or y != y1:
-        # Append the current position to the list of points
-        mask[y, x] = 1
-
-        # Compute the error for the next position
-        e2 = 2 * error
-
-        # Determine which direction to move
-        if e2 > -dy:
-            error = error - dy
-            x = x + sx
-        if e2 < dx:
-            error = error + dx
-            y = y + sy
-
-    # Append the final position to the list of points
-    mask[y1, x1] = 1
-
-    return mask
-
-
-def line_image_boundaries(P, V, M, N):
-    Px, Py = P
-    Vx, Vy = V
-    (Vx, Vy) = (Vx.item(), Vy.item())
-    t_left = -Px / Vx if Vx != 0 else float("inf")
-    t_right = (N - 1 - Px) / Vx if Vx != 0 else float("inf")
-    t_top = -Py / Vy if Vy != 0 else float("inf")
-    t_bottom = (M - 1 - Py) / Vy if Vy != 0 else float("inf")
-
-    Q_left = (Px + t_left * Vx, Py + t_left * Vy)
-    Q_right = (Px + t_right * Vx, Py + t_right * Vy)
-    Q_top = (Px + t_top * Vx, Py + t_top * Vy)
-    Q_bottom = (Px + t_bottom * Vx, Py + t_bottom * Vy)
-
-    points = [Q_left, Q_right, Q_top, Q_bottom]
-    valid_points = [
-        (int(x), int(y))
-        for (x, y) in points
-        if 0 <= round(x, 0) < N and 0 <= round(y, 0) < M
-    ]
-    return list(set(valid_points))
+def test_mask(mask, p, v, eps=1e-9):
+    slope = v[1] / (v[0] + eps)
+    b = p[1] - slope * p[0]
+    u, v = torch.where(mask == 1)
+    error = torch.abs(v - (slope * u + b)).min()
+    return error <= CONFIG["mask-test-threshold"]
 
 
 def binary_mask_centroid(mask):

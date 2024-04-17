@@ -6,11 +6,11 @@ import numpy as np
 from utils import (
     shift_binary_mask,
     project_point_onto_line,
-    draw_line_in_mask,
-    line_image_boundaries,
+    test_mask,
     binary_mask_centroid,
     visualize_segments,
     get_subview_indices,
+    test_mask,
     CONFIG,
 )
 from tqdm import tqdm
@@ -49,7 +49,9 @@ class LF_segment_merger:
         segment_sums = torch.stack(
             [(self.segments == i).sum() for i in central_segments]
         ).cuda()
-        central_segments = central_segments[torch.argsort(segment_sums)]
+        central_segments = central_segments[
+            torch.argsort(segment_sums, descending=True)
+        ]
         return central_segments
 
     @torch.no_grad()
@@ -72,22 +74,11 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def find_match(self, main_mask, main_mask_centroid, s, t):
-        line_boundries = line_image_boundaries(
-            main_mask_centroid.detach().cpu().numpy(),
-            self.epipolar_line_vectors[s, t],
-            self.u_size,
-            self.v_size,
-        )
-        epipolar_line = draw_line_in_mask(
-            torch.zeros_like(main_mask).cuda(),
-            line_boundries[0],
-            line_boundries[1],
-        )
         segments_result = []
         max_ious_result = []
         for segment_num in torch.unique(segments[s, t])[1:]:
             seg = segments[s, t] == segment_num
-            if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
+            if test_mask(seg, main_mask_centroid, self.epipolar_line_vectors[s, t]):
                 segments_result.append(segment_num.item())
                 max_iou = self.calculate_peak_metric(
                     main_mask,
@@ -98,7 +89,7 @@ class LF_segment_merger:
                 max_ious_result.append(max_iou)
         if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
             return -1  # match not found
-
+        print(len(torch.unique(segments[s, t])[1:]), len(segments_result))
         return segments_result[np.argmax(max_ious_result)]
 
     @torch.no_grad()

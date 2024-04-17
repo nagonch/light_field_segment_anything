@@ -23,4 +23,5 @@ std-iou-error-weight: 0.1
 ransac-n-fitting-points: 2
 ransac-n-inliers: 50
 ransac-n-iterations: 10
+mask-test-threshold: 0.01
 token-size: 1
