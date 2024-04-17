@@ -157,6 +157,7 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def calculate_peak_metric(
+        self,
         mask_central,
         central_mask_centroid,
         mask_subview,
@@ -191,7 +192,7 @@ class LF_segment_merger:
             seg = segments[s, t] == segment_num
             if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
                 segments_result.append(segment_num.item())
-                max_iou = calculate_peak_metric(
+                max_iou = self.calculate_peak_metric(
                     main_mask,
                     main_mask_centroid,
                     seg,
