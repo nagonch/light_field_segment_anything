@@ -4,7 +4,7 @@ import os
 from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
 from data import get_LF
 from sam_functions import get_sam
-from LF_functions import get_result_masks
+from LF_functions import LF_segment_merger
 from plenpy.lightfields import LightField
 import logging
 
@@ -34,9 +34,9 @@ def main(
     from scipy.io import loadmat
     from data import LFDataset
 
-    # dataset = LFDataset("UrbanLF_Syn/test")
-    # LF = dataset[2].detach().cpu().numpy()
-    LF = loadmat("Lego.256.mat")["LF"][4:-4, 4:-4]
+    dataset = LFDataset("UrbanLF_Syn/test")
+    LF = dataset[3].detach().cpu().numpy()
+    # LF = loadmat("Lego.256.mat")["LF"][4:-4, 4:-4]
     LF_vis = LightField(LF)
     LF_vis.show()
     save_LF_image(np.array(LF), "input_LF.png")
@@ -53,7 +53,8 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        segments = get_result_masks(segments).detach().cpu().numpy()
+        segment_merger = LF_segment_merger(segments)
+        segments = segment_merger.get_result_masks().detach().cpu().numpy()
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,

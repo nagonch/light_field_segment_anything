@@ -76,8 +76,8 @@ class LF_segment_merger:
     def find_match(self, main_mask, main_mask_centroid, s, t):
         segments_result = []
         max_ious_result = []
-        for segment_num in torch.unique(segments[s, t])[1:]:
-            seg = segments[s, t] == segment_num
+        for segment_num in torch.unique(self.segments[s, t])[1:]:
+            seg = self.segments[s, t] == segment_num
             if test_mask(seg, main_mask_centroid, self.epipolar_line_vectors[s, t]):
                 segments_result.append(segment_num.item())
                 max_iou = self.calculate_peak_metric(
@@ -109,13 +109,16 @@ class LF_segment_merger:
             main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
             main_mask_centroid = binary_mask_centroid(main_mask)
             matches = self.find_matches(main_mask, main_mask_centroid)
-            segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
-        segments[
+            self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
+                segment_num
+            )
+        self.segments[
             ~torch.isin(
-                segments, torch.unique(segments[self.s_central, self.t_central])
+                self.segments,
+                torch.unique(self.segments[self.s_central, self.t_central]),
             )
         ] = 0
-        return segments
+        return self.segments
 
 
 if __name__ == "__main__":
