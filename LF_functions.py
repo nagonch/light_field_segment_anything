@@ -146,11 +146,14 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def get_central_segments(self):
-        central_segments = torch.unique(segments[self.s_central, self.t_central])[1:]
+        central_segments = torch.unique(self.segments[self.s_central, self.t_central])[
+            1:
+        ]
         segment_sums = torch.stack(
-            [(segments == i).sum() for i in central_segments]
+            [(self.segments == i).sum() for i in central_segments]
         ).cuda()
         central_segments = central_segments[torch.argsort(segment_sums)]
+        print(central_segments)
         return central_segments
 
     @torch.no_grad()
@@ -177,6 +180,7 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
     segment_merger = LF_segment_merger(segments)
+    print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
     # print(get_result_masks(segments))
     # central_test_segment = 32862
