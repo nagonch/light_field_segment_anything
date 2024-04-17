@@ -153,7 +153,6 @@ class LF_segment_merger:
             [(self.segments == i).sum() for i in central_segments]
         ).cuda()
         central_segments = central_segments[torch.argsort(segment_sums)]
-        print(central_segments)
         return central_segments
 
     @torch.no_grad()
