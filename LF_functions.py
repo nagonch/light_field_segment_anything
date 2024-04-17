@@ -119,6 +119,29 @@ def get_result_masks(segments):
     return segments
 
 
+class LF_segment_merger:
+    @torch.no_grad()
+    def __init__(self, segments):
+        self.segments = segments
+        self.epipolar_line_vectors = self.get_epipolar_line_vectors()
+
+    @torch.no_grad()
+    def get_epipolar_line_vectors(self):
+        s, t, u, v = self.segments.shape
+        s_central, t_central = s // 2, t // 2
+        subview_indices = get_subview_indices(s, t)
+        epipolar_line_vectors = (
+            torch.tensor([s_central, t_central]).cuda() - subview_indices
+        ).float()
+        aspect_ratio_matrix = (
+            torch.diag(torch.tensor([v, u])).float().cuda()
+        )  # in case the image is non-square
+        epipolar_line_vectors = (aspect_ratio_matrix @ epipolar_line_vectors.T).T
+        epipolar_line_vectors = F.normalize(epipolar_line_vectors)
+        epipolar_line_vectors = epipolar_line_vectors.reshape(s, t, 2)
+        return epipolar_line_vectors
+
+
 if __name__ == "__main__":
     # mask = torch.zeros((256, 341))
     # mask = draw_line_in_mask(mask, (0, 0), (230, 240))
@@ -129,7 +152,7 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    print(get_epipolar_line_vectors(segments))
+    segment_merger = LF_segment_merger(segments)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
     # print(get_result_masks(segments))
     # central_test_segment = 32862
