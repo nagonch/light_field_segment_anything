@@ -123,23 +123,43 @@ class LF_segment_merger:
     @torch.no_grad()
     def __init__(self, segments):
         self.segments = segments
+        self.s_size, self.t_size, self.v_size, self.u_size = segments.shape
+        self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
+        self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
+        print(self.epipolar_line_vectors)
 
     @torch.no_grad()
     def get_epipolar_line_vectors(self):
-        s, t, u, v = self.segments.shape
-        s_central, t_central = s // 2, t // 2
-        subview_indices = get_subview_indices(s, t)
         epipolar_line_vectors = (
-            torch.tensor([s_central, t_central]).cuda() - subview_indices
+            torch.tensor([self.s_central, self.t_central]).cuda() - self.subview_indices
         ).float()
         aspect_ratio_matrix = (
-            torch.diag(torch.tensor([v, u])).float().cuda()
+            torch.diag(torch.tensor([self.v_size, self.u_size])).float().cuda()
         )  # in case the image is non-square
         epipolar_line_vectors = (aspect_ratio_matrix @ epipolar_line_vectors.T).T
         epipolar_line_vectors = F.normalize(epipolar_line_vectors)
-        epipolar_line_vectors = epipolar_line_vectors.reshape(s, t, 2)
+        epipolar_line_vectors = epipolar_line_vectors.reshape(
+            self.s_size, self.t_size, 2
+        )
         return epipolar_line_vectors
+
+    @torch.no_grad()
+    def get_result_masks(self, segments):
+        s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+        central_segments = torch.unique(segments[s_central, t_central])[1:]
+        segment_sums = [(segments == i).sum() for i in central_segments]
+        central_segments = [
+            segment
+            for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
+        ]
+        for segment_num in tqdm(central_segments):
+            matches = find_matches(segments, segment_num)
+            segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
+        segments[
+            ~torch.isin(segments, torch.unique(segments[s_central, t_central]))
+        ] = 0
+        return segments
 
 
 if __name__ == "__main__":
