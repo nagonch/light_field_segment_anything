@@ -6,13 +6,13 @@ import numpy as np
 from utils import (
     shift_binary_mask,
     project_point_onto_line,
+    draw_line_in_mask,
     line_image_boundaries,
     binary_mask_centroid,
     visualize_segments,
     get_subview_indices,
     CONFIG,
 )
-import cv2
 from tqdm import tqdm
 
 
@@ -78,14 +78,11 @@ class LF_segment_merger:
             self.u_size,
             self.v_size,
         )
-        epipolar_line = cv2.line(
-            np.zeros((self.u_size, self.v_size)),
+        epipolar_line = draw_line_in_mask(
+            torch.zeros_like(main_mask).cuda(),
             line_boundries[0],
             line_boundries[1],
-            (255, 255, 255),
-            1,
         )
-        epipolar_line = torch.tensor(epipolar_line).cuda()
         segments_result = []
         max_ious_result = []
         for segment_num in torch.unique(segments[s, t])[1:]:
@@ -101,6 +98,7 @@ class LF_segment_merger:
                 max_ious_result.append(max_iou)
         if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
             return -1  # match not found
+
         return segments_result[np.argmax(max_ious_result)]
 
     @torch.no_grad()
