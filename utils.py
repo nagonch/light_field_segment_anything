@@ -103,47 +103,6 @@ def project_point_onto_line(x, v, y):
     return t
 
 
-def draw_line_in_mask(mask, start_point, end_point):
-    # Extract x and y coordinates of start and end points
-    x0, y0 = start_point[0], start_point[1]
-    x1, y1 = end_point[0], end_point[1]
-
-    # Compute differences between start and end points
-    dx = abs(x1 - x0)
-    dy = abs(y1 - y0)
-
-    # Determine direction of the line
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-
-    # Compute the initial error
-    error = dx - dy
-
-    # Initialize the current position to the start point
-    x, y = x0, y0
-
-    # Loop until we reach the end point
-    while x != x1 or y != y1:
-        # Append the current position to the list of points
-        mask[y, x] = 1
-
-        # Compute the error for the next position
-        e2 = 2 * error
-
-        # Determine which direction to move
-        if e2 > -dy:
-            error = error - dy
-            x = x + sx
-        if e2 < dx:
-            error = error + dx
-            y = y + sy
-
-    # Append the final position to the list of points
-    mask[y1, x1] = 1
-
-    return mask
-
-
 def line_image_boundaries(P, V, M, N):
     Px, Py = P
     Vx, Vy = V
