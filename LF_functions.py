@@ -147,11 +147,10 @@ class LF_segment_merger:
     @torch.no_grad()
     def get_central_segments(self):
         central_segments = torch.unique(segments[self.s_central, self.t_central])[1:]
-        segment_sums = [(segments == i).sum() for i in central_segments]
-        central_segments = [
-            segment
-            for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
-        ]
+        segment_sums = torch.stack(
+            [(segments == i).sum() for i in central_segments]
+        ).cuda()
+        central_segments = central_segments[torch.argsort(segment_sums)]
         return central_segments
 
     @torch.no_grad()
