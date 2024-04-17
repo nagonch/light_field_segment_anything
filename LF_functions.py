@@ -76,7 +76,7 @@ class LF_segment_merger:
     def find_match(self, main_mask, main_mask_centroid, s, t):
         segments_result = []
         max_ious_result = []
-        for segment_num in torch.unique(self.segments[s, t])[1:]:
+        for segment_num in torch.unique(self.segments[s, t])[1:]:  # TODO: parallelize
             seg = self.segments[s, t] == segment_num
             if test_mask(seg, main_mask_centroid, self.epipolar_line_vectors[s, t]):
                 segments_result.append(segment_num.item())
@@ -94,7 +94,7 @@ class LF_segment_merger:
     @torch.no_grad()
     def find_matches(self, main_mask, main_mask_centroid):
         matches = []
-        for s in range(self.s_size):
+        for s in range(self.s_size):  # TODO: parallelize
             for t in range(self.t_size):
                 if s == self.s_central and t == self.t_central:
                     continue
