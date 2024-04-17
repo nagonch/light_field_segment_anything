@@ -89,7 +89,6 @@ class LF_segment_merger:
                 max_ious_result.append(max_iou)
         if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
             return -1  # match not found
-        print(len(torch.unique(segments[s, t])[1:]), len(segments_result))
         return segments_result[np.argmax(max_ious_result)]
 
     @torch.no_grad()
