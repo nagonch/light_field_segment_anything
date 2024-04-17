@@ -127,7 +127,7 @@ class LF_segment_merger:
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
-        print(self.epipolar_line_vectors)
+        self.central_segments = self.get_central_segments()
 
     @torch.no_grad()
     def get_epipolar_line_vectors(self):
@@ -145,19 +145,24 @@ class LF_segment_merger:
         return epipolar_line_vectors
 
     @torch.no_grad()
-    def get_result_masks(self, segments):
-        s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-        central_segments = torch.unique(segments[s_central, t_central])[1:]
+    def get_central_segments(self):
+        central_segments = torch.unique(segments[self.s_central, self.t_central])[1:]
         segment_sums = [(segments == i).sum() for i in central_segments]
         central_segments = [
             segment
             for _, segment in sorted(zip(segment_sums, central_segments), reverse=True)
         ]
-        for segment_num in tqdm(central_segments):
+        return central_segments
+
+    @torch.no_grad()
+    def get_result_masks(self, segments):
+        for segment_num in tqdm(self.central_segments):
             matches = find_matches(segments, segment_num)
             segments[torch.isin(segments, torch.tensor(matches).cuda())] = segment_num
         segments[
-            ~torch.isin(segments, torch.unique(segments[s_central, t_central]))
+            ~torch.isin(
+                segments, torch.unique(segments[self.s_central, self.t_central])
+            )
         ] = 0
         return segments
 
