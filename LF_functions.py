@@ -20,7 +20,7 @@ class LF_segment_merger:
     @torch.no_grad()
     def __init__(self, segments):
         self.segments = segments
-        self.s_size, self.t_size, self.v_size, self.u_size = segments.shape
+        self.s_size, self.t_size, self.u_size, self.v_size = segments.shape
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
@@ -96,8 +96,7 @@ class LF_segment_merger:
                     self.epipolar_line_vectors[s, t],
                 )
                 max_ious_result.append(max_iou)
-        max_iou = np.max(max_ious_result)
-        if not segments_result or max_iou <= CONFIG["metric-threshold"]:
+        if not segments_result or np.max(max_ious_result) <= CONFIG["metric-threshold"]:
             return -1  # match not found
         return segments_result[np.argmax(max_ious_result)]
 
@@ -138,9 +137,8 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    get_result_masks(segments)
-    # merger = LF_segment_merger(segments)
-    # merger.get_result_masks()
+    merger = LF_segment_merger(segments)
+    merger.get_result_masks()
     # segment_merger = LF_segment_merger(segments)
     # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
