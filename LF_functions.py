@@ -73,6 +73,22 @@ def find_match(main_mask, main_mask_centroid, s, t):
     return segments_result[np.argmax(max_ious_result)]
 
 
+def get_epipolar_line_vectors(segments):
+    s, t, u, v = segments.shape
+    s_central, t_central = s // 2, t // 2
+    subview_indices = get_subview_indices(s, t)
+    epipolar_line_vectors = (
+        torch.tensor([s_central, t_central]).cuda() - subview_indices
+    ).float()
+    aspect_ratio_matrix = (
+        torch.diag(torch.tensor([v, u])).float().cuda()
+    )  # in case the image is non-square
+    epipolar_line_vectors = (aspect_ratio_matrix @ epipolar_line_vectors.T).T
+    epipolar_line_vectors = F.normalize(epipolar_line_vectors)
+    epipolar_line_vectors = epipolar_line_vectors.reshape(s, t, 2)
+    return epipolar_line_vectors
+
+
 def find_matches(segments, segment_num):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     main_mask = (segments == segment_num)[s_central, t_central]
@@ -113,7 +129,8 @@ if __name__ == "__main__":
     from random import randint
 
     segments = torch.tensor(torch.load("segments.pt")).cuda()
+    print(get_epipolar_line_vectors(segments))
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
-    print(get_result_masks(segments))
+    # print(get_result_masks(segments))
     # central_test_segment = 32862
     # print(get_segmentation(segments, central_test_segment))
