@@ -129,10 +129,21 @@ if __name__ == "__main__":
     # plt.close()
     # raise
     from random import randint
+    from utils import get_process_to_segments_dict
 
+    process_to_segments_dict = get_process_to_segments_dict("embeddings.pt")
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    merger = LF_segment_merger(segments)
-    merger.get_result_masks()
+    result_segments = torch.zeros_like(segments).cuda()
+    for i in range(CONFIG["n-parallel-processes"]):
+        segments_i = (
+            segments.float() * torch.isin(segments, process_to_segments_dict[i]).float()
+        ).long()
+        merger = LF_segment_merger(segments_i)
+        result_masks = merger.get_result_masks()
+        result_segments += result_masks
+    torch.save(result_segments, "segments_merged.pt")
+    # merger = LF_segment_merger(segments)
+    # merger.get_result_masks()
     # segment_merger = LF_segment_merger(segments)
     # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)

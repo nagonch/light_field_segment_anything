@@ -125,7 +125,7 @@ def get_subview_indices(s_size, t_size):
     return indices
 
 
-def split_segment_to_process_dict(
+def get_process_to_segments_dict(
     embeddings_filename, n_processes=CONFIG["n-parallel-processes"]
 ):
     embeddings_dict = torch.load(embeddings_filename)
