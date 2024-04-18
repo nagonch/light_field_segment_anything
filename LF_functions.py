@@ -156,6 +156,14 @@ class LF_segment_merger:
         return self.segments
 
 
+def parallelize_segments(i, results, segments, proc_to_seg_dict):
+    segments_i = (
+        segments.float() * torch.isin(segments, proc_to_seg_dict[i]).float()
+    ).long()
+    merger = LF_segment_merger(segments_i)
+    results[i] = merger.get_result_masks()
+
+
 if __name__ == "__main__":
     # mask = torch.zeros((256, 341))
     # mask = draw_line_in_mask(mask, (0, 0), (230, 240))
@@ -168,6 +176,20 @@ if __name__ == "__main__":
 
     # process_to_segments_dict = get_process_to_segments_dict("embeddings.pt")
     segments = torch.tensor(torch.load("segments.pt")).cuda()
+    proc_to_seg_dict = get_process_to_segments_dict("embeddings.pt")
+    result_segments = mp.Manager().list([None] * CONFIG["n-parallel-processes"])
+    processes = []
+    for rank in range(CONFIG["n-parallel-processes"]):
+        p = mp.Process(
+            target=parallelize_segments,
+            args=(rank, result_segments, segments, proc_to_seg_dict),
+        )
+        p.start()
+        processes.append(p)
+    # Wait for all processes to complete
+    for p in tqdm(processes):
+        p.join()
+    print(result_segments)
     # result_segments = torch.zeros_like(segments).cuda()
     # for i in range(CONFIG["n-parallel-processes"]):
     #     segments_i = (
@@ -177,8 +199,8 @@ if __name__ == "__main__":
     #     result_masks = merger.get_result_masks()
     #     result_segments += result_masks
     # torch.save(result_segments, "segments_merged.pt")
-    merger = LF_segment_merger(segments)
-    merger.get_result_masks()
+    # merger = LF_segment_merger(segments)
+    # merger.get_result_masks()
     # segment_merger = LF_segment_merger(segments)
     # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
