@@ -28,7 +28,6 @@ class LF_segment_merger:
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
-        self.central_segments = self.get_central_segments()
 
     @torch.no_grad()
     def get_epipolar_line_vectors(self):
@@ -46,7 +45,7 @@ class LF_segment_merger:
         return epipolar_line_vectors
 
     @torch.no_grad()
-    def get_central_segments(self):
+    def get_central_segments(self, segments):
         central_segments = torch.unique(self.segments[self.s_central, self.t_central])[
             1:
         ]
@@ -108,8 +107,12 @@ class LF_segment_merger:
         return matches
 
     @torch.no_grad()
-    def get_result_masks_i(self, segments_i):
-        for segment_num in tqdm(self.central_segments):
+    def get_result_masks_i(self, i, results, process_to_segments_dict):
+        segments_i = (
+            self.segments.float()
+            * torch.isin(self.segments, process_to_segments_dict[i]).float()
+        ).long()
+        for segment_num in tqdm(self.get_central_segments(segments_i)):
             main_mask = (segments_i == segment_num)[self.s_central, self.t_central]
             main_mask_centroid = binary_mask_centroid(main_mask)
             matches = self.find_matches(main_mask, main_mask_centroid)
@@ -122,23 +125,46 @@ class LF_segment_merger:
                 torch.unique(segments_i[self.s_central, self.t_central]),
             )
         ] = 0
-        return segments_i
+        results[i] = segments_i
 
     @torch.no_grad()
-    def get_result_masks(self):
+    def get_result_masks_parallel(self):
         process_to_segments_dict = get_process_to_segments_dict(
             self.embeddings_filename
         )
-        result_segments = torch.zeros_like(self.segments).cuda()
-        for i in range(CONFIG["n-parallel-processes"]):
-            segments_i = (
-                self.segments.float()
-                * torch.isin(self.segments, process_to_segments_dict[i]).float()
-            ).long()
-            merger = LF_segment_merger(segments_i)
-            result_masks = merger.get_result_masks()
-            result_segments += result_masks
+        result_segments = mp.Manager().list([None] * CONFIG["n-parallel-processes"])
+        # Spawn processes
+        processes = []
+        for rank in range(CONFIG["n-parallel-processes"]):
+            p = mp.Process(
+                target=self.get_result_masks_i,
+                args=(rank, result_segments, process_to_segments_dict),
+            )
+            processes.append(p)
+            p.start()
+        # Wait for all processes to complete
+        for p in processes:
+            p.join()
+        print(result_segments)
+        raise
         return result_segments
+
+    @torch.no_grad()
+    def get_result_masks(self):
+        for segment_num in tqdm(self.get_central_segments(self.segments)):
+            main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
+            main_mask_centroid = binary_mask_centroid(main_mask)
+            matches = self.find_matches(main_mask, main_mask_centroid)
+            self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
+                segment_num
+            )
+        self.segments[
+            ~torch.isin(
+                self.segments,
+                torch.unique(self.segments[self.s_central, self.t_central]),
+            )
+        ] = 0
+        return self.segments
 
 
 if __name__ == "__main__":
@@ -151,19 +177,19 @@ if __name__ == "__main__":
     from random import randint
     from utils import get_process_to_segments_dict
 
-    process_to_segments_dict = get_process_to_segments_dict("embeddings.pt")
+    # process_to_segments_dict = get_process_to_segments_dict("embeddings.pt")
     segments = torch.tensor(torch.load("segments.pt")).cuda()
-    result_segments = torch.zeros_like(segments).cuda()
-    for i in range(CONFIG["n-parallel-processes"]):
-        segments_i = (
-            segments.float() * torch.isin(segments, process_to_segments_dict[i]).float()
-        ).long()
-        merger = LF_segment_merger(segments_i)
-        result_masks = merger.get_result_masks()
-        result_segments += result_masks
-    torch.save(result_segments, "segments_merged.pt")
-    # merger = LF_segment_merger(segments)
-    # merger.get_result_masks()
+    # result_segments = torch.zeros_like(segments).cuda()
+    # for i in range(CONFIG["n-parallel-processes"]):
+    #     segments_i = (
+    #         segments.float() * torch.isin(segments, process_to_segments_dict[i]).float()
+    #     ).long()
+    #     merger = LF_segment_merger(segments_i)
+    #     result_masks = merger.get_result_masks()
+    #     result_segments += result_masks
+    # torch.save(result_segments, "segments_merged.pt")
+    merger = LF_segment_merger(segments)
+    merger.get_result_masks()
     # segment_merger = LF_segment_merger(segments)
     # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
