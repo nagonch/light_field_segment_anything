@@ -14,7 +14,9 @@ from utils import (
     CONFIG,
 )
 from tqdm import tqdm
-import torch.multiprocessing as mp
+
+# import torch.multiprocessing as mp
+import multiprocessing as mp
 
 mp.set_start_method("spawn", force=True)
 
@@ -46,11 +48,9 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def get_central_segments(self, segments):
-        central_segments = torch.unique(self.segments[self.s_central, self.t_central])[
-            1:
-        ]
+        central_segments = torch.unique(segments[self.s_central, self.t_central])[1:]
         segment_sums = torch.stack(
-            [(self.segments == i).sum() for i in central_segments]
+            [(segments == i).sum() for i in central_segments]
         ).cuda()
         central_segments = central_segments[
             torch.argsort(segment_sums, descending=True)
@@ -112,20 +112,24 @@ class LF_segment_merger:
             self.segments.float()
             * torch.isin(self.segments, process_to_segments_dict[i]).float()
         ).long()
-        for segment_num in tqdm(self.get_central_segments(segments_i)):
+        result_matches = {}
+        for segment_num in self.get_central_segments(segments_i):
             main_mask = (segments_i == segment_num)[self.s_central, self.t_central]
             main_mask_centroid = binary_mask_centroid(main_mask)
             matches = self.find_matches(main_mask, main_mask_centroid)
+            for match in matches:
+                result_matches[int(match)] = int(segment_num)
             segments_i[torch.isin(segments_i, torch.tensor(matches).cuda())] = (
                 segment_num
             )
-        segments_i[
+        for segment in segments_i[
             ~torch.isin(
                 segments_i,
                 torch.unique(segments_i[self.s_central, self.t_central]),
             )
-        ] = 0
-        results[i] = segments_i
+        ]:
+            result_matches[int(segment)] = 0
+        results[i] = result_matches
 
     @torch.no_grad()
     def get_result_masks_parallel(self):
@@ -140,10 +144,10 @@ class LF_segment_merger:
                 target=self.get_result_masks_i,
                 args=(rank, result_segments, process_to_segments_dict),
             )
-            processes.append(p)
             p.start()
+            processes.append(p)
         # Wait for all processes to complete
-        for p in processes:
+        for p in tqdm(processes):
             p.join()
         print(result_segments)
         raise
@@ -189,7 +193,7 @@ if __name__ == "__main__":
     #     result_segments += result_masks
     # torch.save(result_segments, "segments_merged.pt")
     merger = LF_segment_merger(segments)
-    merger.get_result_masks()
+    merger.get_result_masks_parallel()
     # segment_merger = LF_segment_merger(segments)
     # print(segment_merger)
     # find_matches_RANSAC(segments, 331232, n_data_points=70)
