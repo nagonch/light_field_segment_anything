@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from utils import CONFIG
 
 
 def kmeans_pp_init(X, k, dist_func, tol=1e-9):
@@ -36,13 +37,26 @@ def cosine_dist(X, means):
     return dist
 
 
+def classes_penalty(t_jn, classes, eps=1e-8):
+    cluster_labels = t_jn.sum(axis=1)
+    penalties = []
+    for i in torch.unique(cluster_labels):
+        cluster_labels = classes[cluster_labels == i]
+        _, label_counts = torch.unique(cluster_labels, return_counts=True)
+        label_probs = label_counts / len(cluster_labels)
+        penalties.append(-torch.sum(label_probs * torch.log(label_probs + eps)))
+    return torch.stack(penalties).cuda()
+
+
 def k_means(
     X: torch.Tensor,
+    classes: torch.Tensor,
     k: int,
     tol=1e-9,
     times=50,
     dist="euclid",
     init="kmeanspp",
+    lambda_reg=CONFIG["k-means-reg-parameter"],
     verbose=True,
 ):
     """
@@ -77,7 +91,11 @@ def k_means(
                 if class_i_samples.shape[-1] > 0:
                     new_means[:, i] = class_i_samples.mean(dim=-1)
             # class means (d, k)
-            loss = (t_jn[None] * dist_func(X, new_means)).mean()  # (d, n, k)
+            loss = (
+                t_jn[None] * dist_func(X, new_means)
+            ).mean() + lambda_reg * classes_penalty(
+                t_jn, classes
+            ).mean()  # (d, n, k)
 
         if loss < best_loss:
             if verbose:
@@ -91,8 +109,10 @@ def k_means(
 
 if __name__ == "__main__":
     embeddings = torch.load("embeddings.pt").values()
-    embeddings = torch.stack([emb[0] for emb in embeddings])
+    classes = torch.stack([torch.tensor(emb[1]) for emb in embeddings]).cuda().long()
+    embeddings = torch.stack([emb[0] for emb in embeddings]).cuda()
     c, assignments, loss = k_means(
-        embeddings.T, k=50, times=100, dist="cosine", init="kmeanspp"
+        embeddings.T, classes, k=10, times=100, dist="cosine", init="kmeanspp"
     )
-    print(assignments.shape)
+    for i in torch.unique(assignments):
+        print(torch.unique(classes[assignments == i], return_counts=True))
