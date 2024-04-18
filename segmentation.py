@@ -47,9 +47,9 @@ def main(
         segments = torch.load(segments_filename).cuda()
         embeddings = torch.load(embeddings_filename).cuda()
     else:
-        segments, embeddings = simple_sam.segment_LF(LF)
+        segments = simple_sam.segment_LF(LF)
+        simple_sam.postprocess_embeddings()
         torch.save(segments, segments_filename)
-        torch.save(embeddings, embeddings_filename)
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:

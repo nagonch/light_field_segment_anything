@@ -15,6 +15,7 @@ from segment_anything.utils.amg import (
 from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
 from tqdm import tqdm
+import os
 
 
 def get_sam():
@@ -206,8 +207,8 @@ class SimpleSAM(nn.Module):
 
     @torch.no_grad()
     def segment_LF(self, LF):
+        os.makedirs("embeddings", exist_ok=True)
         result_masks = []
-        result_embeddings = []
         max_segment_num = -1
         s, t, u, v, c = LF.shape
         LF = (
@@ -217,9 +218,9 @@ class SimpleSAM(nn.Module):
             .permute(0, 3, 1, 2)
         )
         iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
-        for batch in tqdm(iterator):
+        for batch_num, batch in tqdm(enumerate(iterator)):
             result = self.forward(batch[0])
-            for item in result:
+            for item_num, item in enumerate(result):
                 item = zip(item["masks"], item["mask_tokens"])
                 masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
                 segments = torch.stack([torch.tensor(mask[0]).cuda() for mask in masks])
@@ -227,35 +228,40 @@ class SimpleSAM(nn.Module):
                 segments_result = (
                     torch.zeros((segments.shape[-2], segments.shape[-1])).cuda().long()
                 )
-                emb_size = embeddings[0].shape[-1]
-                normalization_map = torch.zeros_like(segments_result).cuda() + 1e-9
-                embeddings_map = torch.zeros(
-                    (
-                        segments.shape[-2],
-                        segments.shape[-1],
-                        emb_size,
-                    )
-                ).cuda()
+                embedding_keys = []
+                embedding_values = []
                 segment_num = 0
                 for embedding, segment in zip(embeddings, segments):
                     segments_result[segment] += segment_num + 1
-                    embeddings_map[segment] += embedding
-                    normalization_map[segment] += 1
+                    embedding_keys.append(segments_result[segment][0].item())
+                    embedding_values.append(embedding)
                     segment_num = segments_result.max() + 1
-                embeddings_map /= normalization_map[:, :, None]
-                del normalization_map
                 segments = segments_result
                 segments[segments != 0] += max_segment_num + 1
-                result_embeddings.append(embeddings_map)
+                embedding_keys = [
+                    int(key + max_segment_num + 1) for key in embedding_keys
+                ]
+                embeddings_map = dict(zip(embedding_keys, embedding_values))
+                torch.save(
+                    embeddings_map,
+                    f"embeddings/{str(batch_num).zfill(4)}_{str(item_num).zfill(4)}.pt",
+                )
+                del embeddings_map
                 max_segment_num = segments.max()
                 result_masks.append(segments)
         result_masks = torch.stack(result_masks).reshape(
             s, t, segments_result.shape[-2], segments_result.shape[-1]
         )
-        result_embeddings = torch.stack(result_embeddings).reshape(
-            s, t, embeddings_map.shape[-3], embeddings_map.shape[-2], emb_size
-        )
-        return result_masks, result_embeddings
+        return result_masks
+
+    @torch.no_grad()
+    def postprocess_embeddings(self):
+        emd_dict = {}
+        for item in os.listdir("embeddings"):
+            if item.endswith("pt"):
+                emd_dict.update(torch.load(f"embeddings/{item}"))
+                os.remove(f"embeddings/{item}")
+        torch.save(emd_dict, "embeddings.pt")
 
 
 if __name__ == "__main__":
