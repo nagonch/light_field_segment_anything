@@ -2,7 +2,10 @@
 
 import torch
 import torch.nn.functional as F
-from utils import CONFIG
+import yaml
+
+with open("config.yaml") as f:
+    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def kmeans_pp_init(X, k, dist_func, tol=1e-9):
@@ -53,11 +56,11 @@ def k_means(
     classes: torch.Tensor,
     k: int,
     tol=1e-9,
-    times=50,
+    times=CONFIG["k-means-n-iterations"],
     dist="euclid",
     init="kmeanspp",
     lambda_reg=CONFIG["k-means-reg-parameter"],
-    verbose=True,
+    verbose=False,
 ):
     """
     k-means for `X` (d, N) and `k` classes, where d is vector dimension and N is number of vectors.
@@ -103,16 +106,9 @@ def k_means(
             best_loss = loss
             best_means = new_means
             best_t_jn = t_jn
-    cluster_assignments = best_t_jn.argmax(dim=-1)
+    cluster_assignments = [x.item() for x in best_t_jn.argmax(dim=-1)]
     return best_means, cluster_assignments, best_loss
 
 
 if __name__ == "__main__":
-    embeddings = torch.load("embeddings.pt").values()
-    classes = torch.stack([torch.tensor(emb[1]) for emb in embeddings]).cuda().long()
-    embeddings = torch.stack([emb[0] for emb in embeddings]).cuda()
-    c, assignments, loss = k_means(
-        embeddings.T, classes, k=10, times=100, dist="cosine", init="kmeanspp"
-    )
-    for i in torch.unique(assignments):
-        print(torch.unique(classes[assignments == i], return_counts=True))
+    pass

@@ -7,6 +7,7 @@ import torch
 from scipy.io import savemat
 from plenpy.lightfields import LightField
 import logging
+from k_means import k_means
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -124,5 +125,21 @@ def get_subview_indices(s_size, t_size):
     return indices
 
 
+def split_segment_to_process_dict(
+    embeddings_filename, n_processes=CONFIG["n-parallel-processes"]
+):
+    embeddings_dict = torch.load(embeddings_filename)
+    classes = (
+        torch.stack([torch.tensor(emb[1]) for emb in embeddings_dict.values()])
+        .cuda()
+        .long()
+    )
+    embeddings = torch.stack([emb[0] for emb in embeddings_dict.values()]).cuda()
+    _, assignments, _ = k_means(
+        embeddings.T, classes, k=n_processes, dist="cosine", init="kmeanspp"
+    )
+    return dict(zip(embeddings_dict.keys(), assignments))
+
+
 if __name__ == "__main__":
-    pass
+    print(split_segment_to_process_dict("embeddings.pt"))

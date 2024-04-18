@@ -25,4 +25,6 @@ ransac-n-inliers: 50
 ransac-n-iterations: 10
 mask-test-threshold: 1
 k-means-reg-parameter: 0.01
+k-means-n-iterations: 100
+n-parallel-processes: 10
 token-size: 256
