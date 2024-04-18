@@ -1,4 +1,4 @@
-from utils import CONFIG
+from utils import CONFIG, get_subview_indices
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
@@ -234,7 +234,12 @@ class SimpleSAM(nn.Module):
                 for embedding, segment in zip(embeddings, segments):
                     segments_result[segment] += segment_num + 1
                     embedding_keys.append(segments_result[segment][0].item())
-                    embedding_values.append(embedding)
+                    embedding_values.append(
+                        (
+                            embedding,
+                            batch_num * CONFIG["subviews-batch-size"] + item_num,
+                        )
+                    )
                     segment_num = segments_result.max() + 1
                 segments = segments_result
                 segments[segments != 0] += max_segment_num + 1
