@@ -129,17 +129,22 @@ def split_segment_to_process_dict(
     embeddings_filename, n_processes=CONFIG["n-parallel-processes"]
 ):
     embeddings_dict = torch.load(embeddings_filename)
+    segment_nums = torch.Tensor(list(embeddings_dict.keys())).cuda().long()
     classes = (
         torch.stack([torch.tensor(emb[1]) for emb in embeddings_dict.values()])
         .cuda()
         .long()
     )
     embeddings = torch.stack([emb[0] for emb in embeddings_dict.values()]).cuda()
-    _, assignments, _ = k_means(
+    _, cluster_nums, _ = k_means(
         embeddings.T, classes, k=n_processes, dist="cosine", init="kmeanspp"
     )
-    return dict(zip(embeddings_dict.keys(), assignments))
+    result_mapping = {}
+    for cluster_num in torch.unique(cluster_nums):
+        corresponding_segments = segment_nums[torch.where(cluster_nums == cluster_num)]
+        result_mapping[cluster_num.item()] = corresponding_segments
+    return result_mapping
 
 
 if __name__ == "__main__":
-    print(split_segment_to_process_dict("embeddings.pt"))
+    pass

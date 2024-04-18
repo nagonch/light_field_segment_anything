@@ -106,7 +106,7 @@ def k_means(
             best_loss = loss
             best_means = new_means
             best_t_jn = t_jn
-    cluster_assignments = [x.item() for x in best_t_jn.argmax(dim=-1)]
+    cluster_assignments = best_t_jn.argmax(dim=-1)
     return best_means, cluster_assignments, best_loss
 
 
