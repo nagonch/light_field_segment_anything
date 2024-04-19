@@ -1,79 +1,16 @@
 import numpy as np
-
 import torch
-from tqdm import tqdm
-import yaml
 import os
-import imgviz
-from utils import visualize_segments, get_LF, CONFIG
+from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
+from data import get_LF
 from sam_functions import get_sam
-import matplotlib.pyplot as plt
-from torchmetrics.classification import BinaryJaccardIndex
-import networkx as nx
-import torch.nn.functional as F
+from LF_functions import get_merged_segments
+from plenpy.lightfields import LightField
+import logging
+from scipy.io import loadmat
+from data import LFDataset
 
-
-def calculate_segments_metric(segments, embeddings, i, j):
-    mask_i = (segments == i).to(torch.int32)
-    mask_j = (segments == j).to(torch.int32)
-    if CONFIG["edge-metric"] in ["cosine", "combination"]:
-        embs_i = (embeddings * (segments == i)[:, :, :, :, None].to(torch.int32)).mean(
-            axis=(0, 1, 2, 3)
-        )
-        embs_j = (embeddings * (segments == j)[:, :, :, :, None].to(torch.int32)).mean(
-            axis=(0, 1, 2, 3)
-        )
-        cosine_sim = F.cosine_similarity(embs_i[None], embs_j[None])[0].item()
-        if CONFIG["edge-metric"] == "cosine":
-            return cosine_sim
-    if CONFIG["edge-metric"] in ["iou", "combination"]:
-        iou_metric = BinaryJaccardIndex().cuda()
-        segments_i = mask_i.sum(axis=(0, 1))
-        segments_j = mask_j.sum(axis=(0, 1))
-        iou = iou_metric(segments_i, segments_j).item()
-        if CONFIG["edge-metric"] == "iou":
-            return iou
-    return CONFIG["cosine-weight"] * cosine_sim + (1 - CONFIG["cosine-weight"]) * iou
-
-
-def get_merge_segments_mapping(segments, embeddings):
-    s, t = segments.shape[0], segments.shape[1]
-    central_inds = torch.unique(segments[s // 2][t // 2].reshape(-1))[1:]
-    graphs = []
-    mapping = {}
-    for s_ in tqdm(range(s)):
-        for t_ in range(t):
-            if s_ == s // 2 and t_ == t // 2:
-                continue
-            graph = nx.Graph()
-            segments_st = torch.unique(segments[s_][t_].reshape(-1))[1:]
-            top_nodes = segments_st.cpu().detach().numpy()
-            bottom_nodes = central_inds.cpu().detach().numpy()
-            graph.add_nodes_from(
-                top_nodes,
-                bipartite=0,
-            )
-            graph.add_nodes_from(
-                bottom_nodes,
-                bipartite=1,
-            )
-            for i in central_inds:
-                for j in segments_st:
-                    metric_val = calculate_segments_metric(segments, embeddings, i, j)
-                    if metric_val < CONFIG["metric-threshold"]:
-                        metric_val = 0.0
-                    graph.add_edges_from(
-                        [(j.item(), i.item())], weight=(1 - metric_val)
-                    )
-            graphs.append(graph)
-            max_matching = nx.bipartite.matching.minimum_weight_full_matching(
-                graph, top_nodes=top_nodes
-            )
-            for node in bottom_nodes:
-                if node in max_matching.keys():
-                    max_matching.pop(node)
-            mapping.update(max_matching)
-    return mapping
+logging.getLogger("plenpy").setLevel(logging.WARNING)
 
 
 def post_process_segments(segments):
@@ -88,48 +25,43 @@ def post_process_segments(segments):
 
 
 def main(
-    LF_dir,
+    LF,
     segments_filename=CONFIG["segments-filename"],
-    embeddings_filename=CONFIG["embeddings-filename"],
     merged_filename=CONFIG["merged-filename"],
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
     merged_checkpoint=CONFIG["merged-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
-    from scipy.io import loadmat
-
-    # LF = get_LF(LF_dir)
-    LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
-    simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
-        embeddings = torch.load(embeddings_filename).cuda()
     else:
-        segments, embeddings = simple_sam.segment_LF(LF)
+        simple_sam = get_sam()
+        segments = simple_sam.segment_LF(LF)
+        simple_sam.postprocess_embeddings()
         torch.save(segments, segments_filename)
-        torch.save(embeddings, embeddings_filename)
+        del simple_sam
+        torch.cuda.empty_cache()
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        mapping = get_merge_segments_mapping(segments, embeddings)
-        segments = segments.cpu().numpy()
-        segments = np.vectorize(lambda x: mapping.get(x, x))(segments)
+        segments = get_merged_segments(segments).detach().cpu().numpy()
         torch.save(segments, merged_filename)
-    visualize_segments(
+    visualize_segmentation_mask(
         segments,
-        LF,
-        filename=vis_filename,
+        vis_filename,
     )
     segments = post_process_segments(segments)
     for i, segment in enumerate(segments):
         visualize_segments(
             segment.astype(np.uint32),
-            LF * (segment).astype(np.int32)[:, :, :, :, None],
-            filename=f"imgs/{str(i).zfill(3)}.png",
+            f"imgs/{str(i).zfill(3)}.png",
         )
     return segments
 
 
 if __name__ == "__main__":
-    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
-    segments = main(dir)
+    dataset = LFDataset("UrbanLF_Syn/test")
+    LF = dataset[3].detach().cpu().numpy()
+    LF_vis = LightField(LF)
+    LF_vis.show()
+    segments = main(LF)
