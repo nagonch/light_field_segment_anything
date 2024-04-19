@@ -8,7 +8,7 @@ segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "segments.mat"
-sam-segments-checkpoint: False
+sam-segments-checkpoint: True
 merged-checkpoint: False
 points-per-side: 32
 points-per-batch: 64
@@ -26,6 +26,6 @@ ransac-n-iterations: 10
 mask-test-threshold: 1
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
-n-parallel-processes: 1
+n-parallel-processes: 6
 min-central-segments-for-parallel: 50
 token-size: 256

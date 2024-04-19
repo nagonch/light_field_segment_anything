@@ -266,7 +266,7 @@ class SimpleSAM(nn.Module):
             if item.endswith("pt"):
                 emd_dict.update(torch.load(f"embeddings/{item}"))
                 os.remove(f"embeddings/{item}")
-        torch.save(emd_dict, "embeddings.pt")
+        torch.save(emd_dict, CONFIG["embeddings-filename"])
 
 
 if __name__ == "__main__":

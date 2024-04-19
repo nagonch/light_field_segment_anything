@@ -24,9 +24,8 @@ mp.set_start_method("spawn", force=True)
 
 class LF_segment_merger:
     @torch.no_grad()
-    def __init__(self, segments, embeddings_filename="embeddings.pt"):
+    def __init__(self, segments):
         self.segments = segments
-        self.embeddings_filename = embeddings_filename
         self.s_size, self.t_size, self.u_size, self.v_size = segments.shape
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
@@ -141,7 +140,7 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def get_result_masks(self):
-        for segment_num in tqdm(self.central_cegments):
+        for segment_num in self.central_cegments:
             main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
             main_mask_centroid = binary_mask_centroid(main_mask)
             matches = self.find_matches(main_mask, main_mask_centroid)
@@ -171,7 +170,7 @@ def get_merged_segments(segments):
         torch.unique(segments[s_central, t_central]).shape[0]
         >= CONFIG["min-central-segments-for-parallel"]
     ):
-        proc_to_seg_dict = get_process_to_segments_dict("embeddings.pt")
+        proc_to_seg_dict = get_process_to_segments_dict(CONFIG["embeddings-filename"])
         result_segments_list = mp.Manager().list(
             [None] * CONFIG["n-parallel-processes"]
         )

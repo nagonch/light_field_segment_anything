@@ -4,7 +4,7 @@ import os
 from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
 from data import get_LF
 from sam_functions import get_sam
-from LF_functions import LF_segment_merger
+from LF_functions import get_merged_segments
 from plenpy.lightfields import LightField
 import logging
 
@@ -45,7 +45,6 @@ def main(
     simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
-        embeddings = torch.load(embeddings_filename).cuda()
     else:
         segments = simple_sam.segment_LF(LF)
         simple_sam.postprocess_embeddings()
@@ -53,8 +52,7 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        segment_merger = LF_segment_merger(segments)
-        segments = segment_merger.get_result_masks().detach().cpu().numpy()
+        segments = get_merged_segments(segments).detach().cpu().numpy()
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,
