@@ -166,23 +166,34 @@ def parallelize_segments(i, results, segments, proc_to_seg_dict):
 
 
 def get_merged_segments(segments):
-    proc_to_seg_dict = get_process_to_segments_dict("embeddings.pt")
-    result_segments_list = mp.Manager().list([None] * CONFIG["n-parallel-processes"])
-    processes = []
-    for rank in range(CONFIG["n-parallel-processes"]):
-        p = mp.Process(
-            target=parallelize_segments,
-            args=(rank, result_segments_list, segments, proc_to_seg_dict),
+    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
+    if (
+        torch.unique(segments[s_central, t_central]).shape[0]
+        >= CONFIG["min-central-segments-for-parallel"]
+    ):
+        proc_to_seg_dict = get_process_to_segments_dict("embeddings.pt")
+        result_segments_list = mp.Manager().list(
+            [None] * CONFIG["n-parallel-processes"]
         )
-        p.start()
-        processes.append(p)
-    # Wait for all processes to complete
-    for p in tqdm(processes):
-        p.join()
-    result = torch.stack(list(result_segments_list)).sum(axis=0)
+        processes = []
+        for rank in range(CONFIG["n-parallel-processes"]):
+            p = mp.Process(
+                target=parallelize_segments,
+                args=(rank, result_segments_list, segments, proc_to_seg_dict),
+            )
+            p.start()
+            processes.append(p)
+        # Wait for all processes to complete
+        for p in tqdm(processes):
+            p.join()
+        result = torch.stack(list(result_segments_list)).sum(axis=0)
+    else:
+        merger = LF_segment_merger(segments)
+        result = merger.get_result_masks()
     return result
 
 
 if __name__ == "__main__":
-    segments = torch.tensor(torch.load("segments.pt")).cuda()
-    print(get_merged_segments(segments))
+    pass
+    # segments = torch.tensor(torch.load("segments.pt")).cuda()
+    # print(get_merged_segments(segments))
