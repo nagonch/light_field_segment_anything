@@ -7,6 +7,8 @@ from sam_functions import get_sam
 from LF_functions import get_merged_segments
 from plenpy.lightfields import LightField
 import logging
+from scipy.io import loadmat
+from data import LFDataset
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -23,32 +25,22 @@ def post_process_segments(segments):
 
 
 def main(
-    LF_dir,
+    LF,
     segments_filename=CONFIG["segments-filename"],
-    embeddings_filename=CONFIG["embeddings-filename"],
     merged_filename=CONFIG["merged-filename"],
     segments_checkpoint=CONFIG["sam-segments-checkpoint"],
     merged_checkpoint=CONFIG["merged-checkpoint"],
     vis_filename=CONFIG["vis-filename"],
 ):
-    from scipy.io import loadmat
-    from data import LFDataset
-
-    dataset = LFDataset("UrbanLF_Syn/test")
-    LF = dataset[3].detach().cpu().numpy()
-    # LF = loadmat("Lego.256.mat")["LF"][4:-4, 4:-4]
-    LF_vis = LightField(LF)
-    LF_vis.show()
-    save_LF_image(np.array(LF), "input_LF.png")
-    # LF = get_LF(LF_dir)
-    # LF = loadmat("lego_128.mat")["LF"].astype(np.int32)[1:-1, 1:-1]
-    simple_sam = get_sam()
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
     else:
+        simple_sam = get_sam()
         segments = simple_sam.segment_LF(LF)
         simple_sam.postprocess_embeddings()
         torch.save(segments, segments_filename)
+        del simple_sam
+        torch.cuda.empty_cache()
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
@@ -68,5 +60,8 @@ def main(
 
 
 if __name__ == "__main__":
-    dir = "/home/cedaradmin/blender/lightfield/LFPlane/f00051/png"
-    segments = main(dir)
+    dataset = LFDataset("UrbanLF_Syn/test")
+    LF = dataset[3].detach().cpu().numpy()
+    LF_vis = LightField(LF)
+    LF_vis.show()
+    segments = main(LF)

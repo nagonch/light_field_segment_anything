@@ -8,7 +8,7 @@ segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "segments.mat"
-sam-segments-checkpoint: True
+sam-segments-checkpoint: False
 merged-checkpoint: False
 points-per-side: 32
 points-per-batch: 64
