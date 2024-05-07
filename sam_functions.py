@@ -78,7 +78,16 @@ class SimpleSAM(nn.Module):
         masks [b, n_masks, w, h]
         """
         result = []
-        for _ in masks:
+        for mask in masks:
+            mask = torch.tensor(mask).cuda().long()
+            mask_x, mask_y = torch.where(mask == 1)
+            x_min, y_min, x_max, y_max = [
+                mask_x.min().item(),
+                mask_y.min().item(),
+                mask_x.max().item(),
+                mask_y.max().item(),
+            ]
+            mask = mask[x_min : x_max + 1, y_min : y_max + 1]
             result.append(torch.zeros((CONFIG["token-size"])))
         return result
 

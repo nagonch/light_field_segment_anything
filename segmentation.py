@@ -68,5 +68,5 @@ if __name__ == "__main__":
     dataset = LFDataset("UrbanLF_Syn/test")
     LF = dataset[3].detach().cpu().numpy()
     LF_vis = LightField(LF)
-    LF_vis.show()
+    # LF_vis.show()
     segments = main(LF)
