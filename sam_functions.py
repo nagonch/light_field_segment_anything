@@ -73,6 +73,16 @@ class SimpleSAM(nn.Module):
         return batch
 
     @torch.no_grad()
+    def get_masks_embeddings(self, masks):
+        """
+        masks [b, n_masks, w, h]
+        """
+        result = []
+        for _ in masks:
+            result.append(torch.zeros((CONFIG["token-size"])))
+        return result
+
+    @torch.no_grad()
     def forward(
         self,
         batch,
@@ -95,16 +105,13 @@ class SimpleSAM(nn.Module):
         )
         masks_batches = []
         iou_predictions_batches = []
-        mask_tokens = []
         for sparse_emb, dense_emb in batch_iteration:
-            low_res_masks, iou_predictions, mask_tokens_out = self.sam.mask_decoder(
+            low_res_masks, iou_predictions = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
                 image_pe=self.sam.prompt_encoder.get_dense_pe(),
                 sparse_prompt_embeddings=sparse_emb[0],
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
-                output_tokens=True,
-                token_size=CONFIG["token-size"],
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
@@ -117,8 +124,6 @@ class SimpleSAM(nn.Module):
                 masks = masks > self.sam.mask_threshold
             masks_batches.append(masks)
             iou_predictions_batches.append(iou_predictions.reshape(batch_shape, -1))
-            batch_shape, _, _, emb_shape = mask_tokens_out.shape
-            mask_tokens.append(mask_tokens_out.reshape(batch_shape, -1, emb_shape))
         masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4)
         iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2)
         masks = masks.reshape(masks.shape[0], -1, masks.shape[-2], masks.shape[-1])
@@ -126,40 +131,32 @@ class SimpleSAM(nn.Module):
             iou_predictions.shape[0],
             -1,
         )
-        mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
-        mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
         del masks_batches
         del iou_predictions_batches
         del low_res_masks
-        del mask_tokens_out
         del batch_iteration
-        result = self.postprocess_masks(masks, iou_predictions, mask_tokens)
+        result = self.postprocess_masks(masks, iou_predictions)
 
         return result
 
     @torch.no_grad()
-    def postprocess_masks(self, masks, iou_predictions, mask_tokens):
+    def postprocess_masks(self, masks, iou_predictions):
         result = []
         u, v = masks.shape[-2:]
         min_mask_area = int(CONFIG["min-mask-area"] * u * v)
-        for mask_batch, iou_pred_batch, mask_token_batch in zip(
-            masks, iou_predictions, mask_tokens
-        ):
+        for mask_batch, iou_pred_batch in zip(masks, iou_predictions):
             batch_iteration = zip(
                 batch_iterator(self.points_per_batch_filtering, mask_batch),
                 batch_iterator(self.points_per_batch_filtering, iou_pred_batch),
-                batch_iterator(self.points_per_batch_filtering, mask_token_batch),
             )
             batch_data = MaskData()
-            for mask_batched, iou_pred_batched, mask_token_batched in batch_iteration:
+            for mask_batched, iou_pred_batched in batch_iteration:
                 data = MaskData(
                     masks=mask_batched[0],
                     iou_preds=iou_pred_batched[0],
-                    mask_token_batch=mask_token_batched[0],
                 )
                 del mask_batched
                 del iou_pred_batched
-                del mask_token_batched
                 # Filter by predicted IoU
                 if self.pred_iou_thresh > 0.0:
                     keep_mask = data["iou_preds"] > self.pred_iou_thresh
@@ -197,7 +194,7 @@ class SimpleSAM(nn.Module):
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
-                "mask_tokens": batch_data["mask_token_batch"],
+                "mask_tokens": self.get_masks_embeddings(masks),
             }
             result.append(result_batch)
             del result_batch
