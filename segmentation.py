@@ -44,7 +44,12 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        segments = get_merged_segments(segments).detach().cpu().numpy()
+        segments = (
+            get_merged_segments(segments, torch.load("embeddings.pt"))
+            .detach()
+            .cpu()
+            .numpy()
+        )
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,

@@ -1,8 +1,8 @@
 min-mask-area: 0.001
 min-mask-area-final: 0.001
-edge-metric: "iou"
+distance-metric: "cosine"
 cosine-weight: 0.2
-metric-threshold: 0.1
+metric-threshold: 0.9
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
@@ -26,6 +26,6 @@ ransac-n-iterations: 10
 mask-test-threshold: 1
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
-n-parallel-processes: 6
+n-parallel-processes: 1
 min-central-segments-for-parallel: 50
 token-size: 256
