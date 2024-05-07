@@ -194,7 +194,7 @@ class SimpleSAM(nn.Module):
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
-                "mask_tokens": self.get_masks_embeddings(masks),
+                "mask_tokens": self.get_masks_embeddings(batch_data["masks"]),
             }
             result.append(result_batch)
             del result_batch
