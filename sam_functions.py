@@ -85,7 +85,7 @@ class SimpleSAM(nn.Module):
         mask_u, mask_v = masks[0].shape
         img_u, img_v = img_batch.shape[-2:]
         result = []
-        for mask in masks:
+        for mask in tqdm(masks):
             mask = torch.tensor(mask).cuda().long()
             mask_x, mask_y = torch.where(mask == 1)
             x_min, y_min, x_max, y_max = [
@@ -94,7 +94,6 @@ class SimpleSAM(nn.Module):
                 mask_x.max().item(),
                 mask_y.max().item(),
             ]
-            mask[x_min : x_max + 1, y_min : y_max + 1] += 1
             x_min, y_min, x_max, y_max = [
                 int(x_min * (img_u / mask_u)),
                 int(y_min * (img_v / mask_v)),
@@ -103,9 +102,18 @@ class SimpleSAM(nn.Module):
             ]
             img_patch = img_batch[:, x_min : x_max + 1, y_min : y_max + 1]
             img_patch = self.preprocess_batch(img_patch[None], resize_only=True)
-            img_patch_embedding_left = self.sam.image_encoder(img_patch)
-            img_patch_embedding_right = self.sam.image_encoder(hflip(img_patch))
-            result.append(torch.zeros((CONFIG["token-size"])))
+            result_embds = []
+            for img in (img_patch, hflip(img_patch)):
+                img_patch_embedding = self.sam.image_encoder(img).permute(0, 1, 2, 3)
+                img_patch_embedding = F.interpolate(
+                    img_patch_embedding,
+                    size=(mask_u, mask_v),
+                    mode="bilinear",
+                )[0]
+                mask_embedding = img_patch_embedding[:, mask_x, mask_y].mean(axis=1)
+                result_embds.append(mask_embedding)
+            result_embdedding = torch.stack(result_embds).mean(axis=0)
+            result.append(result_embdedding)
         return result
 
     @torch.no_grad()
