@@ -73,7 +73,7 @@ class SimpleSAM(nn.Module):
         return batch
 
     @torch.no_grad()
-    def get_masks_embeddings(self, masks):
+    def get_masks_embeddings(self, masks, img_batch):
         """
         masks [b, n_masks, w, h]
         """
@@ -94,10 +94,10 @@ class SimpleSAM(nn.Module):
     @torch.no_grad()
     def forward(
         self,
-        batch,
+        input_batch,
         return_logits=True,
     ):
-        u, v = (batch.shape[-2], batch.shape[-1])
+        u, v = (input_batch.shape[-2], input_batch.shape[-1])
         if u < v:
             aspect = v / u
             new_u = CONFIG["mask-mask-side-size"]
@@ -106,7 +106,7 @@ class SimpleSAM(nn.Module):
             aspect = u / v
             new_v = CONFIG["mask-mask-side-size"]
             new_u = new_v * aspect
-        batch = self.preprocess_batch(batch)
+        batch = self.preprocess_batch(input_batch)
         image_embeddings = self.sam.image_encoder(batch)
         batch_iteration = zip(
             batch_iterator(self.points_per_batch, self.sparse_prompt_emb),
@@ -144,16 +144,18 @@ class SimpleSAM(nn.Module):
         del iou_predictions_batches
         del low_res_masks
         del batch_iteration
-        result = self.postprocess_masks(masks, iou_predictions)
+        result = self.postprocess_masks(masks, iou_predictions, input_batch)
 
         return result
 
     @torch.no_grad()
-    def postprocess_masks(self, masks, iou_predictions):
+    def postprocess_masks(self, masks, iou_predictions, img_batches):
         result = []
         u, v = masks.shape[-2:]
         min_mask_area = int(CONFIG["min-mask-area"] * u * v)
-        for mask_batch, iou_pred_batch in zip(masks, iou_predictions):
+        for mask_batch, iou_pred_batch, img_batch in zip(
+            masks, iou_predictions, img_batches
+        ):
             batch_iteration = zip(
                 batch_iterator(self.points_per_batch_filtering, mask_batch),
                 batch_iterator(self.points_per_batch_filtering, iou_pred_batch),
@@ -203,7 +205,9 @@ class SimpleSAM(nn.Module):
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
-                "mask_tokens": self.get_masks_embeddings(batch_data["masks"]),
+                "mask_tokens": self.get_masks_embeddings(
+                    batch_data["masks"], img_batch
+                ),
             }
             result.append(result_batch)
             del result_batch
