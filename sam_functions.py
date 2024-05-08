@@ -3,6 +3,7 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torchvision.transforms.functional import resize
 from segment_anything.utils.amg import (
     batch_iterator,
@@ -75,8 +76,15 @@ class SimpleSAM(nn.Module):
     @torch.no_grad()
     def get_masks_embeddings(self, masks, img_batch):
         """
-        masks [b, n_masks, w, h]
+        masks: list([w, h])
+        img_batch: [b, 3, u, v]
         """
+        mask_u, mask_v = masks[0].shape
+        img_batch = F.interpolate(
+            img_batch[None],
+            (mask_u, mask_v),
+            mode="bilinear",
+        )[0]
         result = []
         for mask in masks:
             mask = torch.tensor(mask).cuda().long()
@@ -144,7 +152,7 @@ class SimpleSAM(nn.Module):
         del iou_predictions_batches
         del low_res_masks
         del batch_iteration
-        result = self.postprocess_masks(masks, iou_predictions, input_batch)
+        result = self.postprocess_masks(masks, iou_predictions, batch)
 
         return result
 
