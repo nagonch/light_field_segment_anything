@@ -4,7 +4,7 @@ from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torchvision.transforms.functional import resize
+from torchvision.transforms.functional import resize, hflip
 from segment_anything.utils.amg import (
     batch_iterator,
     MaskData,
@@ -17,6 +17,8 @@ from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
 from tqdm import tqdm
 import os
+from matplotlib import pyplot as plt
+import numpy as np
 
 
 def get_sam():
@@ -64,13 +66,14 @@ class SimpleSAM(nn.Module):
         return sparse_prompt_embedding, dense_prompt_embedding
 
     @torch.no_grad()
-    def preprocess_batch(self, batch):
+    def preprocess_batch(self, batch, resize_only=False):
         batch = resize(
             batch.reshape(-1, batch.shape[-2], batch.shape[-1]),
             (1024, 1024),
             antialias=True,
         ).reshape(batch.shape[0], 3, 1024, 1024)
-        batch = torch.stack([self.sam.preprocess(x) for x in batch], dim=0)
+        if not resize_only:
+            batch = torch.stack([self.sam.preprocess(x) for x in batch], dim=0)
         return batch
 
     @torch.no_grad()
@@ -80,11 +83,7 @@ class SimpleSAM(nn.Module):
         img_batch: [b, 3, u, v]
         """
         mask_u, mask_v = masks[0].shape
-        img_batch = F.interpolate(
-            img_batch[None],
-            (mask_u, mask_v),
-            mode="bilinear",
-        )[0]
+        img_u, img_v = img_batch.shape[-2:]
         result = []
         for mask in masks:
             mask = torch.tensor(mask).cuda().long()
@@ -95,7 +94,17 @@ class SimpleSAM(nn.Module):
                 mask_x.max().item(),
                 mask_y.max().item(),
             ]
-            mask = mask[x_min : x_max + 1, y_min : y_max + 1]
+            mask[x_min : x_max + 1, y_min : y_max + 1] += 1
+            x_min, y_min, x_max, y_max = [
+                int(x_min * (img_u / mask_u)),
+                int(y_min * (img_v / mask_v)),
+                int(x_max * (img_u / mask_u)),
+                int(y_max * (img_v / mask_v)),
+            ]
+            img_patch = img_batch[:, x_min : x_max + 1, y_min : y_max + 1]
+            img_patch = self.preprocess_batch(img_patch[None], resize_only=True)
+            img_patch_embedding_left = self.sam.image_encoder(img_patch)
+            img_patch_embedding_right = self.sam.image_encoder(hflip(img_patch))
             result.append(torch.zeros((CONFIG["token-size"])))
         return result
 
