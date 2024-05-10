@@ -78,8 +78,6 @@ class SimpleSAM(nn.Module):
 
     @torch.no_grad()
     def get_masks_embeddings(self, masks, img_batch):
-        from matplotlib import pyplot as plt
-
         """
         masks: list([w, h])
         img_batch: [b, 3, u, v]
@@ -90,16 +88,20 @@ class SimpleSAM(nn.Module):
         x_mins, y_mins, x_maxs, y_maxs = [], [], [], []
         mask_x_list = []
         mask_y_list = []
+        sizes_list = []
         for mask in masks:
             mask_x, mask_y = torch.where(mask == 1)
-            mask_x_list.append(mask_x)
-            mask_y_list.append(mask_y)
             x_min, y_min, x_max, y_max = [
                 mask_x.min(),
                 mask_y.min(),
                 mask_x.max(),
                 mask_y.max(),
             ]
+            mask = mask[x_min : x_max + 1, y_min : y_max + 1]
+            mask_x, mask_y = torch.where(mask == 1)
+            mask_x_list.append(mask_x)
+            mask_y_list.append(mask_y)
+            sizes_list.append(mask.shape)
             x_mins.append(int(x_min * (img_u / mask_u)))
             y_mins.append(int(y_min * (img_v / mask_v)))
             x_maxs.append(int(x_max * (img_u / mask_u)))
@@ -114,13 +116,14 @@ class SimpleSAM(nn.Module):
             batch_iterator(CONFIG["batch-size"], imgs),
             batch_iterator(CONFIG["batch-size"], mask_x_list),
             batch_iterator(CONFIG["batch-size"], mask_y_list),
+            batch_iterator(CONFIG["batch-size"], sizes_list),
         )
         mask_embeddings = []
-        for batch, mask_x, mask_y in batch_iteration:
+        for batch, mask_x, mask_y, size in batch_iteration:
             img_patch_embedding = self.sam.image_encoder(batch[0])
             img_patch_embedding = F.interpolate(
                 img_patch_embedding,
-                size=(mask_u, mask_v),
+                size=(size[0][0][0], size[0][0][1]),
                 mode="bilinear",
             )
             mask_embedding = img_patch_embedding[:, :, mask_x[0][0], mask_y[0][0]].mean(
