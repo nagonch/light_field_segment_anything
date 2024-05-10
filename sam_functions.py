@@ -91,7 +91,6 @@ class SimpleSAM(nn.Module):
         mask_x_list = []
         mask_y_list = []
         for mask in masks:
-            mask = torch.tensor(mask).cuda().long()
             mask_x, mask_y = torch.where(mask == 1)
             mask_x_list.append(mask_x)
             mask_y_list.append(mask_y)
@@ -112,9 +111,9 @@ class SimpleSAM(nn.Module):
             imgs.append(img_patch)
         imgs = torch.cat(imgs, dim=0)
         batch_iteration = zip(
-            batch_iterator(CONFIG["batch-size"], imgs[:2]),
-            batch_iterator(CONFIG["batch-size"], mask_x_list[:2]),
-            batch_iterator(CONFIG["batch-size"], mask_y_list[:2]),
+            batch_iterator(CONFIG["batch-size"], imgs),
+            batch_iterator(CONFIG["batch-size"], mask_x_list),
+            batch_iterator(CONFIG["batch-size"], mask_y_list),
         )
         mask_embeddings = []
         for batch, mask_x, mask_y in batch_iteration:
