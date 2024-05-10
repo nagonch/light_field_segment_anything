@@ -78,6 +78,8 @@ class SimpleSAM(nn.Module):
 
     @torch.no_grad()
     def get_masks_embeddings(self, masks, img_batch):
+        from matplotlib import pyplot as plt
+
         """
         masks: list([w, h])
         img_batch: [b, 3, u, v]
@@ -110,9 +112,9 @@ class SimpleSAM(nn.Module):
             imgs.append(img_patch)
         imgs = torch.cat(imgs, dim=0)
         batch_iteration = zip(
-            batch_iterator(CONFIG["batch-size"], imgs),
-            batch_iterator(CONFIG["batch-size"], mask_x_list),
-            batch_iterator(CONFIG["batch-size"], mask_y_list),
+            batch_iterator(CONFIG["batch-size"], imgs[:2]),
+            batch_iterator(CONFIG["batch-size"], mask_x_list[:2]),
+            batch_iterator(CONFIG["batch-size"], mask_y_list[:2]),
         )
         mask_embeddings = []
         for batch, mask_x, mask_y in batch_iteration:
@@ -126,7 +128,7 @@ class SimpleSAM(nn.Module):
                 axis=-1
             )
             mask_embeddings.append(mask_embedding)
-        mask_embeddings = torch.cat(mask_embeddings, dim=0)
+        mask_embeddings = torch.unbind(torch.cat(mask_embeddings, dim=0))
         return mask_embeddings
 
     @torch.no_grad()
