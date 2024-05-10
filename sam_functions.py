@@ -84,37 +84,50 @@ class SimpleSAM(nn.Module):
         """
         mask_u, mask_v = masks[0].shape
         img_u, img_v = img_batch.shape[-2:]
-        result = []
-        for mask in tqdm(masks):
+        masks = torch.stack(masks, dim=0).cuda().long()
+        x_mins, y_mins, x_maxs, y_maxs = [], [], [], []
+        mask_x_list = []
+        mask_y_list = []
+        for mask in masks:
             mask = torch.tensor(mask).cuda().long()
             mask_x, mask_y = torch.where(mask == 1)
+            mask_x_list.append(mask_x)
+            mask_y_list.append(mask_y)
             x_min, y_min, x_max, y_max = [
-                mask_x.min().item(),
-                mask_y.min().item(),
-                mask_x.max().item(),
-                mask_y.max().item(),
+                mask_x.min(),
+                mask_y.min(),
+                mask_x.max(),
+                mask_y.max(),
             ]
-            x_min, y_min, x_max, y_max = [
-                int(x_min * (img_u / mask_u)),
-                int(y_min * (img_v / mask_v)),
-                int(x_max * (img_u / mask_u)),
-                int(y_max * (img_v / mask_v)),
-            ]
+            x_mins.append(int(x_min * (img_u / mask_u)))
+            y_mins.append(int(y_min * (img_v / mask_v)))
+            x_maxs.append(int(x_max * (img_u / mask_u)))
+            y_maxs.append(int(y_max * (img_v / mask_v)))
+        imgs = []
+        for x_min, x_max, y_min, y_max in zip(x_mins, x_maxs, y_mins, y_maxs):
             img_patch = img_batch[:, x_min : x_max + 1, y_min : y_max + 1]
             img_patch = self.preprocess_batch(img_patch[None], resize_only=True)
-            result_embds = []
-            for img in (img_patch, hflip(img_patch)):
-                img_patch_embedding = self.sam.image_encoder(img).permute(0, 1, 2, 3)
-                img_patch_embedding = F.interpolate(
-                    img_patch_embedding,
-                    size=(mask_u, mask_v),
-                    mode="bilinear",
-                )[0]
-                mask_embedding = img_patch_embedding[:, mask_x, mask_y].mean(axis=1)
-                result_embds.append(mask_embedding)
-            result_embdedding = torch.stack(result_embds).mean(axis=0)
-            result.append(result_embdedding)
-        return result
+            imgs.append(img_patch)
+        imgs = torch.cat(imgs, dim=0)
+        batch_iteration = zip(
+            batch_iterator(CONFIG["batch-size"], imgs),
+            batch_iterator(CONFIG["batch-size"], mask_x_list),
+            batch_iterator(CONFIG["batch-size"], mask_y_list),
+        )
+        mask_embeddings = []
+        for batch, mask_x, mask_y in batch_iteration:
+            img_patch_embedding = self.sam.image_encoder(batch[0])
+            img_patch_embedding = F.interpolate(
+                img_patch_embedding,
+                size=(mask_u, mask_v),
+                mode="bilinear",
+            )
+            mask_embedding = img_patch_embedding[:, :, mask_x[0][0], mask_y[0][0]].mean(
+                axis=-1
+            )
+            mask_embeddings.append(mask_embedding)
+        mask_embeddings = torch.cat(mask_embeddings, dim=0)
+        return mask_embeddings
 
     @torch.no_grad()
     def forward(
@@ -231,7 +244,8 @@ class SimpleSAM(nn.Module):
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
                 "mask_tokens": self.get_masks_embeddings(
-                    batch_data["masks"], img_batch
+                    [torch.tensor(mask).cuda().long() for mask in batch_data["masks"]],
+                    img_batch,
                 ),
             }
             result.append(result_batch)
@@ -252,7 +266,7 @@ class SimpleSAM(nn.Module):
             .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
             .permute(0, 3, 1, 2)
         )
-        iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+        iterator = batch_iterator(CONFIG["batch-size"], LF)
         for batch_num, batch in tqdm(enumerate(iterator)):
             result = self.forward(batch[0])
             for item_num, item in enumerate(result):
@@ -272,7 +286,7 @@ class SimpleSAM(nn.Module):
                     embedding_values.append(
                         (
                             embedding,
-                            batch_num * CONFIG["subviews-batch-size"] + item_num,
+                            batch_num * CONFIG["batch-size"] + item_num,
                         )
                     )
                     segment_num = segments_result.max() + 1
