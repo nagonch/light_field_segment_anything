@@ -44,7 +44,12 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        segments = get_merged_segments(segments).detach().cpu().numpy()
+        segments = (
+            get_merged_segments(segments, torch.load("embeddings.pt"))
+            .detach()
+            .cpu()
+            .numpy()
+        )
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,
@@ -63,5 +68,5 @@ if __name__ == "__main__":
     dataset = LFDataset("UrbanLF_Syn/test")
     LF = dataset[3].detach().cpu().numpy()
     LF_vis = LightField(LF)
-    LF_vis.show()
+    # LF_vis.show()
     segments = main(LF)

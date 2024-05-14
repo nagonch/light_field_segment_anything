@@ -79,8 +79,6 @@ class MaskDecoder(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
-        output_tokens: bool = False,
-        token_size: int = 256,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
@@ -97,12 +95,11 @@ class MaskDecoder(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
-        masks, iou_pred, mask_tokens_out = self.predict_masks(
+        masks, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
-            token_size=token_size,
         )
 
         # Select the correct mask or masks for output
@@ -112,10 +109,7 @@ class MaskDecoder(nn.Module):
             mask_slice = slice(0, 1)
         masks = masks[:, :, mask_slice, :, :]
         iou_pred = iou_pred[:, :, mask_slice]
-        mask_tokens_out = mask_tokens_out[:, :, mask_slice]
         result = (masks, iou_pred)
-        if output_tokens:
-            result += (mask_tokens_out,)
         # Prepare output
         return result
 
@@ -125,7 +119,6 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
-        token_size: int = 256,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -138,7 +131,6 @@ class MaskDecoder(nn.Module):
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
         masks_result = []
         iou_preds_result = []
-        mask_tokens_result = []
         for batch in image_embeddings:
             # Expand per-image data in batch direction to be per-mask
             src = torch.repeat_interleave(batch[None], tokens.shape[0], dim=0)
@@ -166,19 +158,12 @@ class MaskDecoder(nn.Module):
             iou_pred = self.iou_prediction_head(iou_token_out)
             masks_result.append(masks)
             iou_preds_result.append(iou_pred)
-            mask_tokens_result.append(mask_tokens_out)
         del masks
         del iou_pred
         del mask_tokens_out
         iou_preds_result = torch.stack(iou_preds_result)
         masks_result = torch.stack(masks_result)
-        mask_tokens_result = torch.stack(mask_tokens_result)[
-            :,
-            :,
-            :,
-            :token_size,
-        ]
-        return masks_result, iou_preds_result, mask_tokens_result
+        return masks_result, iou_preds_result
 
 
 # Lightly adapted from

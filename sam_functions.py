@@ -3,7 +3,8 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
 from torch import nn
-from torchvision.transforms.functional import resize
+import torch.nn.functional as F
+from torchvision.transforms.functional import resize, hflip
 from segment_anything.utils.amg import (
     batch_iterator,
     MaskData,
@@ -16,6 +17,8 @@ from torchvision.ops.boxes import batched_nms
 from utils import CONFIG
 from tqdm import tqdm
 import os
+from matplotlib import pyplot as plt
+import numpy as np
 
 
 def get_sam():
@@ -63,22 +66,80 @@ class SimpleSAM(nn.Module):
         return sparse_prompt_embedding, dense_prompt_embedding
 
     @torch.no_grad()
-    def preprocess_batch(self, batch):
+    def preprocess_batch(self, batch, resize_only=False):
         batch = resize(
             batch.reshape(-1, batch.shape[-2], batch.shape[-1]),
             (1024, 1024),
             antialias=True,
         ).reshape(batch.shape[0], 3, 1024, 1024)
-        batch = torch.stack([self.sam.preprocess(x) for x in batch], dim=0)
+        if not resize_only:
+            batch = torch.stack([self.sam.preprocess(x) for x in batch], dim=0)
         return batch
+
+    @torch.no_grad()
+    def get_masks_embeddings(self, masks, img_batch):
+        """
+        masks: list([w, h])
+        img_batch: [b, 3, u, v]
+        """
+        mask_u, mask_v = masks[0].shape
+        img_u, img_v = img_batch.shape[-2:]
+        masks = torch.stack(masks, dim=0).cuda().long()
+        x_mins, y_mins, x_maxs, y_maxs = [], [], [], []
+        mask_x_list = []
+        mask_y_list = []
+        sizes_list = []
+        for mask in masks:
+            mask_x, mask_y = torch.where(mask == 1)
+            x_min, y_min, x_max, y_max = [
+                mask_x.min(),
+                mask_y.min(),
+                mask_x.max(),
+                mask_y.max(),
+            ]
+            mask = mask[x_min : x_max + 1, y_min : y_max + 1]
+            mask_x, mask_y = torch.where(mask == 1)
+            mask_x_list.append(mask_x)
+            mask_y_list.append(mask_y)
+            sizes_list.append(mask.shape)
+            x_mins.append(int(x_min * (img_u / mask_u)))
+            y_mins.append(int(y_min * (img_v / mask_v)))
+            x_maxs.append(int(x_max * (img_u / mask_u)))
+            y_maxs.append(int(y_max * (img_v / mask_v)))
+        imgs = []
+        for x_min, x_max, y_min, y_max in zip(x_mins, x_maxs, y_mins, y_maxs):
+            img_patch = img_batch[:, x_min : x_max + 1, y_min : y_max + 1]
+            img_patch = self.preprocess_batch(img_patch[None], resize_only=True)
+            imgs.append(img_patch)
+        imgs = torch.cat(imgs, dim=0)
+        batch_iteration = zip(
+            batch_iterator(CONFIG["batch-size"], imgs),
+            batch_iterator(CONFIG["batch-size"], mask_x_list),
+            batch_iterator(CONFIG["batch-size"], mask_y_list),
+            batch_iterator(CONFIG["batch-size"], sizes_list),
+        )
+        mask_embeddings = []
+        for batch, mask_x, mask_y, size in batch_iteration:
+            img_patch_embedding = self.sam.image_encoder(batch[0])
+            img_patch_embedding = F.interpolate(
+                img_patch_embedding,
+                size=(size[0][0][0], size[0][0][1]),
+                mode="bilinear",
+            )
+            mask_embedding = img_patch_embedding[:, :, mask_x[0][0], mask_y[0][0]].mean(
+                axis=-1
+            )
+            mask_embeddings.append(mask_embedding)
+        mask_embeddings = torch.unbind(torch.cat(mask_embeddings, dim=0))
+        return mask_embeddings
 
     @torch.no_grad()
     def forward(
         self,
-        batch,
+        input_batch,
         return_logits=True,
     ):
-        u, v = (batch.shape[-2], batch.shape[-1])
+        u, v = (input_batch.shape[-2], input_batch.shape[-1])
         if u < v:
             aspect = v / u
             new_u = CONFIG["mask-mask-side-size"]
@@ -87,7 +148,7 @@ class SimpleSAM(nn.Module):
             aspect = u / v
             new_v = CONFIG["mask-mask-side-size"]
             new_u = new_v * aspect
-        batch = self.preprocess_batch(batch)
+        batch = self.preprocess_batch(input_batch)
         image_embeddings = self.sam.image_encoder(batch)
         batch_iteration = zip(
             batch_iterator(self.points_per_batch, self.sparse_prompt_emb),
@@ -95,16 +156,13 @@ class SimpleSAM(nn.Module):
         )
         masks_batches = []
         iou_predictions_batches = []
-        mask_tokens = []
         for sparse_emb, dense_emb in batch_iteration:
-            low_res_masks, iou_predictions, mask_tokens_out = self.sam.mask_decoder(
+            low_res_masks, iou_predictions = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
                 image_pe=self.sam.prompt_encoder.get_dense_pe(),
                 sparse_prompt_embeddings=sparse_emb[0],
                 dense_prompt_embeddings=dense_emb[0],
                 multimask_output=True,
-                output_tokens=True,
-                token_size=CONFIG["token-size"],
             )
             batch_shape, n_points, c, w, h = low_res_masks.shape
             masks = self.sam.postprocess_masks(
@@ -117,8 +175,6 @@ class SimpleSAM(nn.Module):
                 masks = masks > self.sam.mask_threshold
             masks_batches.append(masks)
             iou_predictions_batches.append(iou_predictions.reshape(batch_shape, -1))
-            batch_shape, _, _, emb_shape = mask_tokens_out.shape
-            mask_tokens.append(mask_tokens_out.reshape(batch_shape, -1, emb_shape))
         masks = torch.stack(masks_batches).permute(1, 0, 2, 3, 4)
         iou_predictions = torch.stack(iou_predictions_batches).permute(1, 0, 2)
         masks = masks.reshape(masks.shape[0], -1, masks.shape[-2], masks.shape[-1])
@@ -126,40 +182,34 @@ class SimpleSAM(nn.Module):
             iou_predictions.shape[0],
             -1,
         )
-        mask_tokens = torch.stack(mask_tokens).permute(1, 0, 2, 3)
-        mask_tokens = mask_tokens.reshape(batch_shape, -1, emb_shape)
         del masks_batches
         del iou_predictions_batches
         del low_res_masks
-        del mask_tokens_out
         del batch_iteration
-        result = self.postprocess_masks(masks, iou_predictions, mask_tokens)
+        result = self.postprocess_masks(masks, iou_predictions, batch)
 
         return result
 
     @torch.no_grad()
-    def postprocess_masks(self, masks, iou_predictions, mask_tokens):
+    def postprocess_masks(self, masks, iou_predictions, img_batches):
         result = []
         u, v = masks.shape[-2:]
         min_mask_area = int(CONFIG["min-mask-area"] * u * v)
-        for mask_batch, iou_pred_batch, mask_token_batch in zip(
-            masks, iou_predictions, mask_tokens
+        for mask_batch, iou_pred_batch, img_batch in zip(
+            masks, iou_predictions, img_batches
         ):
             batch_iteration = zip(
                 batch_iterator(self.points_per_batch_filtering, mask_batch),
                 batch_iterator(self.points_per_batch_filtering, iou_pred_batch),
-                batch_iterator(self.points_per_batch_filtering, mask_token_batch),
             )
             batch_data = MaskData()
-            for mask_batched, iou_pred_batched, mask_token_batched in batch_iteration:
+            for mask_batched, iou_pred_batched in batch_iteration:
                 data = MaskData(
                     masks=mask_batched[0],
                     iou_preds=iou_pred_batched[0],
-                    mask_token_batch=mask_token_batched[0],
                 )
                 del mask_batched
                 del iou_pred_batched
-                del mask_token_batched
                 # Filter by predicted IoU
                 if self.pred_iou_thresh > 0.0:
                     keep_mask = data["iou_preds"] > self.pred_iou_thresh
@@ -197,7 +247,10 @@ class SimpleSAM(nn.Module):
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
-                "mask_tokens": batch_data["mask_token_batch"],
+                "mask_tokens": self.get_masks_embeddings(
+                    [torch.tensor(mask).cuda().long() for mask in batch_data["masks"]],
+                    img_batch,
+                ),
             }
             result.append(result_batch)
             del result_batch
@@ -217,7 +270,7 @@ class SimpleSAM(nn.Module):
             .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
             .permute(0, 3, 1, 2)
         )
-        iterator = batch_iterator(CONFIG["subviews-batch-size"], LF)
+        iterator = batch_iterator(CONFIG["batch-size"], LF)
         for batch_num, batch in tqdm(enumerate(iterator)):
             result = self.forward(batch[0])
             for item_num, item in enumerate(result):
@@ -237,7 +290,7 @@ class SimpleSAM(nn.Module):
                     embedding_values.append(
                         (
                             embedding,
-                            batch_num * CONFIG["subviews-batch-size"] + item_num,
+                            batch_num * CONFIG["batch-size"] + item_num,
                         )
                     )
                     segment_num = segments_result.max() + 1
