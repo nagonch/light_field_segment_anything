@@ -4,6 +4,7 @@
 /__pycache__
 /.ipynb_checkpoints
 *.jpeg
+*.jpg
 *.png
 *.txt
 *.mp4
@@ -12,3 +13,4 @@
 *.pt
 *.pyc
 test.py
+test2.py
