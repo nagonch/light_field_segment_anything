@@ -126,35 +126,6 @@ class LF_segment_merger:
         return matches
 
     @torch.no_grad()
-    def get_result_masks_i(self, i, results, process_to_segments_dict):
-        segments_i = (
-            (
-                self.segments.float()
-                * torch.isin(self.segments, process_to_segments_dict[i]).float()
-            )
-            .long()
-            .cuda()
-        )
-        result_matches = {}
-        for segment_num in self.central_cegments:
-            main_mask = (segments_i == segment_num)[self.s_central, self.t_central]
-            main_mask_centroid = binary_mask_centroid(main_mask)
-            matches = self.find_matches(main_mask, main_mask_centroid, segment_num)
-            for match in matches:
-                result_matches[int(match)] = int(segment_num)
-            segments_i[torch.isin(segments_i, torch.tensor(matches).cuda())] = (
-                segment_num
-            )
-        for segment in segments_i[
-            ~torch.isin(
-                segments_i,
-                torch.unique(segments_i[self.s_central, self.t_central]),
-            )
-        ]:
-            result_matches[int(segment)] = 0
-        results[i] = result_matches
-
-    @torch.no_grad()
     def get_result_masks(self):
         for segment_num in tqdm(self.central_cegments):
             main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
