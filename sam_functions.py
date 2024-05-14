@@ -77,6 +77,18 @@ class SimpleSAM(nn.Module):
         return batch
 
     @torch.no_grad()
+    def get_masks_embeddings_fast(self, masks):
+        result_embeddings = []
+        for mask in masks:
+            mask_x, mask_y = torch.where(mask == 1)
+            embeddings = self.upscaled_image_embeddings[:, :, mask_x, mask_y].mean(
+                axis=-1
+            )
+            result_embeddings.append(embeddings)
+        result = torch.unbind(torch.cat(result_embeddings, dim=0))
+        return result
+
+    @torch.no_grad()
     def get_masks_embeddings(self, masks, img_batch):
         """
         masks: list([w, h])
@@ -150,6 +162,11 @@ class SimpleSAM(nn.Module):
             new_u = new_v * aspect
         batch = self.preprocess_batch(input_batch)
         image_embeddings = self.sam.image_encoder(batch)
+        self.upscaled_image_embeddings = F.interpolate(
+            image_embeddings,
+            size=(int(new_u), int(new_v)),
+            mode="bilinear",
+        )
         batch_iteration = zip(
             batch_iterator(self.points_per_batch, self.sparse_prompt_emb),
             batch_iterator(self.points_per_batch, self.dense_prompt_emb),
@@ -247,9 +264,9 @@ class SimpleSAM(nn.Module):
             result_batch = {
                 "masks": batch_data["masks"],
                 "iou_predictions": batch_data["iou_preds"],
-                "mask_tokens": self.get_masks_embeddings(
+                "mask_tokens": self.get_masks_embeddings_fast(
                     [torch.tensor(mask).cuda().long() for mask in batch_data["masks"]],
-                    img_batch,
+                    # img_batch,
                 ),
             }
             result.append(result_batch)
