@@ -81,15 +81,22 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def calculate_cosine_distance(self, central_segment, subview_segment):
-        central_embedding = self.embeddings[central_segment.item()][0][None]
-        subview_embedding = self.embeddings[subview_segment.item()][0][None]
-        return F.cosine_similarity(central_embedding, subview_embedding)[0].item()
+        central_embedding = self.embeddings.get(central_segment.item(), None)
+        subview_embedding = self.embeddings.get(subview_segment.item(), None)
+        if central_embedding is None or subview_embedding is None:
+            return 0.0
+        central_embedding = central_embedding[0][None]
+        subview_embedding = subview_embedding[0][None]
+        result = F.cosine_similarity(central_embedding, subview_embedding)[0].item()
+        return result
 
     @torch.no_grad()
     def find_match(self, main_mask, main_mask_centroid, s, t, main_mask_segment_num):
         segments_result = []
         metrics_result = []
         for segment_num in torch.unique(self.segments[s, t])[1:]:  # TODO: parallelize
+            if segment_num in self.merged_segments:
+                continue
             seg = self.segments[s, t] == segment_num
             if test_mask(seg, main_mask_centroid, self.epipolar_line_vectors[s, t]):
                 segments_result.append(segment_num.item())
@@ -127,6 +134,7 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def get_result_masks(self):
+        self.merged_segments = []
         for segment_num in tqdm(self.central_cegments):
             main_mask = (self.segments == segment_num)[self.s_central, self.t_central]
             main_mask_centroid = binary_mask_centroid(main_mask)
@@ -134,6 +142,7 @@ class LF_segment_merger:
             self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
                 segment_num
             )
+            self.merged_segments.append(segment_num)
         self.segments[
             ~torch.isin(
                 self.segments,
