@@ -8,7 +8,7 @@ segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
 merged-filename: "merged.pt"
 vis-filename: "segments.mat"
-sam-segments-checkpoint: False
+sam-segments-checkpoint: True
 merged-checkpoint: False
 points-per-side: 32
 points-per-batch: 64
@@ -28,3 +28,4 @@ min-central-segments-for-parallel: 50
 token-size: 256
 ransac-max-outliers: 0.1
 ransac-max-iterations: 15
+embedding-coeff: 0.5

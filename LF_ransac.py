@@ -15,6 +15,7 @@ class LF_RANSAC_segment_merger:
         self.central_segments = self.get_central_segments()
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
         self.segments_centroids = self.get_segments_centroids()
+        self.embedding_coeff = CONFIG["embedding-coeff"]
 
     @torch.no_grad()
     def get_segments_centroids(self):
@@ -120,13 +121,21 @@ class LF_RANSAC_segment_merger:
         return result_segment, result_disparity, result_similarity
 
     @torch.no_grad()
-    def predict(self, central_mask_centroid, s, t, disparity):
+    def predict(self, central_mask_num, central_mask_centroid, s, t, disparity):
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
         )
         if subview_segments is None:
             return -1
+        central_embedding = self.embeddings[central_mask_num.item()][0][None]
+        embeddings, subview_segments = self.get_segments_embeddings(subview_segments)
+        if subview_segments is None:
+            return -1
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        embdding_distances = 1 - F.cosine_similarity(embeddings, central_embedding)
         centroids = torch.stack(
             [self.segments_centroids[segment.item()] for segment in subview_segments]
         ).cuda()
@@ -135,6 +144,10 @@ class LF_RANSAC_segment_merger:
         )
         target_point = target_point.repeat(centroids.shape[0], 1)
         distances = torch.norm(centroids - target_point, dim=1)
+        distances = distances / distances.max()
+        distances = self.embedding_coeff * embdding_distances + (
+            1 - self.embedding_coeff
+        ) * (distances)
         result_segment_index = torch.argmin(distances).item()
         result_segment = subview_segments[result_segment_index]
         return result_segment
@@ -168,8 +181,15 @@ class LF_RANSAC_segment_merger:
             )
             # 3. For the rest of s and t find match a closest to the depth using centroids
             for s, t in indices_shuffled:
-                match = self.predict(central_mask_centroid, s, t, disparity)
-                matches.append(match)
+                match = self.predict(
+                    central_mask_num,
+                    central_mask_centroid,
+                    s,
+                    t,
+                    disparity,
+                )
+                if match >= 0:
+                    matches.append(match)
             # TODO: 4. Calculate outliers and repeat procedure
             outliers = self.calculate_outliers(central_mask_num, matches)
             if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:

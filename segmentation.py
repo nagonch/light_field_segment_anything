@@ -9,6 +9,7 @@ from plenpy.lightfields import LightField
 import logging
 from scipy.io import loadmat
 from data import LFDataset
+from LF_ransac import LF_RANSAC_segment_merger
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -44,12 +45,8 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         segments = torch.load(merged_filename)
     else:
-        segments = (
-            get_merged_segments(segments, torch.load("embeddings.pt"))
-            .detach()
-            .cpu()
-            .numpy()
-        )
+        merger = LF_RANSAC_segment_merger(segments, torch.load("embeddings.pt"))
+        segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(segments, merged_filename)
     visualize_segmentation_mask(
         segments,
