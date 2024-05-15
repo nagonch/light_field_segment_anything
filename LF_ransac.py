@@ -33,6 +33,9 @@ class LF_RANSAC_segment_merger:
             self.s_central, self.t_central
         ]
         central_mask_centroid = binary_mask_centroid(central_mask)
+        # 1. Sample a random s, t
+        # 2. Find a segment match and a depth "the hard way"
+        # 3. For the rest of s and t find match a closest to the depth using centroids
         return matches
 
     @torch.no_grad()
