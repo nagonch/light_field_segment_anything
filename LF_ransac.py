@@ -131,11 +131,11 @@ class LF_RANSAC_segment_merger:
         # Get the depth of the segment
         result_similarity = similarities[result_segment_index]
         result_centroid = self.segments_centroids[result_segment.item()]
-        result_depth = torch.norm(result_centroid - central_mask_centroid)
-        return result_segment, result_depth, result_similarity
+        result_disparity = torch.norm(result_centroid - central_mask_centroid)
+        return result_segment, result_disparity, result_similarity
 
     @torch.no_grad()
-    def predict(self, central_mask_centroid, s, t, depth):
+    def predict(self, central_mask_centroid, s, t, disparity):
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
@@ -145,7 +145,9 @@ class LF_RANSAC_segment_merger:
         centroids = torch.stack(
             [self.segments_centroids[segment.item()] for segment in subview_segments]
         ).cuda()  # precompute for all the segments
-        target_point = central_mask_centroid + self.epipolar_line_vectors[s, t] * depth
+        target_point = (
+            central_mask_centroid + self.epipolar_line_vectors[s, t] * disparity
+        )
         target_point = target_point.repeat(centroids.shape[0], 1)
         distances = torch.norm(centroids - target_point, dim=1)
         result_segment_index = torch.argmin(distances).item()
@@ -160,27 +162,31 @@ class LF_RANSAC_segment_merger:
         indices_shuffled = self.shuffle_indices()
         s_main, t_main = indices_shuffled[0]
         # 2. Find a segment match and a depth "the hard way"
-        matched_segment, depth, certainty = self.fit(
+        matched_segment, disparity, certainty = self.fit(
             central_mask_num, central_mask_centroid, s_main, t_main
         )
-        for s, t in indices_shuffled:
-            match = self.predict(central_mask_centroid, s, t, depth)
-            matches.append(match)
         # 3. For the rest of s and t find match a closest to the depth using centroids
-        return matches
+        for s, t in indices_shuffled:
+            match = self.predict(central_mask_centroid, s, t, disparity)
+            matches.append(match)
+        # TODO: 4. Calculate outliers and repeat procedure
+        return matches, disparity
 
     @torch.no_grad()
     def get_result_masks(self):
         self.merged_segments = []
+        disparity_map = {}
         for segment_num in tqdm(self.central_segments):
             segment_embedding = self.embeddings.get(segment_num.item(), None)
             if segment_embedding is None:
                 continue
-            matches = self.find_matches(segment_num)
+            matches, disparity = self.find_matches(segment_num)
+            disparity_map[segment_num.item()] = disparity
             self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
                 segment_num
             )
             self.merged_segments.append(segment_num)
+        print(disparity_map)
         return self.segments
 
 
