@@ -84,11 +84,26 @@ class LF_RANSAC_segment_merger:
         return subview_segments
 
     @torch.no_grad()
-    def fit(self, central_mask, central_mask_centroid, s, t):
+    def get_segments_embeddings(self, segment_nums):
+        segments_embeddings = []
+        segment_nums_filtered = []
+        for segment in segment_nums:
+            embedding = self.embeddings.get(segment.item(), None)
+            if embedding is not None:
+                segments_embeddings.append(embedding[0])
+                segment_nums_filtered.append(segment)
+        result = torch.stack(segments_embeddings).cuda()
+        segment_nums_filtered = torch.stack(segment_nums_filtered).cuda()
+        return result
+
+    @torch.no_grad()
+    def fit(self, central_mask_num, central_mask_centroid, s, t):
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
         )
+        central_embedding = self.embeddings[central_mask_num.item()][0]
+        embeddings = self.get_segments_embeddings(subview_segments)
 
     @torch.no_grad()
     def find_matches(self, central_mask_num):
@@ -109,6 +124,9 @@ class LF_RANSAC_segment_merger:
     def get_result_masks(self):
         self.merged_segments = []
         for segment_num in tqdm(self.central_segments):
+            central_embedding = self.embeddings.get(segment_num.item(), None)
+            if central_embedding is None:
+                continue
             matches = self.find_matches(segment_num)
             self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
                 segment_num
