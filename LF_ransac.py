@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from utils import binary_mask_centroid, get_subview_indices, test_mask, CONFIG
+from utils import binary_mask_centroid, get_subview_indices, CONFIG
 
 
 class LF_RANSAC_segment_merger:
@@ -70,25 +70,11 @@ class LF_RANSAC_segment_merger:
         return indices_shuffled
 
     @torch.no_grad()
-    def test_mask(self, mask_num, s, t, p, v):
-        mask = self.segments[s, t] == mask_num
-        v_len = torch.norm(v)
-        u_mask, v_mask = torch.where(mask == 1)
-        error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
-        return error.min() <= CONFIG["mask-test-threshold"]
-
-    @torch.no_grad()
     def filter_segments(self, subview_segments, central_mask_centroid, s, t):
         subview_segments = subview_segments[
             ~torch.isin(subview_segments, torch.tensor(self.merged_segments).cuda())
         ]
-        subview_segments = [
-            num
-            for num in subview_segments
-            if self.test_mask(
-                num, s, t, central_mask_centroid, self.epipolar_line_vectors[s, t]
-            )
-        ]
+        subview_segments = [num for num in subview_segments]
         if not subview_segments:
             return None
         subview_segments = torch.stack(subview_segments)
@@ -193,4 +179,5 @@ if __name__ == "__main__":
     embeddings = torch.load("embeddings.pt")
     merger = LF_RANSAC_segment_merger(segments, embeddings)
     result_masks = merger.get_result_masks()
+    torch.save(result_masks, "merged.pt")
     print(result_masks)
