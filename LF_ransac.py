@@ -128,7 +128,6 @@ class LF_RANSAC_segment_merger:
         similarities = F.cosine_similarity(embeddings, central_embedding)
         result_segment_index = torch.argmax(similarities).item()
         result_segment = subview_segments[result_segment_index]
-        # Get the depth of the segment
         result_similarity = similarities[result_segment_index]
         result_centroid = self.segments_centroids[result_segment.item()]
         result_disparity = torch.norm(result_centroid - central_mask_centroid)
@@ -144,7 +143,7 @@ class LF_RANSAC_segment_merger:
             return -1
         centroids = torch.stack(
             [self.segments_centroids[segment.item()] for segment in subview_segments]
-        ).cuda()  # precompute for all the segments
+        ).cuda()
         target_point = (
             central_mask_centroid + self.epipolar_line_vectors[s, t] * disparity
         )
@@ -186,7 +185,6 @@ class LF_RANSAC_segment_merger:
                 segment_num
             )
             self.merged_segments.append(segment_num)
-        print(disparity_map)
         return self.segments
 
 
