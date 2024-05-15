@@ -148,7 +148,7 @@ class LF_segment_merger:
                 self.segments,
                 torch.unique(self.segments[self.s_central, self.t_central]),
             )
-        ] = 0
+        ] = 0  # TODO: check what happens with unmatched
         return self.segments
 
 
