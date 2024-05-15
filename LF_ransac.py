@@ -72,15 +72,16 @@ class LF_RANSAC_segment_merger:
         subview_segments = subview_segments[
             ~torch.isin(subview_segments, torch.tensor(self.merged_segments).cuda())
         ]
-        subview_segments = torch.stack(
-            [
-                num
-                for num in subview_segments
-                if self.test_mask(
-                    num, s, t, central_mask_centroid, self.epipolar_line_vectors[s, t]
-                )
-            ]
-        )
+        subview_segments = [
+            num
+            for num in subview_segments
+            if self.test_mask(
+                num, s, t, central_mask_centroid, self.epipolar_line_vectors[s, t]
+            )
+        ]
+        if not subview_segments:
+            return None
+        subview_segments = torch.stack(subview_segments)
         return subview_segments
 
     @torch.no_grad()
@@ -92,9 +93,11 @@ class LF_RANSAC_segment_merger:
             if embedding is not None:
                 segments_embeddings.append(embedding[0])
                 segment_nums_filtered.append(segment)
+        if not segment_nums_filtered:
+            return None, None
         result = torch.stack(segments_embeddings).cuda()
         segment_nums_filtered = torch.stack(segment_nums_filtered).cuda()
-        return result
+        return result, segment_nums_filtered
 
     @torch.no_grad()
     def fit(self, central_mask_num, central_mask_centroid, s, t):
@@ -103,8 +106,12 @@ class LF_RANSAC_segment_merger:
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
         )
+        if subview_segments is None:
+            return -1, torch.nan, torch.nan
         central_embedding = self.embeddings[central_mask_num.item()][0][None]
-        embeddings = self.get_segments_embeddings(subview_segments)
+        embeddings, subview_segments = self.get_segments_embeddings(subview_segments)
+        if subview_segments is None:
+            return -1, torch.nan, torch.nan
         central_embedding = torch.repeat_interleave(
             central_embedding, embeddings.shape[0], dim=0
         )
@@ -123,12 +130,14 @@ class LF_RANSAC_segment_merger:
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
         )
+        if subview_segments is None:
+            return -1
         centroids = torch.stack(
             [
                 binary_mask_centroid(self.segments[s, t] == segment)
                 for segment in subview_segments
             ]
-        ).cuda()
+        ).cuda()  # precompute for all the segments
         target_point = central_mask_centroid + self.epipolar_line_vectors[s, t] * depth
         target_point = target_point.repeat(centroids.shape[0], 1)
         distances = torch.norm(centroids - target_point, dim=1)
@@ -150,6 +159,7 @@ class LF_RANSAC_segment_merger:
         matched_segment, depth, certainty = self.fit(
             central_mask_num, central_mask_centroid, s_main, t_main
         )
+        print(depth)
         for s, t in indices_shuffled:
             match = self.predict(central_mask_centroid, s, t, depth)
             matches.append(match)
