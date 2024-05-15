@@ -44,6 +44,16 @@ class LF_RANSAC_segment_merger:
         return indices_shuffled
 
     @torch.no_grad()
+    def fit(self, central_mask_num, s, t):
+        # 1. Get s, t segments
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        # 2. Filter out the ones already matched before
+        subview_segments = subview_segments[
+            ~torch.isin(subview_segments, torch.tensor(self.merged_segments).cuda())
+        ]
+        # 3. Filter out the ones that don't cross the epipolar line
+
+    @torch.no_grad()
     def find_matches(self, central_mask_num):
         matches = []
         central_mask = (self.segments == central_mask_num)[
@@ -53,6 +63,7 @@ class LF_RANSAC_segment_merger:
         # 1. Sample a random s, t
         indices_shuffled = self.shuffle_indices()
         s_main, t_main = indices_shuffled[0]
+        self.fit(central_mask_num, s_main, t_main)
         # 2. Find a segment match and a depth "the hard way"
         # 3. For the rest of s and t find match a closest to the depth using centroids
         return matches
