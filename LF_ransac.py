@@ -102,8 +102,15 @@ class LF_RANSAC_segment_merger:
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
         )
-        central_embedding = self.embeddings[central_mask_num.item()][0]
+        central_embedding = self.embeddings[central_mask_num.item()][0][None]
         embeddings = self.get_segments_embeddings(subview_segments)
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings, central_embedding)
+        result_segment = torch.argmax(similarities).item()
+        print(result_segment)
+        return result_segment
 
     @torch.no_grad()
     def find_matches(self, central_mask_num):
