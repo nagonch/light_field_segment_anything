@@ -98,6 +98,7 @@ class LF_RANSAC_segment_merger:
 
     @torch.no_grad()
     def fit(self, central_mask_num, central_mask_centroid, s, t):
+        # TODO: embeddings define similarity in texture, iou in shape. Integrate iou
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
@@ -108,9 +109,13 @@ class LF_RANSAC_segment_merger:
             central_embedding, embeddings.shape[0], dim=0
         )
         similarities = F.cosine_similarity(embeddings, central_embedding)
-        result_segment = torch.argmax(similarities).item()
-        print(result_segment)
-        return result_segment
+        result_segment_index = torch.argmax(similarities).item()
+        result_segment = subview_segments[result_segment_index]
+        # Get the depth of the segment
+        result_similarity = similarities[result_segment_index]
+        result_centroid = binary_mask_centroid(self.segments[s, t] == result_segment)
+        result_depth = torch.norm(result_centroid - central_mask_centroid)
+        return result_segment, result_depth, result_similarity
 
     @torch.no_grad()
     def find_matches(self, central_mask_num):
