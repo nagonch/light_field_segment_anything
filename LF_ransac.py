@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from utils import binary_mask_centroid
 
 
 class LF_RANSAC_segment_merger:
@@ -28,6 +29,10 @@ class LF_RANSAC_segment_merger:
     @torch.no_grad()
     def find_matches(self, central_mask_num):
         matches = []
+        central_mask = (self.segments == central_mask_num)[
+            self.s_central, self.t_central
+        ]
+        central_mask_centroid = binary_mask_centroid(central_mask)
         return matches
 
     @torch.no_grad()
