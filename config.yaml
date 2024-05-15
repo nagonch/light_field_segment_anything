@@ -20,9 +20,6 @@ box-nms-thresh: 0.7
 batch-size: 1
 mask-mask-side-size: 256
 std-iou-error-weight: 0.1
-ransac-n-fitting-points: 2
-ransac-n-inliers: 50
-ransac-n-iterations: 10
 mask-test-threshold: 5
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
