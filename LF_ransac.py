@@ -118,6 +118,25 @@ class LF_RANSAC_segment_merger:
         return result_segment, result_depth, result_similarity
 
     @torch.no_grad()
+    def predict(self, central_mask_centroid, s, t, depth):
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        subview_segments = self.filter_segments(
+            subview_segments, central_mask_centroid, s, t
+        )
+        centroids = torch.stack(
+            [
+                binary_mask_centroid(self.segments[s, t] == segment)
+                for segment in subview_segments
+            ]
+        ).cuda()
+        target_point = central_mask_centroid + self.epipolar_line_vectors[s, t] * depth
+        target_point = target_point.repeat(centroids.shape[0], 1)
+        distances = torch.norm(centroids - target_point, dim=1)
+        result_segment_index = torch.argmin(distances).item()
+        result_segment = subview_segments[result_segment_index]
+        return result_segment
+
+    @torch.no_grad()
     def find_matches(self, central_mask_num):
         matches = []
         central_mask = (self.segments == central_mask_num)[
@@ -131,6 +150,9 @@ class LF_RANSAC_segment_merger:
         matched_segment, depth, certainty = self.fit(
             central_mask_num, central_mask_centroid, s_main, t_main
         )
+        for s, t in indices_shuffled:
+            match = self.predict(central_mask_centroid, s, t, depth)
+            matches.append(match)
         # 3. For the rest of s and t find match a closest to the depth using centroids
         return matches
 
