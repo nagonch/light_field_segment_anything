@@ -172,7 +172,6 @@ class LF_RANSAC_segment_merger:
                 matches.append(match)
             # TODO: 4. Calculate outliers and repeat procedure
             outliers = self.calculate_outliers(central_mask_num, matches)
-            print(outliers / indices_shuffled.shape[0])
             if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:
                 break
         return matches, disparity
