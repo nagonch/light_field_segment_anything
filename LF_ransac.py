@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from utils import binary_mask_centroid, get_subview_indices
+from utils import binary_mask_centroid, get_subview_indices, test_mask, CONFIG
 
 
 class LF_RANSAC_segment_merger:
@@ -13,6 +13,22 @@ class LF_RANSAC_segment_merger:
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.central_segments = self.get_central_segments()
+        self.epipolar_line_vectors = self.get_epipolar_line_vectors()
+
+    @torch.no_grad()
+    def get_epipolar_line_vectors(self):
+        epipolar_line_vectors = (
+            torch.tensor([self.s_central, self.t_central]).cuda() - self.subview_indices
+        ).float()
+        aspect_ratio_matrix = (
+            torch.diag(torch.tensor([self.v_size, self.u_size])).float().cuda()
+        )  # in case the image is non-square
+        epipolar_line_vectors = (aspect_ratio_matrix @ epipolar_line_vectors.T).T
+        epipolar_line_vectors = F.normalize(epipolar_line_vectors)
+        epipolar_line_vectors = epipolar_line_vectors.reshape(
+            self.s_size, self.t_size, 2
+        )
+        return epipolar_line_vectors
 
     @torch.no_grad()
     def get_central_segments(self):
@@ -44,14 +60,35 @@ class LF_RANSAC_segment_merger:
         return indices_shuffled
 
     @torch.no_grad()
-    def fit(self, central_mask_num, s, t):
-        # 1. Get s, t segments
-        subview_segments = torch.unique(self.segments[s, t])[1:]
-        # 2. Filter out the ones already matched before
+    def test_mask(self, mask_num, s, t, p, v):
+        mask = self.segments[s, t] == mask_num
+        v_len = torch.norm(v)
+        u_mask, v_mask = torch.where(mask == 1)
+        error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
+        return error.min() <= CONFIG["mask-test-threshold"]
+
+    @torch.no_grad()
+    def filter_segments(self, subview_segments, central_mask_centroid, s, t):
         subview_segments = subview_segments[
             ~torch.isin(subview_segments, torch.tensor(self.merged_segments).cuda())
         ]
-        # 3. Filter out the ones that don't cross the epipolar line
+        subview_segments = torch.stack(
+            [
+                num
+                for num in subview_segments
+                if self.test_mask(
+                    num, s, t, central_mask_centroid, self.epipolar_line_vectors[s, t]
+                )
+            ]
+        )
+        return subview_segments
+
+    @torch.no_grad()
+    def fit(self, central_mask, central_mask_centroid, s, t):
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        subview_segments = self.filter_segments(
+            subview_segments, central_mask_centroid, s, t
+        )
 
     @torch.no_grad()
     def find_matches(self, central_mask_num):
@@ -63,7 +100,7 @@ class LF_RANSAC_segment_merger:
         # 1. Sample a random s, t
         indices_shuffled = self.shuffle_indices()
         s_main, t_main = indices_shuffled[0]
-        self.fit(central_mask_num, s_main, t_main)
+        self.fit(central_mask_num, central_mask_centroid, s_main, t_main)
         # 2. Find a segment match and a depth "the hard way"
         # 3. For the rest of s and t find match a closest to the depth using centroids
         return matches

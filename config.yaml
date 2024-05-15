@@ -23,7 +23,7 @@ std-iou-error-weight: 0.1
 ransac-n-fitting-points: 2
 ransac-n-inliers: 50
 ransac-n-iterations: 10
-mask-test-threshold: 1
+mask-test-threshold: 5
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
 n-parallel-processes: 1
