@@ -124,8 +124,8 @@ class LF_RANSAC_segment_merger:
     def get_result_masks(self):
         self.merged_segments = []
         for segment_num in tqdm(self.central_segments):
-            central_embedding = self.embeddings.get(segment_num.item(), None)
-            if central_embedding is None:
+            segment_embedding = self.embeddings.get(segment_num.item(), None)
+            if segment_embedding is None:
                 continue
             matches = self.find_matches(segment_num)
             self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
