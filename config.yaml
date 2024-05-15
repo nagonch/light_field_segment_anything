@@ -26,3 +26,5 @@ k-means-n-iterations: 100
 n-parallel-processes: 1
 min-central-segments-for-parallel: 50
 token-size: 256
+ransac-max-outliers: 0.1
+ransac-max-iterations: 15

@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from utils import binary_mask_centroid, get_subview_indices, CONFIG
+from utils import binary_mask_centroid, get_subview_indices, calculate_outliers, CONFIG
 
 
 class LF_RANSAC_segment_merger:
@@ -140,21 +140,41 @@ class LF_RANSAC_segment_merger:
         return result_segment
 
     @torch.no_grad()
-    def find_matches(self, central_mask_num):
-        matches = []
-        central_mask_centroid = self.segments_centroids[central_mask_num.item()]
-        # 1. Sample a random s, t
-        indices_shuffled = self.shuffle_indices()
-        s_main, t_main = indices_shuffled[0]
-        # 2. Find a segment match and a depth "the hard way"
-        matched_segment, disparity, certainty = self.fit(
-            central_mask_num, central_mask_centroid, s_main, t_main
+    def calculate_outliers(self, central_segment_num, matches):
+        embeddings, subview_segments = self.get_segments_embeddings(
+            torch.stack(matches).cuda()
         )
-        # 3. For the rest of s and t find match a closest to the depth using centroids
-        for s, t in indices_shuffled:
-            match = self.predict(central_mask_centroid, s, t, disparity)
-            matches.append(match)
-        # TODO: 4. Calculate outliers and repeat procedure
+        central_embedding = self.embeddings[central_segment_num.item()][0][None]
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings, central_embedding)
+        outliers = calculate_outliers(similarities)
+        return outliers
+
+    @torch.no_grad()
+    def find_matches(self, central_mask_num):
+        indices_shuffled = self.shuffle_indices()
+        for iteration in range(
+            min(CONFIG["ransac-max-iterations"], indices_shuffled.shape[0])
+        ):
+            matches = []
+            central_mask_centroid = self.segments_centroids[central_mask_num.item()]
+            # 1. Sample a random s, t
+            s_main, t_main = indices_shuffled[iteration]
+            # 2. Find a segment match and a depth "the hard way"
+            matched_segment, disparity, certainty = self.fit(
+                central_mask_num, central_mask_centroid, s_main, t_main
+            )
+            # 3. For the rest of s and t find match a closest to the depth using centroids
+            for s, t in indices_shuffled:
+                match = self.predict(central_mask_centroid, s, t, disparity)
+                matches.append(match)
+            # TODO: 4. Calculate outliers and repeat procedure
+            outliers = self.calculate_outliers(central_mask_num, matches)
+            print(outliers / indices_shuffled.shape[0])
+            if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:
+                break
         return matches, disparity
 
     @torch.no_grad()

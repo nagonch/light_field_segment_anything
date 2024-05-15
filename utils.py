@@ -146,10 +146,14 @@ def get_process_to_segments_dict(
     return result_mapping
 
 
-def calculate_outliers(float_tensor):
-    quantile1 = torch.quantile(float_tensor, 0.99)
-    quantile2 = torch.quantile(float_tensor, 0.1)
-    n_outliers = ((float_tensor >= quantile1) & (float_tensor <= quantile2)).sum()
+def calculate_outliers(tensor, k=1.5):
+    q1 = torch.quantile(tensor, 0.25)
+    q3 = torch.quantile(tensor, 0.75)
+    iqr = q3 - q1
+    lower_bound = q1 - k * iqr
+    upper_bound = q3 + k * iqr
+    outliers = torch.logical_or(tensor < lower_bound, tensor > upper_bound)
+    n_outliers = torch.sum(outliers).item()
     return n_outliers
 
 
