@@ -127,8 +127,10 @@ class LF_RANSAC_segment_merger:
         # 1. Sample a random s, t
         indices_shuffled = self.shuffle_indices()
         s_main, t_main = indices_shuffled[0]
-        self.fit(central_mask_num, central_mask_centroid, s_main, t_main)
         # 2. Find a segment match and a depth "the hard way"
+        matched_segment, depth, certainty = self.fit(
+            central_mask_num, central_mask_centroid, s_main, t_main
+        )
         # 3. For the rest of s and t find match a closest to the depth using centroids
         return matches
 
