@@ -128,7 +128,6 @@ class LF_RANSAC_segment_merger:
 
     @torch.no_grad()
     def fit(self, central_mask_num, central_mask_centroid, s, t):
-        # TODO: embeddings define similarity in texture, iou in shape. Integrate iou
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
             subview_segments, central_mask_centroid, s, t
@@ -228,7 +227,7 @@ class LF_RANSAC_segment_merger:
             )
             # 3. For the rest of s and t find match a closest to the depth using centroids
             for s, t in indices_shuffled:
-                match, _, _ = self.fit(
+                match, _, _ = self.fit(  # TODO: replace with predict later
                     central_mask_num,
                     central_mask_centroid,
                     s,
@@ -237,7 +236,7 @@ class LF_RANSAC_segment_merger:
                 )
                 if match >= 0:
                     matches.append(match)
-            # TODO: 4. Calculate outliers and repeat procedure
+            # 4. Calculate outliers and repeat procedure
             outliers = self.calculate_outliers(central_mask_num, matches)
             if outliers < best_outliers:
                 best_outliers = outliers
