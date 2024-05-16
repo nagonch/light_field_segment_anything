@@ -22,7 +22,7 @@ import multiprocessing as mp
 mp.set_start_method("spawn", force=True)
 
 
-class LF_RANSAC_segment_merger:
+class LF_segment_merger:
     @torch.no_grad()
     def __init__(self, segments, embeddings, LF):
         self.segments = segments
@@ -328,7 +328,7 @@ def parallelize_segments(i, results, segments, proc_to_seg_dict, embeddings):
     segments_i = (
         segments.float() * torch.isin(segments, proc_to_seg_dict[i]).float()
     ).long()
-    merger = LF_RANSAC_segment_merger(segments_i, embeddings)
+    merger = LF_segment_merger(segments_i, embeddings)
     results[i] = merger.get_result_masks().cpu()
 
 
@@ -361,7 +361,7 @@ def get_merged_segments(segments, embeddings):
             p.join()
         result = torch.stack(list(result_segments_list)).sum(axis=0)
     else:
-        merger = LF_RANSAC_segment_merger(segments, embeddings)
+        merger = LF_segment_merger(segments, embeddings)
         result = merger.get_result_masks()
     return result
 
@@ -369,7 +369,7 @@ def get_merged_segments(segments, embeddings):
 if __name__ == "__main__":
     segments = torch.load("segments.pt").cuda()
     embeddings = torch.load("embeddings.pt")
-    merger = LF_RANSAC_segment_merger(segments, embeddings)
+    merger = LF_segment_merger(segments, embeddings)
     result_masks = merger.get_result_masks()
     torch.save(result_masks, "merged.pt")
     print(result_masks)
