@@ -1,168 +1,278 @@
 import torch
 import torch.nn.functional as F
-from utils import get_subview_indices
-import numpy as np
-from torchmetrics.classification import BinaryJaccardIndex
+from tqdm import tqdm
 from utils import (
-    shift_binary_mask,
-    project_point_onto_line,
-    draw_line_in_mask,
-    line_image_boundaries,
     binary_mask_centroid,
-    visualize_segments,
     get_subview_indices,
+    calculate_outliers,
     CONFIG,
+    project_point_onto_line,
+    shift_binary_mask,
 )
+from torchmetrics.classification import BinaryJaccardIndex
 
 
-def calculate_peak_metric(
-    mask_central,
-    mask_subview,
-    epipolar_line_vector,
-    displacement=None,
-    metric=BinaryJaccardIndex().cuda(),
-):
-    if not displacement:
-        central_mask_centroid = torch.tensor(binary_mask_centroid(mask_central)).cuda()
-        epipolar_line_point = torch.tensor(binary_mask_centroid(mask_subview)).cuda()
-        displacement = project_point_onto_line(
-            epipolar_line_point, epipolar_line_vector, central_mask_centroid
+class LF_RANSAC_segment_merger:
+    @torch.no_grad()
+    def __init__(self, segments, embeddings):
+        self.segments = segments
+        self.embeddings = embeddings
+        self.s_size, self.t_size, self.u_size, self.v_size = segments.shape
+        self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
+        self.subview_indices = get_subview_indices(self.s_size, self.t_size)
+        self.central_segments = self.get_central_segments()
+        self.epipolar_line_vectors = self.get_epipolar_line_vectors()
+        self.segments_centroids = self.get_segments_centroids()
+        self.embedding_coeff = CONFIG["embedding-coeff"]
+
+    @torch.no_grad()
+    def get_segments_centroids(self):
+        centroids_dict = {}
+        for segment_i in torch.unique(self.segments):
+            centroids_dict[segment_i.item()] = binary_mask_centroid(
+                self.segments == segment_i
+            )[-2:]
+        return centroids_dict
+
+    @torch.no_grad()
+    def get_epipolar_line_vectors(self):
+        epipolar_line_vectors = (
+            torch.tensor([self.s_central, self.t_central]).cuda() - self.subview_indices
+        ).float()
+        aspect_ratio_matrix = (
+            torch.diag(torch.tensor([self.v_size, self.u_size])).float().cuda()
+        )  # in case the image is non-square
+        epipolar_line_vectors = (aspect_ratio_matrix @ epipolar_line_vectors.T).T
+        epipolar_line_vectors = F.normalize(epipolar_line_vectors)
+        epipolar_line_vectors = epipolar_line_vectors.reshape(
+            self.s_size, self.t_size, 2
         )
-    vec = torch.round(epipolar_line_vector * displacement).long()
-    mask_new = shift_binary_mask(mask_subview, vec)
-    iou = metric(mask_central, mask_new).item()
-    return iou, torch.abs(displacement)
+        return epipolar_line_vectors
 
-
-def fit_point_to_LF(segments, segment_num, point, disparity=None):
-    s, t = point
-    u, v = segments.shape[-2:]
-    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-    epipolar_line_vector = (
-        torch.tensor([s_central - s, t_central - t]).float().cuda()
-    )  # the direction of the epipolar line in this subview
-    aspect_ratio_matrix = (
-        torch.diag(torch.tensor([v, u])).float().cuda()
-    )  # in case the image is non-square
-    epipolar_line_vector = aspect_ratio_matrix @ epipolar_line_vector
-    epipolar_line_vector = F.normalize(epipolar_line_vector[None])[0]
-    mask_central = (segments == segment_num)[s_central, t_central]
-    epipolar_line_point = binary_mask_centroid(mask_central)
-    line_boundries = line_image_boundaries(
-        epipolar_line_point, epipolar_line_vector, u, v
-    )
-    epipolar_line = draw_line_in_mask(
-        torch.zeros_like(mask_central),
-        line_boundries[0],
-        line_boundries[1],
-    )
-    segments_result = []
-    max_ious_result = []
-    disparities = []
-    for segment_num in torch.unique(segments[s, t])[1:]:
-        seg = segments[s, t] == segment_num
-        if torch.max(seg.to(torch.int32) + epipolar_line.to(torch.int32)) > 1:
-            segments_result.append(segment_num.item())
-            max_iou, disparity = calculate_peak_metric(
-                mask_central,
-                seg,
-                epipolar_line_vector,
-                displacement=disparity,
-            )
-            max_ious_result.append(max_iou)
-            disparities.append(disparity)
-    if not segments_result:
-        return (-1, 0, 0)  # match not found
-    best_match_indx = np.argmax(max_ious_result)
-    return (
-        segments_result[best_match_indx],
-        disparities[best_match_indx],
-        max_ious_result[best_match_indx],
-    )
-
-
-def fit_points_to_LF(segments, segment_num, point, eval=False):
-    disparities = []
-    ious = []
-    matches = []
-    for point in point:
-        match, disparity, max_iou = fit_point_to_LF(segments, segment_num, point)
-        disparities.append(disparity)
-        ious.append(max_iou)
-        matches.append(match)
-    disparities_estimates = torch.stack(disparities).cuda()
-    ious = torch.stack([torch.tensor(x) for x in ious]).cuda()
-    ious_estimates = F.normalize(ious[None], p=1)[0]
-    disparity_parameter = (
-        disparities_estimates * ious_estimates
-    ).sum()  # weighted sum by ious
-    if eval:
-        result_matches = []
-        mean_ious = ious.mean()
-        std_ious = ious.std()
-        for match, iou in zip(matches, ious):
-            if iou >= mean_ious - 3 * std_ious and iou <= mean_ious + 3 * std_ious:
-                result_matches.append(match)
-        return (
-            disparity_parameter,
-            result_matches,
-        )
-    else:
-        return disparity_parameter
-
-
-def get_inliers_for_disparity(segments, segment_num, points, disparity):
-    inliers = []
-    for point in points:
-        _, disparity, max_iou = fit_point_to_LF(segments, segment_num, point, disparity)
-        if max_iou >= CONFIG["metric-threshold"]:
-            inliers.append(point)
-    return inliers
-
-
-def LF_ransac(
-    segments,
-    segment_num,
-    n_fitting_points=CONFIG["ransac-n-fitting-points"],
-    min_inliers=CONFIG["ransac-n-inliers"],
-    n_iterations=CONFIG["ransac-n-iterations"],
-):
-    best_match = []
-    best_disparity = torch.nan
-    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-    indices = get_subview_indices(segments.shape[0], segments.shape[1])
-    indices = torch.stack(
-        [
-            ind
-            for ind in indices
-            if (ind != torch.tensor([s_central, t_central]).cuda()).any()
+    @torch.no_grad()
+    def get_central_segments(self):
+        central_segments = torch.unique(self.segments[self.s_central, self.t_central])[
+            1:
         ]
-    ).cuda()
-    for i in range(n_iterations):
-        indices_permuted = indices[torch.randperm(indices.shape[0])]
-        fitting_points = indices_permuted[:n_fitting_points]
-        disparity_parameter = fit_points_to_LF(segments, segment_num, fitting_points)
-        inlier_points = get_inliers_for_disparity(
-            segments,
-            segment_num,
-            indices_permuted,
-            disparity_parameter,
+        segment_sums = torch.stack(
+            [(self.segments == i).sum() for i in central_segments]
+        ).cuda()
+        central_segments = central_segments[
+            torch.argsort(segment_sums, descending=True)
+        ]
+        return central_segments
+
+    @torch.no_grad()
+    def shuffle_indices(self):
+        indices_shuffled = self.subview_indices[
+            torch.randperm(self.subview_indices.shape[0])
+        ]
+        indices_shuffled = torch.stack(
+            [
+                element
+                for element in indices_shuffled
+                if (
+                    element != torch.tensor([self.s_central, self.t_central]).cuda()
+                ).any()
+            ]
         )
-        if len(inlier_points) >= min_inliers:
-            disparity_parameter, segment_matches = fit_points_to_LF(
-                segments,
-                segment_num,
-                torch.stack(inlier_points),
-                eval=True,
+        return indices_shuffled
+
+    @torch.no_grad()
+    def filter_segments(self, subview_segments, central_mask_centroid, s, t):
+        subview_segments = subview_segments[
+            ~torch.isin(subview_segments, torch.tensor(self.merged_segments).cuda())
+        ]
+        subview_segments = [num for num in subview_segments]
+        if not subview_segments:
+            return None
+        subview_segments = torch.stack(subview_segments)
+        return subview_segments
+
+    @torch.no_grad()
+    def get_segments_embeddings(self, segment_nums):
+        segments_embeddings = []
+        segment_nums_filtered = []
+        for segment in segment_nums:
+            embedding = self.embeddings.get(segment.item(), None)
+            if embedding is not None:
+                segments_embeddings.append(embedding[0])
+                segment_nums_filtered.append(segment)
+        if not segment_nums_filtered:
+            return None, None
+        result = torch.stack(segments_embeddings).cuda()
+        segment_nums_filtered = torch.stack(segment_nums_filtered).cuda()
+        return result, segment_nums_filtered
+
+    @torch.no_grad()
+    def calculate_peak_iou(
+        self,
+        central_mask_num,
+        mask_subview_num,
+        s,
+        t,
+        metric=BinaryJaccardIndex().cuda(),
+    ):
+        mask_subview = self.segments[s, t] == mask_subview_num
+        mask_central = self.segments[self.s_central, self.t_central] == central_mask_num
+        epipolar_line_point = self.segments_centroids[mask_subview_num.item()]
+        displacement = project_point_onto_line(
+            epipolar_line_point,
+            self.epipolar_line_vectors[s, t],
+            self.segments_centroids[central_mask_num.item()],
+        )
+        vec = torch.round(self.epipolar_line_vectors[s, t] * displacement).long()
+        mask_new = shift_binary_mask(mask_subview, vec)
+        iou = metric(mask_central, mask_new)
+        return iou
+
+    @torch.no_grad()
+    def fit(self, central_mask_num, central_mask_centroid, s, t):
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        subview_segments = self.filter_segments(
+            subview_segments, central_mask_centroid, s, t
+        )
+        if subview_segments is None:
+            return -1, torch.nan, torch.nan
+        central_embedding = self.embeddings[central_mask_num.item()][0][None]
+        embeddings, subview_segments = self.get_segments_embeddings(subview_segments)
+        if subview_segments is None:
+            return -1, torch.nan, torch.nan
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings, central_embedding)
+        iou_per_mask = torch.stack(
+            [
+                self.calculate_peak_iou(central_mask_num, mask_num, s, t)
+                for mask_num in subview_segments
+            ]
+        ).cuda()
+        similarities = (
+            CONFIG["embedding-coeff"] * similarities
+            + (1 - CONFIG["embedding-coeff"]) * iou_per_mask
+        )
+        result_segment_index = torch.argmax(similarities).item()
+        result_segment = subview_segments[result_segment_index]
+        result_similarity = similarities[result_segment_index]
+        result_centroid = self.segments_centroids[result_segment.item()]
+        result_disparity = torch.norm(result_centroid - central_mask_centroid)
+        if result_similarity <= CONFIG["metric-threshold"]:
+            return -1, torch.nan, torch.nan
+        return result_segment, result_disparity, result_similarity
+
+    @torch.no_grad()
+    def predict(self, central_mask_num, central_mask_centroid, s, t, disparity):
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        subview_segments = self.filter_segments(
+            subview_segments, central_mask_centroid, s, t
+        )
+        if subview_segments is None:
+            return -1
+        central_embedding = self.embeddings[central_mask_num.item()][0][None]
+        embeddings, subview_segments = self.get_segments_embeddings(subview_segments)
+        if subview_segments is None:
+            return -1
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        embdding_distances = 1 - F.cosine_similarity(embeddings, central_embedding)
+        centroids = torch.stack(
+            [self.segments_centroids[segment.item()] for segment in subview_segments]
+        ).cuda()
+        target_point = (
+            central_mask_centroid + self.epipolar_line_vectors[s, t] * disparity
+        )
+        target_point = target_point.repeat(centroids.shape[0], 1)
+        distances = torch.norm(centroids - target_point, dim=1)
+        distances = distances / distances.max()
+        distances = self.embedding_coeff * embdding_distances + (
+            1 - self.embedding_coeff
+        ) * (distances)
+        result_segment_index = torch.argmin(distances).item()
+        result_segment = subview_segments[result_segment_index]
+        return result_segment
+
+    @torch.no_grad()
+    def calculate_outliers(self, central_segment_num, matches):
+        if not matches:
+            return 0
+        embeddings, subview_segments = self.get_segments_embeddings(
+            torch.stack(matches).cuda()
+        )
+        central_embedding = self.embeddings[central_segment_num.item()][0][None]
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings, central_embedding)
+        outliers = calculate_outliers(similarities)
+        return outliers
+
+    @torch.no_grad()
+    def find_matches(self, central_mask_num):
+        indices_shuffled = self.shuffle_indices()
+        best_outliers = torch.inf
+        best_disparity = torch.nan
+        best_match = []
+        for iteration in range(
+            min(CONFIG["ransac-max-iterations"], indices_shuffled.shape[0])
+        ):
+            matches = []
+            central_mask_centroid = self.segments_centroids[central_mask_num.item()]
+            # 1. Sample a random s, t
+            s_main, t_main = indices_shuffled[iteration]
+            # 2. Find a segment match and a depth "the hard way"
+            matched_segment, disparity, certainty = self.fit(
+                central_mask_num, central_mask_centroid, s_main, t_main
             )
-            best_match = segment_matches
-            best_disparity = disparity_parameter
-            break
-    return best_match, best_disparity
+            # 3. For the rest of s and t find match a closest to the depth using centroids
+            for s, t in indices_shuffled:
+                match, _, _ = self.fit(  # TODO: replace with predict later
+                    central_mask_num,
+                    central_mask_centroid,
+                    s,
+                    t,
+                    # disparity,
+                )
+                if match >= 0:
+                    matches.append(match)
+            # 4. Calculate outliers and repeat procedure
+            outliers = self.calculate_outliers(central_mask_num, matches)
+            if outliers < best_outliers:
+                best_outliers = outliers
+                best_match = matches
+                best_disparity = disparity
+            if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:
+                break
+        return best_match, best_disparity
+
+    @torch.no_grad()
+    def get_result_masks(self):
+        self.merged_segments = []
+        disparity_map = {}
+        for segment_num in tqdm(self.central_segments):
+            segment_embedding = self.embeddings.get(segment_num.item(), None)
+            if segment_embedding is None:
+                continue
+            matches, disparity = self.find_matches(segment_num)
+            disparity_map[segment_num.item()] = disparity
+            self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
+                segment_num
+            )
+            self.merged_segments.append(segment_num)
+        self.segments[
+            ~torch.isin(
+                self.segments,
+                torch.unique(self.segments[self.s_central, self.t_central]),
+            )
+        ] = 0  # TODO: check what happens with unmatched
+        return self.segments
 
 
 if __name__ == "__main__":
-    segments = torch.tensor(torch.load("segments.pt")).cuda()
-    # print(torch.unique(segments[4, 4]))
-    # raise
-    print(LF_ransac(segments, 331026))
+    segments = torch.load("segments.pt").cuda()
+    embeddings = torch.load("embeddings.pt")
+    merger = LF_RANSAC_segment_merger(segments, embeddings)
+    result_masks = merger.get_result_masks()
+    torch.save(result_masks, "merged.pt")
+    print(result_masks)

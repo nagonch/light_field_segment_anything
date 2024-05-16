@@ -146,5 +146,17 @@ def get_process_to_segments_dict(
     return result_mapping
 
 
+def calculate_outliers(tensor, k=1.5):
+    q1 = torch.quantile(tensor, 0.25)
+    q3 = torch.quantile(tensor, 0.75)
+    iqr = q3 - q1
+    lower_bound = q1 - k * iqr
+    upper_bound = q3 + k * iqr
+    outliers = torch.logical_or(tensor < lower_bound, tensor > upper_bound)
+    n_outliers = torch.sum(outliers).item()
+    return n_outliers
+
+
 if __name__ == "__main__":
-    pass
+    segments = torch.load("merged.pt").detach().cpu().numpy()
+    visualize_segmentation_mask(segments, "segments.mat")
