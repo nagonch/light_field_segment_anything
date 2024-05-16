@@ -48,22 +48,26 @@ def main(
         del simple_sam
         torch.cuda.empty_cache()
     if merged_checkpoint and os.path.exists(merged_filename):
-        segments = torch.load(merged_filename)
+        merged_segments = torch.load(merged_filename)
     else:
         merger = LF_RANSAC_segment_merger(segments, torch.load("embeddings.pt"))
-        segments = merger.get_result_masks().detach().cpu().numpy()
-        torch.save(segments, merged_filename)
+        merged_segments = merger.get_result_masks().detach().cpu().numpy()
+        torch.save(merged_segments, merged_filename)
+    LF = LightField(LF)
+    LF.show()
     visualize_segmentation_mask(
-        segments,
-        vis_filename,
+        segments.detach().cpu().numpy(),
     )
-    segments = post_process_segments(segments)
-    for i, segment in enumerate(segments):
+    visualize_segmentation_mask(
+        merged_segments,
+    )
+    merged_segments = post_process_segments(merged_segments)
+    for i, segment in enumerate(merged_segments):
         visualize_segments(
             segment.astype(np.uint32),
             f"imgs/{str(i).zfill(3)}.png",
         )
-    return segments
+    return merged_segments
 
 
 if __name__ == "__main__":

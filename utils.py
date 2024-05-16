@@ -18,7 +18,7 @@ with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, filename):
+def visualize_segmentation_mask(segments, filename=None):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
     vis = np.transpose(
@@ -28,10 +28,11 @@ def visualize_segmentation_mask(segments, filename):
         ).reshape(s, u, t, v, 3),
         (0, 2, 1, 3, 4),
     )
-    savemat(
-        filename,
-        {"LF": vis},
-    )
+    if filename:
+        savemat(
+            filename,
+            {"LF": vis},
+        )
     segments = LightField(vis)
     segments.show()
 
