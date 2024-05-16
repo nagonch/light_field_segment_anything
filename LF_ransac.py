@@ -1,7 +1,15 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from utils import binary_mask_centroid, get_subview_indices, calculate_outliers, CONFIG
+from utils import (
+    binary_mask_centroid,
+    get_subview_indices,
+    calculate_outliers,
+    CONFIG,
+    project_point_onto_line,
+    shift_binary_mask,
+)
+from torchmetrics.classification import BinaryJaccardIndex
 
 
 class LF_RANSAC_segment_merger:
@@ -97,6 +105,28 @@ class LF_RANSAC_segment_merger:
         return result, segment_nums_filtered
 
     @torch.no_grad()
+    def calculate_peak_iou(
+        self,
+        central_mask_num,
+        mask_subview_num,
+        s,
+        t,
+        metric=BinaryJaccardIndex().cuda(),
+    ):
+        mask_subview = self.segments[s, t] == mask_subview_num
+        mask_central = self.segments[self.s_central, self.t_central] == central_mask_num
+        epipolar_line_point = self.segments_centroids[mask_subview_num.item()]
+        displacement = project_point_onto_line(
+            epipolar_line_point,
+            self.epipolar_line_vectors[s, t],
+            self.segments_centroids[central_mask_num.item()],
+        )
+        vec = torch.round(self.epipolar_line_vectors[s, t] * displacement).long()
+        mask_new = shift_binary_mask(mask_subview, vec)
+        iou = metric(mask_central, mask_new)
+        return iou
+
+    @torch.no_grad()
     def fit(self, central_mask_num, central_mask_centroid, s, t):
         # TODO: embeddings define similarity in texture, iou in shape. Integrate iou
         subview_segments = torch.unique(self.segments[s, t])[1:]
@@ -113,11 +143,23 @@ class LF_RANSAC_segment_merger:
             central_embedding, embeddings.shape[0], dim=0
         )
         similarities = F.cosine_similarity(embeddings, central_embedding)
+        iou_per_mask = torch.stack(
+            [
+                self.calculate_peak_iou(central_mask_num, mask_num, s, t)
+                for mask_num in subview_segments
+            ]
+        ).cuda()
+        similarities = (
+            CONFIG["embedding-coeff"] * similarities
+            + (1 - CONFIG["embedding-coeff"]) * iou_per_mask
+        )
         result_segment_index = torch.argmax(similarities).item()
         result_segment = subview_segments[result_segment_index]
         result_similarity = similarities[result_segment_index]
         result_centroid = self.segments_centroids[result_segment.item()]
         result_disparity = torch.norm(result_centroid - central_mask_centroid)
+        if result_similarity <= CONFIG["metric-threshold"]:
+            return -1, torch.nan, torch.nan
         return result_segment, result_disparity, result_similarity
 
     @torch.no_grad()
@@ -154,6 +196,8 @@ class LF_RANSAC_segment_merger:
 
     @torch.no_grad()
     def calculate_outliers(self, central_segment_num, matches):
+        if not matches:
+            return 0
         embeddings, subview_segments = self.get_segments_embeddings(
             torch.stack(matches).cuda()
         )
@@ -168,6 +212,9 @@ class LF_RANSAC_segment_merger:
     @torch.no_grad()
     def find_matches(self, central_mask_num):
         indices_shuffled = self.shuffle_indices()
+        best_outliers = torch.inf
+        best_disparity = torch.nan
+        best_match = []
         for iteration in range(
             min(CONFIG["ransac-max-iterations"], indices_shuffled.shape[0])
         ):
@@ -181,20 +228,24 @@ class LF_RANSAC_segment_merger:
             )
             # 3. For the rest of s and t find match a closest to the depth using centroids
             for s, t in indices_shuffled:
-                match = self.predict(
+                match, _, _ = self.fit(
                     central_mask_num,
                     central_mask_centroid,
                     s,
                     t,
-                    disparity,
+                    # disparity,
                 )
                 if match >= 0:
                     matches.append(match)
             # TODO: 4. Calculate outliers and repeat procedure
             outliers = self.calculate_outliers(central_mask_num, matches)
+            if outliers < best_outliers:
+                best_outliers = outliers
+                best_match = matches
+                best_disparity = disparity
             if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:
                 break
-        return matches, disparity
+        return best_match, best_disparity
 
     @torch.no_grad()
     def get_result_masks(self):
@@ -210,6 +261,12 @@ class LF_RANSAC_segment_merger:
                 segment_num
             )
             self.merged_segments.append(segment_num)
+        self.segments[
+            ~torch.isin(
+                self.segments,
+                torch.unique(self.segments[self.s_central, self.t_central]),
+            )
+        ] = 0  # TODO: check what happens with unmatched
         return self.segments
 
 
