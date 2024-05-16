@@ -11,8 +11,11 @@ from k_means import k_means
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
-with open("config.yaml") as f:
-    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+with open("sam_config.yaml") as f:
+    SAM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
+with open("merger_config.yaml") as f:
+    MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def visualize_segmentation_mask(segments, filename):
@@ -108,7 +111,7 @@ def test_mask(mask, p, v):
     v_len = torch.norm(v)
     u_mask, v_mask = torch.where(mask == 1)
     error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
-    return error.min() <= CONFIG["mask-test-threshold"]
+    return error.min() <= MERGER_CONFIG["mask-test-threshold"]
 
 
 def binary_mask_centroid(mask):
@@ -126,9 +129,8 @@ def get_subview_indices(s_size, t_size):
 
 
 def get_process_to_segments_dict(
-    embeddings_filename, n_processes=CONFIG["n-parallel-processes"]
+    embeddings_dict, n_processes=MERGER_CONFIG["n-parallel-processes"]
 ):
-    embeddings_dict = torch.load(embeddings_filename)
     segment_nums = torch.Tensor(list(embeddings_dict.keys())).cuda().long()
     classes = (
         torch.stack([torch.tensor(emb[1]) for emb in embeddings_dict.values()])

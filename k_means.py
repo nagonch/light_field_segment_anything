@@ -4,8 +4,8 @@ import torch
 import torch.nn.functional as F
 import yaml
 
-with open("config.yaml") as f:
-    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+with open("merger_config.yaml") as f:
+    MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def kmeans_pp_init(X, k, dist_func, tol=1e-9):
@@ -56,10 +56,10 @@ def k_means(
     classes: torch.Tensor,
     k: int,
     tol=1e-9,
-    times=CONFIG["k-means-n-iterations"],
+    times=MERGER_CONFIG["k-means-n-iterations"],
     dist="euclid",
     init="kmeanspp",
-    lambda_reg=CONFIG["k-means-reg-parameter"],
+    lambda_reg=MERGER_CONFIG["k-means-reg-parameter"],
     verbose=False,
 ):
     """

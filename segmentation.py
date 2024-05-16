@@ -1,7 +1,13 @@
 import numpy as np
 import torch
 import os
-from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
+from utils import (
+    visualize_segments,
+    SAM_CONFIG,
+    MERGER_CONFIG,
+    save_LF_image,
+    visualize_segmentation_mask,
+)
 from data import get_LF
 from sam_functions import get_sam
 from plenpy.lightfields import LightField
@@ -16,7 +22,7 @@ logging.getLogger("plenpy").setLevel(logging.WARNING)
 def post_process_segments(segments):
     u, v = segments.shape[-2:]
     result_segments = []
-    min_mask_area = int(CONFIG["min-mask-area-final"] * u * v)
+    min_mask_area = int(MERGER_CONFIG["min-mask-area-final"] * u * v)
     for i in np.unique(segments)[1:]:
         seg_i = segments == i
         if seg_i.sum(axis=(2, 3)).mean() >= min_mask_area:
@@ -26,11 +32,11 @@ def post_process_segments(segments):
 
 def main(
     LF,
-    segments_filename=CONFIG["segments-filename"],
-    merged_filename=CONFIG["merged-filename"],
-    segments_checkpoint=CONFIG["sam-segments-checkpoint"],
-    merged_checkpoint=CONFIG["merged-checkpoint"],
-    vis_filename=CONFIG["vis-filename"],
+    segments_filename=SAM_CONFIG["segments-filename"],
+    merged_filename=MERGER_CONFIG["merged-filename"],
+    segments_checkpoint=SAM_CONFIG["sam-segments-checkpoint"],
+    merged_checkpoint=MERGER_CONFIG["merged-checkpoint"],
+    vis_filename=MERGER_CONFIG["vis-filename"],
 ):
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()

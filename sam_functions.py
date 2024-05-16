@@ -1,4 +1,4 @@
-from utils import CONFIG, get_subview_indices
+from utils import SAM_CONFIG, get_subview_indices
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from segment_anything.utils.amg import build_all_layer_point_grids
 import torch
@@ -14,7 +14,6 @@ from segment_anything.utils.amg import (
     rle_to_mask,
 )
 from torchvision.ops.boxes import batched_nms
-from utils import CONFIG
 from tqdm import tqdm
 import os
 from matplotlib import pyplot as plt
@@ -22,7 +21,7 @@ import numpy as np
 
 
 def get_sam():
-    sam = sam_model_registry["vit_b"](checkpoint=CONFIG["model-path"])
+    sam = sam_model_registry["vit_b"](checkpoint=SAM_CONFIG["model-path"])
     sam = sam.to(device="cuda")
     model = SimpleSAM(sam)
 
@@ -37,16 +36,16 @@ class SimpleSAM(nn.Module):
     ):
         super().__init__()
         self.sam = sam
-        self.pred_iou_thresh = CONFIG["pred-iou-thresh"]
-        self.stability_score_offset = CONFIG["stability-score-offset"]
-        self.stability_score_thresh = CONFIG["stability-score-thresh"]
-        self.points_per_batch = CONFIG["points-per-batch"]
-        self.points_per_batch_filtering = CONFIG["points-per-batch-filtering"]
-        self.box_nms_thresh = CONFIG["box-nms-thresh"]
+        self.pred_iou_thresh = SAM_CONFIG["pred-iou-thresh"]
+        self.stability_score_offset = SAM_CONFIG["stability-score-offset"]
+        self.stability_score_thresh = SAM_CONFIG["stability-score-thresh"]
+        self.points_per_batch = SAM_CONFIG["points-per-batch"]
+        self.points_per_batch_filtering = SAM_CONFIG["points-per-batch-filtering"]
+        self.box_nms_thresh = SAM_CONFIG["box-nms-thresh"]
         self.sparse_prompt_emb, self.dense_prompt_emb = self.get_prompt_embeddings()
 
     @torch.no_grad()
-    def get_prompt_embeddings(self, n_points_per_side=CONFIG["points-per-side"]):
+    def get_prompt_embeddings(self, n_points_per_side=SAM_CONFIG["points-per-side"]):
         input_points = torch.tensor(
             build_all_layer_point_grids(n_points_per_side, 0, 1)[0]
         ).cuda()
@@ -125,10 +124,10 @@ class SimpleSAM(nn.Module):
             imgs.append(img_patch)
         imgs = torch.cat(imgs, dim=0)
         batch_iteration = zip(
-            batch_iterator(CONFIG["batch-size"], imgs),
-            batch_iterator(CONFIG["batch-size"], mask_x_list),
-            batch_iterator(CONFIG["batch-size"], mask_y_list),
-            batch_iterator(CONFIG["batch-size"], sizes_list),
+            batch_iterator(SAM_CONFIG["batch-size"], imgs),
+            batch_iterator(SAM_CONFIG["batch-size"], mask_x_list),
+            batch_iterator(SAM_CONFIG["batch-size"], mask_y_list),
+            batch_iterator(SAM_CONFIG["batch-size"], sizes_list),
         )
         mask_embeddings = []
         for batch, mask_x, mask_y, size in batch_iteration:
@@ -154,11 +153,11 @@ class SimpleSAM(nn.Module):
         u, v = (input_batch.shape[-2], input_batch.shape[-1])
         if u < v:
             aspect = v / u
-            new_u = CONFIG["mask-mask-side-size"]
+            new_u = SAM_CONFIG["mask-side-size"]
             new_v = new_u * aspect
         else:
             aspect = u / v
-            new_v = CONFIG["mask-mask-side-size"]
+            new_v = SAM_CONFIG["mask-side-size"]
             new_u = new_v * aspect
         batch = self.preprocess_batch(input_batch)
         image_embeddings = self.sam.image_encoder(batch)
@@ -211,7 +210,7 @@ class SimpleSAM(nn.Module):
     def postprocess_masks(self, masks, iou_predictions, img_batches):
         result = []
         u, v = masks.shape[-2:]
-        min_mask_area = int(CONFIG["min-mask-area"] * u * v)
+        min_mask_area = int(SAM_CONFIG["min-mask-area"] * u * v)
         for mask_batch, iou_pred_batch, img_batch in zip(
             masks, iou_predictions, img_batches
         ):
@@ -287,7 +286,7 @@ class SimpleSAM(nn.Module):
             .reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
             .permute(0, 3, 1, 2)
         )
-        iterator = batch_iterator(CONFIG["batch-size"], LF)
+        iterator = batch_iterator(SAM_CONFIG["batch-size"], LF)
         for batch_num, batch in tqdm(enumerate(iterator)):
             result = self.forward(batch[0])
             for item_num, item in enumerate(result):
@@ -307,7 +306,7 @@ class SimpleSAM(nn.Module):
                     embedding_values.append(
                         (
                             embedding,
-                            batch_num * CONFIG["batch-size"] + item_num,
+                            batch_num * SAM_CONFIG["batch-size"] + item_num,
                         )
                     )
                     segment_num = segments_result.max() + 1
@@ -336,7 +335,7 @@ class SimpleSAM(nn.Module):
             if item.endswith("pt"):
                 emd_dict.update(torch.load(f"embeddings/{item}"))
                 os.remove(f"embeddings/{item}")
-        torch.save(emd_dict, CONFIG["embeddings-filename"])
+        torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from utils import (
     binary_mask_centroid,
     get_subview_indices,
     calculate_outliers,
-    CONFIG,
+    MERGER_CONFIG,
     project_point_onto_line,
     shift_binary_mask,
     get_process_to_segments_dict,
@@ -29,7 +29,7 @@ class LF_RANSAC_segment_merger:
         self.central_segments = self.get_central_segments()
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
         self.segments_centroids = self.get_segments_centroids()
-        self.embedding_coeff = CONFIG["embedding-coeff"]
+        self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
 
     @torch.no_grad()
     def get_segments_centroids(self):
@@ -155,15 +155,15 @@ class LF_RANSAC_segment_merger:
             ]
         ).cuda()
         similarities = (
-            CONFIG["embedding-coeff"] * similarities
-            + (1 - CONFIG["embedding-coeff"]) * iou_per_mask
+            self.embedding_coeff * similarities
+            + (1 - self.embedding_coeff) * iou_per_mask
         )
         result_segment_index = torch.argmax(similarities).item()
         result_segment = subview_segments[result_segment_index]
         result_similarity = similarities[result_segment_index]
         result_centroid = self.segments_centroids[result_segment.item()]
         result_disparity = torch.norm(result_centroid - central_mask_centroid)
-        if result_similarity <= CONFIG["metric-threshold"]:
+        if result_similarity <= MERGER_CONFIG["metric-threshold"]:
             return -1, torch.nan, torch.nan
         return result_segment, result_disparity, result_similarity
 
@@ -221,7 +221,7 @@ class LF_RANSAC_segment_merger:
         best_disparity = torch.nan
         best_match = []
         for iteration in range(
-            min(CONFIG["ransac-max-iterations"], indices_shuffled.shape[0])
+            min(MERGER_CONFIG["ransac-max-iterations"], indices_shuffled.shape[0])
         ):
             matches = []
             central_mask_centroid = self.segments_centroids[central_mask_num.item()]
@@ -248,7 +248,10 @@ class LF_RANSAC_segment_merger:
                 best_outliers = outliers
                 best_match = matches
                 best_disparity = disparity
-            if outliers / indices_shuffled.shape[0] <= CONFIG["ransac-max-outliers"]:
+            if (
+                outliers / indices_shuffled.shape[0]
+                <= MERGER_CONFIG["ransac-max-outliers"]
+            ):
                 break
         return best_match, best_disparity
 
@@ -287,14 +290,14 @@ def get_merged_segments(segments, embeddings):
     s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
     if (
         torch.unique(segments[s_central, t_central]).shape[0]
-        >= CONFIG["min-central-segments-for-parallel"]
+        >= MERGER_CONFIG["min-central-segments-for-parallel"]
     ):
-        proc_to_seg_dict = get_process_to_segments_dict(CONFIG["embeddings-filename"])
+        proc_to_seg_dict = get_process_to_segments_dict(embeddings)
         result_segments_list = mp.Manager().list(
-            [None] * CONFIG["n-parallel-processes"]
+            [None] * MERGER_CONFIG["n-parallel-processes"]
         )
         processes = []
-        for rank in range(CONFIG["n-parallel-processes"]):
+        for rank in range(MERGER_CONFIG["n-parallel-processes"]):
             p = mp.Process(
                 target=parallelize_segments,
                 args=(
