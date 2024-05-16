@@ -9,6 +9,7 @@ from utils import (
     project_point_onto_line,
     shift_binary_mask,
     get_process_to_segments_dict,
+    resize_LF,
 )
 import os
 import numpy as np
@@ -23,8 +24,11 @@ mp.set_start_method("spawn", force=True)
 
 class LF_RANSAC_segment_merger:
     @torch.no_grad()
-    def __init__(self, segments, embeddings):
+    def __init__(self, segments, embeddings, LF):
         self.segments = segments
+        self.LF = torch.tensor(
+            resize_LF(LF, segments.shape[-2], segments.shape[-1])
+        ).cuda()
         self.embeddings = embeddings
         self.s_size, self.t_size, self.u_size, self.v_size = segments.shape
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
@@ -139,6 +143,18 @@ class LF_RANSAC_segment_merger:
         return iou
 
     @torch.no_grad()
+    def get_segment_image(self, segment_num, s, t):
+        mask_image = (
+            (self.LF[s, t] * (self.segments == segment_num)[s, t, :, :, None])
+            .detach()
+            .cpu()
+            .numpy()
+            .astype(np.uint8)
+        )
+        im = Image.fromarray(mask_image)
+        return im
+
+    @torch.no_grad()
     def fit(self, central_mask_num, central_mask_centroid, s, t):
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
@@ -154,18 +170,21 @@ class LF_RANSAC_segment_merger:
             central_embedding, embeddings.shape[0], dim=0
         )
         similarities = F.cosine_similarity(embeddings, central_embedding)
-        # iou_per_mask = torch.stack(
-        #     [
-        #         self.calculate_peak_iou(central_mask_num, mask_num, s, t)
-        #         for mask_num in subview_segments
-        #     ]
-        # ).cuda()
-        similarities = (
-            self.embedding_coeff
-            * similarities
-            # + (1 - self.embedding_coeff) * iou_per_mask
-        )
-        order = torch.argsort(similarities)
+        similarities = self.embedding_coeff * similarities
+        if self.verbose:
+            os.makedirs(
+                f"LF_ransac_output/{central_mask_num.item()}/fit/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}",
+                exist_ok=True,
+            )
+            segments_ordered = subview_segments[
+                torch.argsort(similarities, descending=True)
+            ][: MERGER_CONFIG["top-n-segments-visualization"]]
+            for top_i, number in enumerate(segments_ordered):
+                image = self.get_segment_image(number, s, t)
+                image.save(
+                    f"LF_ransac_output/{central_mask_num.item()}/fit/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}/{str(top_i).zfill(2)}.png"
+                )
+
         result_segment_index = torch.argmax(similarities).item()
         result_segment = subview_segments[result_segment_index]
         result_similarity = similarities[result_segment_index]
@@ -203,6 +222,19 @@ class LF_RANSAC_segment_merger:
         distances = self.embedding_coeff * embdding_distances + (
             1 - self.embedding_coeff
         ) * (distances)
+        if self.verbose:
+            os.makedirs(
+                f"LF_ransac_output/{central_mask_num.item()}/predict/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}",
+                exist_ok=True,
+            )
+            segments_ordered = subview_segments[torch.argsort(distances)][
+                : MERGER_CONFIG["top-n-segments-visualization"]
+            ]
+            for top_i, number in enumerate(segments_ordered):
+                image = self.get_segment_image(number, s, t)
+                image.save(
+                    f"LF_ransac_output/{central_mask_num.item()}/predict/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}/{str(top_i).zfill(2)}.png"
+                )
         result_segment_index = torch.argmin(distances).item()
         result_segment = subview_segments[result_segment_index]
         return result_segment
@@ -225,16 +257,10 @@ class LF_RANSAC_segment_merger:
     @torch.no_grad()
     def find_matches(self, central_mask_num):
         if self.verbose:
-            os.makedirs(f"LF_ransac_output/{central_mask_num}", exist_ok=True)
-            mask_image = (
-                (self.segments[self.s_central, self.t_central] == central_mask_num)
-                .to(torch.int32)
-                .detach()
-                .cpu()
-                .numpy()
-                .astype(np.uint8)
-            ) * 255
-            im = Image.fromarray(mask_image)
+            os.makedirs(f"LF_ransac_output/{central_mask_num.item()}", exist_ok=True)
+            im = self.get_segment_image(
+                central_mask_num, self.s_central, self.t_central
+            )
             im.save(f"LF_ransac_output/{central_mask_num}/main.png")
         indices_shuffled = self.shuffle_indices()
         best_outliers = torch.inf
@@ -253,12 +279,12 @@ class LF_RANSAC_segment_merger:
             )
             # 3. For the rest of s and t find match a closest to the depth using centroids
             for s, t in indices_shuffled:
-                match, _, _ = self.fit(  # TODO: replace with predict later
+                match = self.predict(  # TODO: replace with predict later
                     central_mask_num,
                     central_mask_centroid,
                     s,
                     t,
-                    # disparity,
+                    disparity,
                 )
                 if match >= 0:
                     matches.append(match)

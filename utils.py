@@ -48,6 +48,17 @@ def visualize_segments(segments, filename):
     im.save(filename)
 
 
+def resize_LF(LF, new_u, new_v):
+    s, t, u, v, _ = LF.shape
+    results = []
+    for s_i in range(s):
+        for t_i in range(t):
+            subview = Image.fromarray(LF[s_i, t_i]).resize((new_v, new_u))
+            subview = np.array(subview)
+            results.append(subview)
+    return np.stack(results).reshape(s, t, new_u, new_v, 3)
+
+
 def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
     if isinstance(LF_image, torch.Tensor):
         LF_image = LF_image.detach().cpu().numpy()

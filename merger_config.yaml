@@ -1,5 +1,7 @@
 min-mask-area-final: 0.001
-metric-threshold: 0.5
+metric-threshold: 0.2
+verbose: True
+top-n-segments-visualization: 10
 merged-filename: "merged.pt"
 vis-filename: "segments.mat"
 merged-checkpoint: False

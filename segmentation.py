@@ -51,7 +51,7 @@ def main(
         merged_segments = torch.load(merged_filename)
     else:
         merger = LF_RANSAC_segment_merger(
-            torch.clone(segments), torch.load("embeddings.pt")
+            torch.clone(segments), torch.load("embeddings.pt"), LF
         )
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(merged_segments, merged_filename)
