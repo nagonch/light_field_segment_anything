@@ -50,7 +50,9 @@ def main(
     if merged_checkpoint and os.path.exists(merged_filename):
         merged_segments = torch.load(merged_filename)
     else:
-        merger = LF_RANSAC_segment_merger(segments, torch.load("embeddings.pt"))
+        merger = LF_RANSAC_segment_merger(
+            torch.clone(segments), torch.load("embeddings.pt")
+        )
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(merged_segments, merged_filename)
     LF = LightField(LF)

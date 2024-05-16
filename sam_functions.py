@@ -301,20 +301,18 @@ class SimpleSAM(nn.Module):
                 embedding_values = []
                 segment_num = 0
                 for embedding, segment in zip(embeddings, segments):
-                    segments_result[segment] += segment_num + 1
-                    embedding_keys.append(segments_result[segment][0].item())
+                    segments_result[segment] = segment_num + 1
+                    embedding_keys.append(segment_num + 1)
+                    segment_num += 1
                     embedding_values.append(
                         (
                             embedding,
                             batch_num * SAM_CONFIG["batch-size"] + item_num,
                         )
                     )
-                    segment_num = segments_result.max() + 1
                 segments = segments_result
-                segments[segments != 0] += max_segment_num + 1
-                embedding_keys = [
-                    int(key + max_segment_num + 1) for key in embedding_keys
-                ]
+                segments[segments != 0] += max_segment_num
+                embedding_keys = [int(key + max_segment_num) for key in embedding_keys]
                 embeddings_map = dict(zip(embedding_keys, embedding_values))
                 torch.save(
                     embeddings_map,
