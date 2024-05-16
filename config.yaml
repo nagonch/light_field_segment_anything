@@ -2,7 +2,7 @@ min-mask-area: 0.001
 min-mask-area-final: 0.001
 distance-metric: "cosine"
 cosine-weight: 0.2
-metric-threshold: 0.9
+metric-threshold: 0.5
 model-path: "SAM_model/sam_vit_b.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
@@ -10,7 +10,7 @@ merged-filename: "merged.pt"
 vis-filename: "segments.mat"
 sam-segments-checkpoint: True
 merged-checkpoint: False
-points-per-side: 32
+points-per-side: 40
 points-per-batch: 64
 points-per-batch-filtering: 64
 pred-iou-thresh: 0.88
