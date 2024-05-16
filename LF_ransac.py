@@ -279,12 +279,12 @@ class LF_RANSAC_segment_merger:
             )
             # 3. For the rest of s and t find match a closest to the depth using centroids
             for s, t in indices_shuffled:
-                match = self.predict(  # TODO: replace with predict later
+                match, _, _ = self.fit(  # TODO: replace with predict later
                     central_mask_num,
                     central_mask_centroid,
                     s,
                     t,
-                    disparity,
+                    # disparity,
                 )
                 if match >= 0:
                     matches.append(match)
