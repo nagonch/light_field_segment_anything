@@ -10,6 +10,9 @@ from utils import (
     shift_binary_mask,
     get_process_to_segments_dict,
 )
+import os
+import numpy as np
+from PIL import Image
 from torchmetrics.classification import BinaryJaccardIndex
 
 # import torch.multiprocessing as mp
@@ -29,7 +32,10 @@ class LF_RANSAC_segment_merger:
         self.central_segments = self.get_central_segments()
         self.epipolar_line_vectors = self.get_epipolar_line_vectors()
         self.segments_centroids = self.get_segments_centroids()
+        self.verbose = MERGER_CONFIG["verbose"]
         self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
+        if self.verbose:
+            os.makedirs("LF_ransac_output", exist_ok=True)
 
     @torch.no_grad()
     def get_segments_centroids(self):
@@ -148,16 +154,18 @@ class LF_RANSAC_segment_merger:
             central_embedding, embeddings.shape[0], dim=0
         )
         similarities = F.cosine_similarity(embeddings, central_embedding)
-        iou_per_mask = torch.stack(
-            [
-                self.calculate_peak_iou(central_mask_num, mask_num, s, t)
-                for mask_num in subview_segments
-            ]
-        ).cuda()
+        # iou_per_mask = torch.stack(
+        #     [
+        #         self.calculate_peak_iou(central_mask_num, mask_num, s, t)
+        #         for mask_num in subview_segments
+        #     ]
+        # ).cuda()
         similarities = (
-            self.embedding_coeff * similarities
-            + (1 - self.embedding_coeff) * iou_per_mask
+            self.embedding_coeff
+            * similarities
+            # + (1 - self.embedding_coeff) * iou_per_mask
         )
+        order = torch.argsort(similarities)
         result_segment_index = torch.argmax(similarities).item()
         result_segment = subview_segments[result_segment_index]
         result_similarity = similarities[result_segment_index]
@@ -216,6 +224,18 @@ class LF_RANSAC_segment_merger:
 
     @torch.no_grad()
     def find_matches(self, central_mask_num):
+        if self.verbose:
+            os.makedirs(f"LF_ransac_output/{central_mask_num}", exist_ok=True)
+            mask_image = (
+                (self.segments[self.s_central, self.t_central] == central_mask_num)
+                .to(torch.int32)
+                .detach()
+                .cpu()
+                .numpy()
+                .astype(np.uint8)
+            ) * 255
+            im = Image.fromarray(mask_image)
+            im.save(f"LF_ransac_output/{central_mask_num}/main.png")
         indices_shuffled = self.shuffle_indices()
         best_outliers = torch.inf
         best_disparity = torch.nan
