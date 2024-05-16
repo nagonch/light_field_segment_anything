@@ -4,7 +4,6 @@ import os
 from utils import visualize_segments, CONFIG, save_LF_image, visualize_segmentation_mask
 from data import get_LF
 from sam_functions import get_sam
-from LF_functions import get_merged_segments
 from plenpy.lightfields import LightField
 import logging
 from scipy.io import loadmat
