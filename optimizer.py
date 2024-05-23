@@ -11,10 +11,7 @@ class OptimizerEvolution:
         ] * self.subviews
 
     def loss(self, x):
-        result = []
-        for i, x_i in enumerate(x):
-            result.append(self.similarities[i][int(x_i)])
-        result = np.array(result)
+        result = self.similarities[np.arange(x.shape[0]), x.astype(np.int32)]
         return -result.sum()
 
     def run(self):
