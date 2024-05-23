@@ -349,6 +349,7 @@ class LF_segment_merger:
         similarity_matrix = torch.zeros(
             (self.subview_indices.shape[0], k_cutoff)
         ).cuda()
+        segment_indices = torch.zeros_like(similarity_matrix).long()
         segments = (
             torch.zeros(
                 (self.subview_indices.shape[0], k_cutoff, self.u_size, self.v_size)
@@ -357,15 +358,16 @@ class LF_segment_merger:
             .long()
         )
         for i_ind, (s, t) in enumerate(self.subview_indices):
-            similarities, subview_segments = self.get_subview_masks_similarities(
+            similarities, subview_segment_indices = self.get_subview_masks_similarities(
                 central_mask_num, central_mask_centroid, s, t, k_cutoff
             )
             similarity_matrix[i_ind] = similarities
-            for i_segment, subview_segment in enumerate(subview_segments):
+            segment_indices[i_ind] = subview_segment_indices
+            for i_segment, subview_segment in enumerate(subview_segment_indices):
                 segments[i_ind, i_segment, :, :] = (self.segments == subview_segment)[
                     s, t
                 ]
-        return similarity_matrix, segments
+        return similarity_matrix, segments, segment_indices
 
     @torch.no_grad()
     def find_matches_optimize(self, central_mask_num):
@@ -378,9 +380,12 @@ class LF_segment_merger:
         central_mask = (self.segments == central_mask_num)[
             self.s_central, self.t_central
         ].to(torch.int32)
-        sim_matrix, segment_matrix = self.get_similarity_matrix(central_mask_num)
+        sim_matrix, segment_matrix, segment_indices = self.get_similarity_matrix(
+            central_mask_num
+        )
         print(sim_matrix.shape)
         print(segment_matrix.shape)
+        print(segment_indices.shape)
         raise
 
     @torch.no_grad()
