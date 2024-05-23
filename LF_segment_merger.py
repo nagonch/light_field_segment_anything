@@ -302,6 +302,78 @@ class LF_segment_merger:
         return best_match, best_disparity
 
     @torch.no_grad()
+    def get_subview_masks_similarities(
+        self, central_mask_num, central_mask_centroid, s, t, k_cutoff
+    ):
+        result_sims = torch.zeros((k_cutoff,)).cuda()
+        result_segments = -1 * torch.ones_like(result_sims).long()
+        subview_segments = torch.unique(self.segments[s, t])[1:]
+        subview_segments = self.filter_segments(
+            subview_segments, central_mask_centroid, s, t
+        )
+        if subview_segments is None:
+            return result_sims, result_segments
+        central_embedding = self.embeddings[central_mask_num.item()][0][None]
+        embeddings, subview_segments = self.get_segments_embeddings(subview_segments)
+        if subview_segments is None:
+            return result_sims, result_segments
+        central_embedding = torch.repeat_interleave(
+            central_embedding, embeddings.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings, central_embedding)
+        similarities = self.embedding_coeff * similarities
+        if self.verbose:
+            os.makedirs(
+                f"LF_ransac_output/{central_mask_num.item()}/fit/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}",
+                exist_ok=True,
+            )
+            segments_ordered = subview_segments[
+                torch.argsort(similarities, descending=True)
+            ][: MERGER_CONFIG["top-n-segments-visualization"]]
+            for top_i, number in enumerate(segments_ordered):
+                image = self.get_segment_image(number, s, t)
+                image.save(
+                    f"LF_ransac_output/{central_mask_num.item()}/fit/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}/{str(top_i).zfill(2)}.png"
+                )
+        subview_segments = subview_segments[
+            torch.argsort(similarities, descending=True)
+        ][:k_cutoff]
+        similarities = torch.sort(similarities, descending=True)[0][:k_cutoff]
+        result_sims[: similarities.shape[0]] = similarities
+        result_segments[: subview_segments.shape[0]] = subview_segments
+        return result_sims, result_segments
+
+    @torch.no_grad()
+    def get_similarity_matrix(self, central_mask_num, k_cutoff=20):
+        central_mask_centroid = self.segments_centroids[central_mask_num.item()]
+        similarity_matrix = torch.zeros(
+            (self.subview_indices.shape[0], k_cutoff)
+        ).cuda()
+        segments = torch.zeros_like(similarity_matrix).long()
+        for i_ind, (s, t) in enumerate(self.subview_indices):
+            similarities, subview_segments = self.get_subview_masks_similarities(
+                central_mask_num, central_mask_centroid, s, t, k_cutoff
+            )
+            similarity_matrix[i_ind] = similarities
+            segments[i_ind] = subview_segments
+        return similarity_matrix, segments
+
+    @torch.no_grad()
+    def find_matches_optimize(self, central_mask_num):
+        if self.verbose:
+            os.makedirs(f"LF_ransac_output/{central_mask_num.item()}", exist_ok=True)
+            im = self.get_segment_image(
+                central_mask_num, self.s_central, self.t_central
+            )
+            im.save(f"LF_ransac_output/{central_mask_num}/main.png")
+        central_mask = (self.segments == central_mask_num)[
+            self.s_central, self.t_central
+        ].to(torch.int32)
+        sim_matrix, segment_matrix = self.get_similarity_matrix(central_mask_num)
+        print(sim_matrix.shape)
+        print(segment_matrix.shape)
+
+    @torch.no_grad()
     def get_result_masks(self):
         self.merged_segments = []
         disparity_map = {}
@@ -309,7 +381,7 @@ class LF_segment_merger:
             segment_embedding = self.embeddings.get(segment_num.item(), None)
             if segment_embedding is None:
                 continue
-            matches, disparity = self.find_matches(segment_num)
+            matches, disparity = self.find_matches_optimize(segment_num)
             disparity_map[segment_num.item()] = disparity
             self.segments[torch.isin(self.segments, torch.tensor(matches).cuda())] = (
                 segment_num
@@ -367,9 +439,12 @@ def get_merged_segments(segments, embeddings):
 
 
 if __name__ == "__main__":
+    from scipy.io import loadmat
+
     segments = torch.load("segments.pt").cuda()
     embeddings = torch.load("embeddings.pt")
-    merger = LF_segment_merger(segments, embeddings)
+    LF = loadmat("LF.mat")["LF"]
+    merger = LF_segment_merger(segments, embeddings, LF)
     result_masks = merger.get_result_masks()
     torch.save(result_masks, "merged.pt")
     print(result_masks)
