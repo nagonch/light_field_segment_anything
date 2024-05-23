@@ -12,17 +12,20 @@ class OptimizerEvolution:
 
     def loss(self, x):
         result = self.similarities[np.arange(x.shape[0]), x.astype(np.int32)]
-        return -result.sum()
+        return -result.sum() - (x % 2).sum()
 
     def run(self):
         result = differential_evolution(self.loss, self.bounds, integrality=True)
-        return result
+        return result.x
 
 
 if __name__ == "__main__":
-    subviews = 3
-    segments = 2
+    subviews = 5
+    segments = 4
     sims = np.random.uniform(size=(subviews, segments))
-    print(sims)
     opt = OptimizerEvolution(sims)
-    print(opt.run())
+    result = opt.run()
+    print(sims)
+    print(result)
+    print(opt.loss(result))
+    print(opt.loss(sims.argmax(axis=1)))
