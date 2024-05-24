@@ -358,6 +358,8 @@ class LF_segment_merger:
             .long()
         )
         for i_ind, (s, t) in enumerate(self.subview_indices):
+            if s == self.s_central and t == self.t_central:
+                continue
             similarities, subview_segment_indices = self.get_subview_masks_similarities(
                 central_mask_num, central_mask_centroid, s, t, k_cutoff
             )
