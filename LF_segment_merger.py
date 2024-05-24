@@ -347,19 +347,17 @@ class LF_segment_merger:
     def get_similarity_matrix(self, central_mask_num, k_cutoff=20):
         central_mask_centroid = self.segments_centroids[central_mask_num.item()]
         similarity_matrix = torch.zeros(
-            (self.subview_indices.shape[0], k_cutoff)
+            (self.subview_indices.shape[0] - 1, k_cutoff)
         ).cuda()
         segment_indices = torch.zeros_like(similarity_matrix).long()
         segments = (
             torch.zeros(
-                (self.subview_indices.shape[0], k_cutoff, self.u_size, self.v_size)
+                (self.subview_indices.shape[0] - 1, k_cutoff, self.u_size, self.v_size)
             )
             .cuda()
             .long()
         )
-        for i_ind, (s, t) in enumerate(self.subview_indices):
-            if s == self.s_central and t == self.t_central:
-                continue
+        for i_ind, (s, t) in enumerate(self.shuffle_indices()):
             similarities, subview_segment_indices = self.get_subview_masks_similarities(
                 central_mask_num, central_mask_centroid, s, t, k_cutoff
             )
