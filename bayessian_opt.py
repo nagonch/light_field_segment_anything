@@ -49,7 +49,14 @@ class OptimizerBayes:
             ),
         ).cuda()
         choices[0] = torch.zeros((self.n_subviews)).cuda()
-        print(train_X, choices)
+        train_Y = (
+            self.similarities[torch.arange(self.n_subviews), train_X]
+            .sum(axis=-1)
+            .double()
+            .cuda()[None]
+            .T
+        )
+        return train_X, train_Y, choices
 
 
 if __name__ == "__main__":
