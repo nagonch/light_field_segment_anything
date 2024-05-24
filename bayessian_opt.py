@@ -74,7 +74,8 @@ class OptimizerBayes:
             num_restarts=5,
             raw_samples=20,
         )
-        print(candidate)
+        print(candidate, acq_value)
+        print(self.similarities[torch.arange(self.subviews), candidate].sum())
 
 
 if __name__ == "__main__":
