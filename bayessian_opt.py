@@ -56,16 +56,34 @@ class OptimizerBayes:
             .cuda()[None]
             .T
         )
+        train_X = train_X.double()
         return train_X, train_Y, choices
+
+    def maxinimize(self):
+        train_X, train_Y, choices = self.prepare_data()
+        gp = SingleTaskGP(train_X, train_Y)
+
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+        fit_gpytorch_mll(mll)
+
+        UCB = UpperConfidenceBound(gp, beta=0.1)
+        candidate, acq_value = optimize_acqf_discrete(
+            UCB,
+            choices=choices,
+            q=1,
+            num_restarts=5,
+            raw_samples=20,
+        )
+        print(candidate)
 
 
 if __name__ == "__main__":
-    sim_matrix = torch.load("sim_matrix.pt").cuda()
+    sim_matrix = torch.load("sim_matrix.pt")[:, :5].cuda()
     segment_matrix = torch.load("segment_matrix.pt").cuda()
     segment_indices = torch.load("segment_indices.pt").cuda()
     central_mask = torch.load("central_mask.pt").cuda()
     opt = OptimizerBayes(sim_matrix, segment_matrix, central_mask)
-    opt.prepare_data()
+    print(opt.maxinimize())
     # N = 1000
     # N_choices = 2000
 
