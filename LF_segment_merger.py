@@ -341,9 +341,6 @@ class LF_segment_merger:
         similarities = torch.sort(similarities, descending=True)[0][:k_cutoff]
         result_sims[: similarities.shape[0]] = similarities
         result_segments[: subview_segments.shape[0]] = subview_segments
-        permutation = torch.randperm(result_sims.shape[0])
-        result_sims = result_sims[permutation]
-        result_segments = result_segments[permutation]
         return result_sims, result_segments
 
     @torch.no_grad()
