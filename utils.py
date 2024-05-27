@@ -171,17 +171,24 @@ def calculate_outliers(tensor, k=1.5):
     return n_outliers
 
 
-def masks_cross_iou(masks, eps=1e-9):
+def masks_cross_ssim(masks, eps=1e-9):
+    masks_x, masks_y = torch.meshgrid(
+        (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
+        indexing=None,
+    )
+    masks_x = masks_x.repeat(masks.shape[0], 1, 1)
+    masks_y = masks_y.repeat(masks.shape[0], 1, 1)
+    centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
+    centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
+    centroids = torch.stack((centroids_y, centroids_x)).T
     grid_space = torch.arange((masks.shape[0]))
     inds_lhs, inds_rhs = torch.meshgrid((grid_space, grid_space), indexing=None)
     tri_inds_lhs = torch.triu_indices(inds_lhs.shape[0], inds_lhs.shape[0], 1)
-    masks_lhs = masks[inds_lhs[tri_inds_lhs[0], tri_inds_lhs[1]]]
+    centroids_lhs = centroids[inds_lhs[tri_inds_lhs[0], tri_inds_lhs[1]]]
     tri_inds_rhs = torch.triu_indices(inds_rhs.shape[0], inds_rhs.shape[0], 1)
-    masks_rhs = masks[inds_rhs[tri_inds_rhs[0], tri_inds_rhs[1]]]
-    intersection = (masks_lhs * masks_rhs).sum(axis=(1, 2))
-    union = torch.clip(masks_lhs + masks_rhs, 0, 1).sum(axis=(1, 2))
-    iou = intersection / (union + eps)
-    return iou.mean()
+    centroids_rhs = centroids[inds_rhs[tri_inds_rhs[0], tri_inds_rhs[1]]]
+    ssims = torch.norm(centroids_lhs - centroids_rhs, p=2, dim=1)
+    return ssims.mean()
 
 
 if __name__ == "__main__":
@@ -189,11 +196,11 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("merged.pt")).cuda()
     print(torch.unique(segments))
-    masks = (segments == 4691).to(torch.int32)
+    masks = (segments == 4689).to(torch.int32)
     # s, t, u, v = masks.shape
     # masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
     # plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
     # plt.show()
     masks = masks.reshape(-1, 256, 341)
-    iou = masks_iou(masks)
+    iou = masks_cross_ssim(masks)
     print(iou)
