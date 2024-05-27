@@ -188,7 +188,7 @@ def masks_cross_ssim(masks, eps=1e-9):
     tri_inds_rhs = torch.triu_indices(inds_rhs.shape[0], inds_rhs.shape[0], 1)
     centroids_rhs = centroids[inds_rhs[tri_inds_rhs[0], tri_inds_rhs[1]]]
     ssims = torch.norm(centroids_lhs - centroids_rhs, p=2, dim=1)
-    return ssims.mean()
+    return 1 / (ssims.mean() + eps)
 
 
 if __name__ == "__main__":
