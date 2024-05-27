@@ -16,7 +16,7 @@ class OptimizerBayes:
         central_segment,
         N_train_points=1000,
         search_space_size=1000,
-        lambda_reg=1e-3,
+        lambda_reg=10,
     ):
         self.segment_matrix = segment_matrix
         self.central_segment = central_segment
@@ -40,21 +40,18 @@ class OptimizerBayes:
             ),
         ).cuda()
         train_X[0] = torch.zeros((self.n_subviews,)).cuda()
-        ious = torch.zeros((train_X.shape[0]))
+        ssims = torch.zeros((train_X.shape[0])).cuda()
         for vector_num, train_vector in enumerate(train_X):
             segments = self.segment_matrix[subviews_index, train_vector, :, :]
             segments = torch.cat((segments, self.central_segment[None]), dim=0)
-            print(segments.shape)
-            ious[vector_num] = masks_cross_ssim(segments, vector_num)
-            print(ious[vector_num])
-        print(ious)
+            ssims[vector_num] = masks_cross_ssim(segments)
         train_Y = (
             self.similarities[subviews_index, train_X]
-            .sum(axis=-1)
+            .mean(axis=-1)
             .double()
             .cuda()[None]
-            .T
         )
+        train_Y = (train_Y + self.lambda_reg * ssims).T
         choices = torch.randint(
             0,
             self.n_segments,
@@ -76,15 +73,14 @@ class OptimizerBayes:
         fit_gpytorch_mll(mll)
 
         UCB = UpperConfidenceBound(gp, beta=0.1)
-        candidate, acq_value = optimize_acqf_discrete(
+        candidate, _ = optimize_acqf_discrete(
             UCB,
             choices=choices,
             q=1,
             num_restarts=5,
             raw_samples=20,
         )
-        print(candidate, acq_value)
-        print(self.similarities[torch.arange(self.subviews), candidate].sum())
+        return candidate
 
 
 if __name__ == "__main__":
