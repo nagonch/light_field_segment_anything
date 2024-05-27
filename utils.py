@@ -172,9 +172,8 @@ def calculate_outliers(tensor, k=1.5):
 
 
 def masks_iou(masks, eps=1e-9):
-    u, v = masks.shape[-2:]
-    intersection = torch.prod(masks.reshape(-1, u, v), dim=0).sum()
-    union = torch.clip(torch.sum(masks, axis=(0, 1)), 0, 1).sum()
+    intersection = torch.prod(masks, dim=0).sum()
+    union = torch.clip(torch.sum(masks, axis=(0)), 0, 1).sum()
     iou = intersection / (union + eps)
     return iou
 
@@ -184,10 +183,11 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("merged.pt")).cuda()
     print(torch.unique(segments))
-    masks = (segments == 4689).to(torch.int32)
+    masks = (segments == 4691).to(torch.int32)
     s, t, u, v = masks.shape
     masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
     plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
     plt.show()
+    masks = masks.reshape(-1, 256, 341)
     iou = masks_iou(masks)
     print(iou)
