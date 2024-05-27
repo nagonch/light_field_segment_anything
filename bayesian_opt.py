@@ -5,8 +5,7 @@ from botorch.utils import standardize
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import UpperConfidenceBound
 from botorch.optim import optimize_acqf_discrete
-from matplotlib import pyplot as plt
-from itertools import combinations
+from utils import masks_cross_ssim
 
 
 class OptimizerBayes:
@@ -31,6 +30,7 @@ class OptimizerBayes:
         self.search_space_size = search_space_size
 
     def prepare_data(self):
+        subviews_index = torch.arange(self.n_subviews).cuda()
         train_X = torch.randint(
             0,
             self.n_segments,
@@ -40,6 +40,21 @@ class OptimizerBayes:
             ),
         ).cuda()
         train_X[0] = torch.zeros((self.n_subviews,)).cuda()
+        ious = torch.zeros((train_X.shape[0]))
+        for vector_num, train_vector in enumerate(train_X):
+            segments = self.segment_matrix[subviews_index, train_vector, :, :]
+            segments = torch.cat((segments, self.central_segment[None]), dim=0)
+            print(segments.shape)
+            ious[vector_num] = masks_cross_ssim(segments, vector_num)
+            print(ious[vector_num])
+        print(ious)
+        train_Y = (
+            self.similarities[subviews_index, train_X]
+            .sum(axis=-1)
+            .double()
+            .cuda()[None]
+            .T
+        )
         choices = torch.randint(
             0,
             self.n_segments,
@@ -49,18 +64,12 @@ class OptimizerBayes:
             ),
         ).cuda()
         choices[0] = torch.zeros((self.n_subviews)).cuda()
-        train_Y = (
-            self.similarities[torch.arange(self.n_subviews), train_X]
-            .sum(axis=-1)
-            .double()
-            .cuda()[None]
-            .T
-        )
         train_X = train_X.double()
         return train_X, train_Y, choices
 
     def maxinimize(self):
         train_X, train_Y, choices = self.prepare_data()
+        train_Y = standardize(train_Y)
         gp = SingleTaskGP(train_X, train_Y)
 
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
@@ -80,7 +89,7 @@ class OptimizerBayes:
 
 if __name__ == "__main__":
     sim_matrix = torch.load("sim_matrix.pt")[:, :5].cuda()
-    segment_matrix = torch.load("segment_matrix.pt").cuda()
+    segment_matrix = torch.load("segment_matrix.pt")[:, :5, :, :].cuda()
     segment_indices = torch.load("segment_indices.pt").cuda()
     central_mask = torch.load("central_mask.pt").cuda()
     opt = OptimizerBayes(sim_matrix, segment_matrix, central_mask)
