@@ -64,7 +64,7 @@ class OptimizerBayes:
         train_X = train_X.double()
         return train_X, train_Y, choices
 
-    def maxinimize(self):
+    def maximize(self):
         train_X, train_Y, choices = self.prepare_data()
         train_Y = standardize(train_Y)
         gp = SingleTaskGP(train_X, train_Y)
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     segment_indices = torch.load("segment_indices.pt").cuda()
     central_mask = torch.load("central_mask.pt").cuda()
     opt = OptimizerBayes(sim_matrix, segment_matrix, central_mask)
-    print(opt.maxinimize())
+    print(opt.maximize())
     # N = 1000
     # N_choices = 2000
 
