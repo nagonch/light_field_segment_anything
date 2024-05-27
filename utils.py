@@ -8,6 +8,7 @@ from scipy.io import savemat
 from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
+import math
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -132,11 +133,19 @@ def binary_mask_centroid(mask):
     return centroid
 
 
-def get_subview_indices(s_size, t_size):
+def get_subview_indices(s_size, t_size, remove_central=False):
     rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
     cols = torch.arange(t_size).repeat(s_size)
 
     indices = torch.stack((rows, cols), dim=-1).cuda()
+    if remove_central:
+        indices = torch.stack(
+            [
+                element
+                for element in indices
+                if (element != torch.tensor([s_size // 2, t_size // 2]).cuda()).any()
+            ]
+        )
     return indices
 
 
@@ -171,23 +180,55 @@ def calculate_outliers(tensor, k=1.5):
     return n_outliers
 
 
-def masks_cross_ssim(masks, eps=1e-9):
+def get_disparity_matrix(s, t, disparity):
+    d = disparity
+    H = torch.tensor(
+        [
+            [0, 0, 0, 0, s],
+            [0, 0, 0, 0, t],
+            [-d, 0, 1, 0, s * d],
+            [0, -d, 0, 1, t * d],
+            [0, 0, 0, 0, 1],
+        ]
+    )
+    return H.float()
+
+
+def masks_cross_ssim(masks, disparity, eps=1e-9):
     masks_x, masks_y = torch.meshgrid(
         (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
-        indexing=None,
+        indexing="ij",
     )
+    s_size = t_size = int(math.sqrt(float(masks.shape[0])))
+    inds = get_subview_indices(s_size, t_size, remove_central=True)
     masks_x = masks_x.repeat(masks.shape[0], 1, 1)
     masks_y = masks_y.repeat(masks.shape[0], 1, 1)
     centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
     centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-    centroids = torch.stack((centroids_y, centroids_x)).T
+    centroids = torch.stack((centroids_x, centroids_y)).T
+    H = get_disparity_matrix(s_size // 2, t_size // 2, disparity).cuda()
+    centroids[1:, :] = (
+        H
+        @ torch.cat(
+            (inds, centroids[1:, :], torch.ones(centroids.shape[0] - 1, 1).cuda()),
+            dim=1,
+        ).T
+    ).T[:, 2:-1]
+    plt.scatter(centroids[:, 0].cpu().numpy(), centroids[:, 1].cpu().numpy())
+    # plt.xlim(0, masks.shape[1])
+    # plt.ylim(0, masks.shape[2])
+    plt.show()
+    plt.close()
+    plt.imshow(masks.sum(axis=0).cpu().numpy())
+    plt.show()
+    plt.close()
     grid_space = torch.arange((masks.shape[0]))
     inds_lhs, inds_rhs = torch.meshgrid((grid_space, grid_space), indexing=None)
     tri_inds_lhs = torch.triu_indices(inds_lhs.shape[0], inds_lhs.shape[0], 1)
     centroids_lhs = centroids[inds_lhs[tri_inds_lhs[0], tri_inds_lhs[1]]]
     tri_inds_rhs = torch.triu_indices(inds_rhs.shape[0], inds_rhs.shape[0], 1)
     centroids_rhs = centroids[inds_rhs[tri_inds_rhs[0], tri_inds_rhs[1]]]
-    ssims = torch.norm(centroids_lhs - centroids_rhs, p=2, dim=1)
+    ssims = torch.norm(centroids_lhs - centroids_rhs, p=1, dim=1)
     return 1 / (ssims.mean() + eps)
 
 
@@ -196,11 +237,11 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("merged.pt")).cuda()
     print(torch.unique(segments))
-    masks = (segments == 4689).to(torch.int32)
-    # s, t, u, v = masks.shape
-    # masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
-    # plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
-    # plt.show()
+    masks = (segments == 4686).to(torch.int32)
+    s, t, u, v = masks.shape
+    masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
+    plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
+    plt.show()
     masks = masks.reshape(-1, 256, 341)
-    iou = masks_cross_ssim(masks)
+    iou = masks_cross_ssim(masks, 0.1)
     print(iou)
