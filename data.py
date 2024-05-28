@@ -21,8 +21,9 @@ def get_LF(dir):
 
 
 class LFDataset(Dataset):
-    def __init__(self, data_path):
+    def __init__(self, data_path, return_disparity=False):
         self.data_path = data_path
+        self.return_disparity = return_disparity
         self.frames = sorted(
             [
                 item
@@ -38,17 +39,20 @@ class LFDataset(Dataset):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         imgs = []
+        disparities = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
             if (
-                not filename.endswith(".png")
-                or filename.endswith("depth.png")
+                filename.endswith("depth.png")
                 or filename.endswith("disparity.png")
                 or filename.endswith("label.png")
             ):
                 continue
-            img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
-            img = (torch.tensor(img))[:, :, :3]
-            imgs.append(img)
+            if filename.endswith(".png"):
+                img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
+                img = (torch.tensor(img))[:, :, :3]
+                imgs.append(img)
+            elif filename.endswith("disparity.npy"):
+                disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -59,11 +63,21 @@ class LFDataset(Dataset):
             v,
             c,
         )
-        return LF
+        if self.return_disparity:
+            disparities = np.stack(disparities).reshape(
+                n_apertures,
+                n_apertures,
+                u,
+                v,
+            )
+            return LF, disparities
+        else:
+            return LF
 
 
 if __name__ == "__main__":
-    dataset = LFDataset("UrbanLF_Syn/test")
-    img = dataset[0][2:-2, 2:-2]
+    dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
+    img, disp = dataset[0]
+    print(img.shape, disp.shape)
     # print(img.shape)
-    save_LF_image(img, resize_to=None)
+    # save_LF_image(img, resize_to=None)
