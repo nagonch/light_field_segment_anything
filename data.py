@@ -39,7 +39,12 @@ class LFDataset(Dataset):
         frame = self.frames[idx]
         imgs = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
-            if not filename.endswith(".png"):
+            if (
+                not filename.endswith(".png")
+                or filename.endswith("depth.png")
+                or filename.endswith("disparity.png")
+                or filename.endswith("label.png")
+            ):
                 continue
             img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
             img = (torch.tensor(img))[:, :, :3]
