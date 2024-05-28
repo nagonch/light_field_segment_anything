@@ -214,14 +214,6 @@ def masks_cross_ssim(masks, disparity, eps=1e-9):
             dim=1,
         ).T
     ).T[:, 2:-1]
-    plt.scatter(centroids[:, 0].cpu().numpy(), centroids[:, 1].cpu().numpy())
-    # plt.xlim(0, masks.shape[1])
-    # plt.ylim(0, masks.shape[2])
-    plt.show()
-    plt.close()
-    plt.imshow(masks.sum(axis=0).cpu().numpy())
-    plt.show()
-    plt.close()
     grid_space = torch.arange((masks.shape[0]))
     inds_lhs, inds_rhs = torch.meshgrid((grid_space, grid_space), indexing=None)
     tri_inds_lhs = torch.triu_indices(inds_lhs.shape[0], inds_lhs.shape[0], 1)
@@ -237,11 +229,11 @@ if __name__ == "__main__":
 
     segments = torch.tensor(torch.load("merged.pt")).cuda()
     print(torch.unique(segments))
-    masks = (segments == 4686).to(torch.int32)
+    masks = (segments == 3350).to(torch.int32)
     s, t, u, v = masks.shape
     masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
     plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
     plt.show()
     masks = masks.reshape(-1, 256, 341)
-    iou = masks_cross_ssim(masks, 0.1)
+    iou = masks_cross_ssim(masks, 0.20214808)
     print(iou)
