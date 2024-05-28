@@ -5,7 +5,7 @@ from botorch.utils import standardize
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import UpperConfidenceBound
 from botorch.optim import optimize_acqf_discrete
-from utils import masks_cross_ssim
+from utils import masks_regularization_score
 
 
 class OptimizerBayes:
@@ -44,7 +44,7 @@ class OptimizerBayes:
         for vector_num, train_vector in enumerate(train_X):
             segments = self.segment_matrix[subviews_index, train_vector, :, :]
             segments = torch.cat((segments, self.central_segment[None]), dim=0)
-            ssims[vector_num] = masks_cross_ssim(segments)
+            ssims[vector_num] = masks_regularization_score(segments)
         train_Y = (
             self.similarities[subviews_index, train_X]
             .mean(axis=-1)
