@@ -73,7 +73,7 @@ def main(
 
 
 if __name__ == "__main__":
-    dataset = LFDataset("UrbanLF_Syn/test")
+    dataset = LFDataset("UrbanLF_Syn/val")
     LF = dataset[3].detach().cpu().numpy()
     LF_vis = LightField(LF)
     # LF_vis.show()
