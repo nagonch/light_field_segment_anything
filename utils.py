@@ -180,40 +180,30 @@ def calculate_outliers(tensor, k=1.5):
     return n_outliers
 
 
-def get_disparity_matrix(s, t, disparity):
-    d = disparity
-    H = torch.tensor(
-        [
-            [0, 0, 0, 0, s],
-            [0, 0, 0, 0, t],
-            [-d, 0, 1, 0, s * d],
-            [0, -d, 0, 1, t * d],
-            [0, 0, 0, 0, 1],
-        ]
-    )
-    return H.float()
-
-
 def masks_cross_ssim(masks, disparity, eps=1e-9):
     masks_x, masks_y = torch.meshgrid(
         (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
         indexing="ij",
     )
     s_size = t_size = int(math.sqrt(float(masks.shape[0])))
-    inds = get_subview_indices(s_size, t_size, remove_central=True)
+    inds = get_subview_indices(s_size, t_size)
+    inds = inds - torch.tensor([s_size // 2, t_size // 2]).cuda()
+    inds_reverse = torch.zeros_like(inds)
+    inds_reverse[:, 0] = inds[:, 1]
+    inds_reverse[:, 1] = inds[:, 0]
     masks_x = masks_x.repeat(masks.shape[0], 1, 1)
     masks_y = masks_y.repeat(masks.shape[0], 1, 1)
     centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
     centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-    centroids = torch.stack((centroids_x, centroids_y)).T
-    H = get_disparity_matrix(s_size // 2, t_size // 2, disparity).cuda()
-    centroids[1:, :] = (
-        H
-        @ torch.cat(
-            (inds, centroids[1:, :], torch.ones(centroids.shape[0] - 1, 1).cuda()),
-            dim=1,
-        ).T
-    ).T[:, 2:-1]
+    centroids = torch.stack((centroids_y, centroids_x)).T
+    plt.scatter(centroids.cpu().numpy()[:, 0], centroids.cpu().numpy()[:, 1])
+    centroids += inds_reverse * disparity
+    plt.scatter(centroids.cpu().numpy()[:, 0], centroids.cpu().numpy()[:, 1])
+    plt.xlim(110, 140)
+    plt.ylim(80, 100)
+    plt.show()
+    plt.close()
+
     grid_space = torch.arange((masks.shape[0]))
     inds_lhs, inds_rhs = torch.meshgrid((grid_space, grid_space), indexing=None)
     tri_inds_lhs = torch.triu_indices(inds_lhs.shape[0], inds_lhs.shape[0], 1)
@@ -230,10 +220,10 @@ if __name__ == "__main__":
     segments = torch.tensor(torch.load("merged.pt")).cuda()
     print(torch.unique(segments))
     masks = (segments == 3350).to(torch.int32)
-    s, t, u, v = masks.shape
-    masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
-    plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
-    plt.show()
+    # s, t, u, v = masks.shape
+    # masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
+    # plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
+    # plt.show()
     masks = masks.reshape(-1, 256, 341)
-    iou = masks_cross_ssim(masks, 0.20214808)
+    iou = masks_cross_ssim(masks, 2.0214808)
     print(iou)
