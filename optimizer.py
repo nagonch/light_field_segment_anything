@@ -74,7 +74,9 @@ class GreedyOptimizer:
         matches = []
         chosen_segment_inds = []
         for i in range(self.n_subviews):
-            function_val = self.similarities + self.lambda_reg * self.reg_matrix
+            function_val = (
+                1 - self.lambda_reg
+            ) * self.similarities + self.lambda_reg * self.reg_matrix
             ind_num, segment_num = unravel_index(
                 function_val.argmax(), (self.n_subviews, self.n_segments)
             )
