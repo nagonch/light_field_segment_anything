@@ -9,6 +9,7 @@ from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
 import math
+from typing import Tuple
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -47,6 +48,33 @@ def visualize_segments(segments, filename):
     )
     im = Image.fromarray(vis)
     im.save(filename)
+
+
+def unravel_index(
+    indices: torch.LongTensor,
+    shape: Tuple[int, ...],
+) -> torch.LongTensor:
+    r"""Converts flat indices into unraveled coordinates in a target shape.
+
+    This is a `torch` implementation of `numpy.unravel_index`.
+
+    Args:
+        indices: A tensor of (flat) indices, (*, N).
+        shape: The targeted shape, (D,).
+
+    Returns:
+        The unraveled coordinates, (*, N, D).
+    """
+
+    coord = []
+
+    for dim in reversed(shape):
+        coord.append(indices % dim)
+        indices = indices // dim
+
+    coord = torch.stack(coord[::-1], dim=-1).cuda()
+
+    return coord
 
 
 def resize_LF(LF, new_u, new_v):

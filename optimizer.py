@@ -1,4 +1,5 @@
 import torch
+from utils import unravel_index
 
 
 class GreedyOptimizer:
@@ -67,12 +68,14 @@ class GreedyOptimizer:
         chosen_segment_inds = []
         for i in range(self.n_subviews):
             function_val = self.similarities + self.lambda_reg * self.reg_matrix
-            ind_num, segment_num = torch.where(function_val == function_val.max())
+            ind_num, segment_num = unravel_index(
+                function_val.argmax(), (self.n_subviews, self.n_segments)
+            )
             self.similarities[ind_num] = torch.ones_like(self.similarities[ind_num]) * (
                 -torch.inf
             )
-            matches.append(self.segment_indices[ind_num[0], segment_num[0]].item())
-            chosen_segment_inds.append(torch.tensor([ind_num[0], segment_num[0]]))
+            matches.append(self.segment_indices[ind_num, segment_num].item())
+            chosen_segment_inds.append(torch.tensor([ind_num, segment_num]))
             if i < self.n_subviews - 1:
                 for candidate_i in range(self.n_subviews):
                     for candidate_j in range(self.n_segments):
