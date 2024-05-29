@@ -185,12 +185,15 @@ class LF_segment_merger:
         sim_matrix, segment_matrix, segment_indices = self.get_similarity_matrix(
             central_mask_num
         )
-        print(sim_matrix.shape)
-        torch.save(sim_matrix, "sim_matrix.pt")
-        torch.save(segment_matrix, "segment_matrix.pt")
-        torch.save(segment_indices, "segment_indices.pt")
-        torch.save(central_mask, "central_mask.pt")
-        raise
+        # print(sim_matrix.shape)
+        matches = []
+        for i in range(self.subview_indices.shape[0] - 1):
+            ind_num, segment_num = torch.where(sim_matrix == sim_matrix.max())
+            sim_matrix[ind_num] = torch.ones_like(sim_matrix[ind_num]) * (-torch.inf)
+            # print(sim_matrix)
+            matches.append(segment_indices[ind_num[0], segment_num[0]])
+        # print(torch.stack(matches))
+        return matches
 
     @torch.no_grad()
     def get_result_masks(self):
