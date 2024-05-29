@@ -34,20 +34,10 @@ class LF_segment_merger:
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.central_segments = self.get_central_segments()
-        self.segments_centroids = self.get_segments_centroids()
         self.verbose = MERGER_CONFIG["verbose"]
         self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
         if self.verbose:
             os.makedirs("LF_ransac_output", exist_ok=True)
-
-    @torch.no_grad()
-    def get_segments_centroids(self):
-        centroids_dict = {}
-        for segment_i in torch.unique(self.segments):
-            centroids_dict[segment_i.item()] = binary_mask_centroid(
-                self.segments == segment_i
-            )[-2:]
-        return centroids_dict
 
     @torch.no_grad()
     def get_central_segments(self):
@@ -117,9 +107,7 @@ class LF_segment_merger:
         return im
 
     @torch.no_grad()
-    def get_subview_masks_similarities(
-        self, central_mask_num, central_mask_centroid, s, t, k_cutoff
-    ):
+    def get_subview_masks_similarities(self, central_mask_num, s, t, k_cutoff):
         result_sims = torch.zeros((k_cutoff,)).cuda()
         result_segments = -1 * torch.ones_like(result_sims).long()
         subview_segments = torch.unique(self.segments[s, t])[1:]
@@ -160,7 +148,6 @@ class LF_segment_merger:
 
     @torch.no_grad()
     def get_similarity_matrix(self, central_mask_num, k_cutoff=20):
-        central_mask_centroid = self.segments_centroids[central_mask_num.item()]
         similarity_matrix = torch.zeros(
             (self.subview_indices.shape[0] - 1, k_cutoff)
         ).cuda()
@@ -174,7 +161,7 @@ class LF_segment_merger:
         )
         for i_ind, (s, t) in enumerate(self.shuffle_indices()):
             similarities, subview_segment_indices = self.get_subview_masks_similarities(
-                central_mask_num, central_mask_centroid, s, t, k_cutoff
+                central_mask_num, s, t, k_cutoff
             )
             similarity_matrix[i_ind] = similarities
             segment_indices[i_ind] = subview_segment_indices
