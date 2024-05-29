@@ -43,7 +43,6 @@ class GreedyOptimizer:
         )
 
     def covariance_regularization(self, segment_inds, eps=1e-9):
-        print(segment_inds.shape)
         centroids = self.mask_centroids[segment_inds[:, 0], segment_inds[:, 1]]
         centroids = torch.cat((centroids, self.central_segment_centroid[None]), dim=0)
         sing_values = torch.svd(centroids, compute_uv=False)[1]
@@ -66,7 +65,7 @@ class GreedyOptimizer:
         for i in range(self.n_subviews):
             ind_num, segment_num = torch.where(sim_matrix == sim_matrix.max())
             sim_matrix[ind_num] = torch.ones_like(sim_matrix[ind_num]) * (-torch.inf)
-            matches.append(self.segment_indices[ind_num[0], segment_num[0]])
+            matches.append(self.segment_indices[ind_num[0], segment_num[0]].item())
             chosen_segment_inds.append(torch.tensor([ind_num[0], segment_num[0]]))
             if i < self.n_subviews - 1:
                 for candidate_i in range(self.n_subviews):
@@ -88,4 +87,4 @@ if __name__ == "__main__":
     central_mask = torch.load("central_mask.pt")
     opt = GreedyOptimizer(sim_matrix, segment_matrix, central_mask, segment_indices)
     result = opt.run()
-    # print(result)
+    print(result)
