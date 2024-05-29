@@ -199,15 +199,5 @@ def masks_regularization_score(masks, eps=1e-9):
 
 
 if __name__ == "__main__":
-    from matplotlib import pyplot as plt
-
-    segments = torch.tensor(torch.load("merged.pt")).cuda()
-    print(torch.unique(segments))
-    masks = (segments == 3351).to(torch.int32)[2:]
-    s, t, u, v = masks.shape
-    masks_vis = masks.permute(0, 2, 1, 3).reshape(s * u, t * v)
-    plt.imshow(masks_vis.detach().cpu().numpy(), cmap="gray")
-    plt.show()
-    masks = masks.reshape(-1, 256, 341)
-    metric = masks_regularization_score(masks, 1.6)
-    print(metric)
+    segments = torch.load("merged.pt").detach().cpu().numpy()
+    visualize_segmentation_mask(segments, "segments.mat")
