@@ -4,16 +4,16 @@ from utils import masks_iou
 import torch
 
 
-class OptimizerEvolution:
+class GreedyOptimizer:
     def __init__(
         self,
         similarities,
         segment_matrix,
         central_segment,
+        segment_indices,
         lambda_reg=1e-3,
-        maxiter=1000,
     ):
-        self.maxiter = maxiter
+        self.segment_indices = segment_indices
         self.segment_matrix = segment_matrix
         self.central_segment = central_segment
         self.lambda_reg = lambda_reg
