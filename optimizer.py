@@ -20,7 +20,7 @@ class GreedyOptimizer:
         self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
         self.reg_matrix = torch.zeros_like(similarities).cuda()
 
-    def get_masks_centroids(self):
+    def get_masks_centroids(self, eps=1e-9):
         masks = self.segment_matrix.reshape(
             -1, self.segment_matrix.shape[-2], self.segment_matrix.shape[-1]
         )
@@ -31,8 +31,12 @@ class GreedyOptimizer:
         )
         masks_x = masks_x.repeat(masks.shape[0], 1, 1)
         masks_y = masks_y.repeat(masks.shape[0], 1, 1)
-        centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-        centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
+        centroids_x = (masks_x * masks).sum(axis=(1, 2)) / (
+            masks.sum(axis=(1, 2)) + eps
+        )
+        centroids_y = (masks_y * masks).sum(axis=(1, 2)) / (
+            masks.sum(axis=(1, 2)) + eps
+        )
         centroids = torch.stack((centroids_y, centroids_x)).T
         centroids -= centroids.mean(axis=0)
         return (
@@ -90,9 +94,9 @@ class GreedyOptimizer:
 
 
 if __name__ == "__main__":
-    sim_matrix = torch.load("sim_matrix.pt")[:, :5]
-    segment_matrix = torch.load("segment_matrix.pt")[:, :5]
-    segment_indices = torch.load("segment_indices.pt")[:, :5]
+    sim_matrix = torch.load("sim_matrix.pt")
+    segment_matrix = torch.load("segment_matrix.pt")
+    segment_indices = torch.load("segment_indices.pt")
     central_mask = torch.load("central_mask.pt")
     opt = GreedyOptimizer(sim_matrix, segment_matrix, central_mask, segment_indices)
     result = opt.run()
