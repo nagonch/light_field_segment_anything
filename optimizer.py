@@ -17,7 +17,7 @@ class GreedyOptimizer:
         self.n_subviews, self.n_segments = similarities.shape
         self.similarities = similarities
         self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
-        self.reg_matrix = torch.zeros_like(similarities)
+        self.reg_matrix = torch.zeros_like(similarities).cuda()
 
     def get_masks_centroids(self):
         masks = self.segment_matrix.reshape(
@@ -46,7 +46,8 @@ class GreedyOptimizer:
     def svd_regularization(self, segment_inds, eps=1e-9):
         centroids = self.mask_centroids[segment_inds[:, 0], segment_inds[:, 1]]
         centroids = torch.cat((centroids, self.central_segment_centroid[None]), dim=0)
-        sing_values = torch.svd(centroids, compute_uv=False)[1]
+        cov = torch.cov(centroids.T)
+        sing_values = torch.svd(cov, compute_uv=False)[1]
         score = sing_values.min() / (sing_values.max() + eps)
 
         return score
@@ -56,7 +57,7 @@ class GreedyOptimizer:
             reg_segment_ids = chosen_segment_inds + [
                 torch.tensor([subview_ind, segment_ind]),
             ]
-            reg_segment_ids = torch.stack(reg_segment_ids)
+            reg_segment_ids = torch.stack(reg_segment_ids).cuda()
             self.reg_matrix[subview_ind, segment_ind] = self.svd_regularization(
                 reg_segment_ids
             )
@@ -75,7 +76,7 @@ class GreedyOptimizer:
             if i < self.n_subviews - 1:
                 for candidate_i in range(self.n_subviews):
                     for candidate_j in range(self.n_segments):
-                        if self.segment_indices[candidate_i, candidate_j] in matches:
+                        if self.similarities[candidate_i, candidate_j] == -torch.inf:
                             continue
                         self.update_reg(
                             candidate_i,
