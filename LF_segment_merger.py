@@ -2,19 +2,15 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from utils import (
-    binary_mask_centroid,
     get_subview_indices,
-    calculate_outliers,
     MERGER_CONFIG,
-    project_point_onto_line,
-    shift_binary_mask,
     get_process_to_segments_dict,
     resize_LF,
 )
 import os
 import numpy as np
 from PIL import Image
-from torchmetrics.classification import BinaryJaccardIndex
+from optimizer import GreedyOptimizer
 
 # import torch.multiprocessing as mp
 import multiprocessing as mp
@@ -36,6 +32,7 @@ class LF_segment_merger:
         self.central_segments = self.get_central_segments()
         self.verbose = MERGER_CONFIG["verbose"]
         self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
+        self.k_cutoff = MERGER_CONFIG["k-cutoff"]
         if self.verbose:
             os.makedirs("LF_ransac_output", exist_ok=True)
 
@@ -107,8 +104,8 @@ class LF_segment_merger:
         return im
 
     @torch.no_grad()
-    def get_subview_masks_similarities(self, central_mask_num, s, t, k_cutoff):
-        result_sims = torch.zeros((k_cutoff,)).cuda()
+    def get_subview_masks_similarities(self, central_mask_num, s, t):
+        result_sims = torch.zeros((self.k_cutoff,)).cuda()
         result_segments = -1 * torch.ones_like(result_sims).long()
         subview_segments = torch.unique(self.segments[s, t])[1:]
         subview_segments = self.filter_segments(
@@ -140,28 +137,33 @@ class LF_segment_merger:
                 )
         subview_segments = subview_segments[
             torch.argsort(similarities, descending=True)
-        ][:k_cutoff]
-        similarities = torch.sort(similarities, descending=True)[0][:k_cutoff]
+        ][: self.k_cutoff]
+        similarities = torch.sort(similarities, descending=True)[0][: self.k_cutoff]
         result_sims[: similarities.shape[0]] = similarities
         result_segments[: subview_segments.shape[0]] = subview_segments
         return result_sims, result_segments
 
     @torch.no_grad()
-    def get_similarity_matrix(self, central_mask_num, k_cutoff=20):
+    def get_similarity_matrix(self, central_mask_num):
         similarity_matrix = torch.zeros(
-            (self.subview_indices.shape[0] - 1, k_cutoff)
+            (self.subview_indices.shape[0] - 1, self.k_cutoff)
         ).cuda()
         segment_indices = torch.zeros_like(similarity_matrix).long()
         segments = (
             torch.zeros(
-                (self.subview_indices.shape[0] - 1, k_cutoff, self.u_size, self.v_size)
+                (
+                    self.subview_indices.shape[0] - 1,
+                    self.k_cutoff,
+                    self.u_size,
+                    self.v_size,
+                )
             )
             .cuda()
             .long()
         )
         for i_ind, (s, t) in enumerate(self.shuffle_indices()):
             similarities, subview_segment_indices = self.get_subview_masks_similarities(
-                central_mask_num, s, t, k_cutoff
+                central_mask_num, s, t
             )
             similarity_matrix[i_ind] = similarities
             segment_indices[i_ind] = subview_segment_indices
@@ -185,14 +187,10 @@ class LF_segment_merger:
         sim_matrix, segment_matrix, segment_indices = self.get_similarity_matrix(
             central_mask_num
         )
-        # print(sim_matrix.shape)
-        matches = []
-        for i in range(self.subview_indices.shape[0] - 1):
-            ind_num, segment_num = torch.where(sim_matrix == sim_matrix.max())
-            sim_matrix[ind_num] = torch.ones_like(sim_matrix[ind_num]) * (-torch.inf)
-            # print(sim_matrix)
-            matches.append(segment_indices[ind_num[0], segment_num[0]])
-        # print(torch.stack(matches))
+        optimizer = GreedyOptimizer(
+            sim_matrix, segment_matrix, central_mask, segment_indices
+        )
+        matches = optimizer.run()
         return matches
 
     @torch.no_grad()

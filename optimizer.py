@@ -63,8 +63,12 @@ class GreedyOptimizer:
         matches = []
         chosen_segment_inds = []
         for i in range(self.n_subviews):
-            ind_num, segment_num = torch.where(sim_matrix == sim_matrix.max())
-            sim_matrix[ind_num] = torch.ones_like(sim_matrix[ind_num]) * (-torch.inf)
+            ind_num, segment_num = torch.where(
+                self.similarities == self.similarities.max()
+            )
+            self.similarities[ind_num] = torch.ones_like(self.similarities[ind_num]) * (
+                -torch.inf
+            )
             matches.append(self.segment_indices[ind_num[0], segment_num[0]].item())
             chosen_segment_inds.append(torch.tensor([ind_num[0], segment_num[0]]))
             if i < self.n_subviews - 1:
