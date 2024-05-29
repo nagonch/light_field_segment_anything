@@ -1,5 +1,5 @@
 import torch
-from utils import unravel_index
+from utils import unravel_index, MERGER_CONFIG
 
 
 class GreedyOptimizer:
@@ -9,14 +9,17 @@ class GreedyOptimizer:
         segment_matrix,
         central_segment,
         segment_indices,
-        lambda_reg=1e-1,
+        lambda_reg=MERGER_CONFIG["lambda-reg"],
+        min_similarity=MERGER_CONFIG["min-similarity"],
     ):
         self.segment_indices = segment_indices
+        self.min_similarity = min_similarity
         self.segment_matrix = segment_matrix
         self.central_segment = central_segment
         self.lambda_reg = lambda_reg
         self.n_subviews, self.n_segments = similarities.shape
         self.similarities = similarities
+        self.similarities_initial = torch.clone(self.similarities)
         self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
         self.reg_matrix = torch.zeros_like(similarities).cuda()
 
@@ -90,7 +93,14 @@ class GreedyOptimizer:
                             candidate_j,
                             chosen_segment_inds=chosen_segment_inds,
                         )
-        return matches
+        result_matches = []
+        for match, match_ind in zip(matches, chosen_segment_inds):
+            if (
+                self.similarities_initial[match_ind[0], match_ind[1]]
+                >= self.min_similarity
+            ):
+                result_matches.append(match)
+        return result_matches
 
 
 if __name__ == "__main__":
