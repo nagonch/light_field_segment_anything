@@ -17,6 +17,7 @@ class GreedyOptimizer:
         self.n_subviews, self.n_segments = similarities.shape
         self.similarities = similarities
         self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
+        self.reg_matrix = torch.zeros_like(similarities)
 
     def get_masks_centroids(self):
         masks = self.segment_matrix.reshape(
@@ -42,30 +43,30 @@ class GreedyOptimizer:
             centroids[-1],
         )
 
-    def covariance_regularization(self, segment_inds, eps=1e-9):
+    def svd_regularization(self, segment_inds, eps=1e-9):
         centroids = self.mask_centroids[segment_inds[:, 0], segment_inds[:, 1]]
         centroids = torch.cat((centroids, self.central_segment_centroid[None]), dim=0)
         sing_values = torch.svd(centroids, compute_uv=False)[1]
         score = sing_values.min() / (sing_values.max() + eps)
+
         return score
 
-    def loss(self, subview_ind, segment_ind, chosen_segment_inds=None):
-        result = self.similarities[subview_ind, segment_ind]
+    def update_reg(self, subview_ind, segment_ind, chosen_segment_inds=None):
         if chosen_segment_inds:
             reg_segment_ids = chosen_segment_inds + [
                 torch.tensor([subview_ind, segment_ind]),
             ]
             reg_segment_ids = torch.stack(reg_segment_ids)
-            result += self.lambda_reg * self.covariance_regularization(reg_segment_ids)
-        return result
+            self.reg_matrix[subview_ind, segment_ind] = self.svd_regularization(
+                reg_segment_ids
+            )
 
     def run(self):
         matches = []
         chosen_segment_inds = []
         for i in range(self.n_subviews):
-            ind_num, segment_num = torch.where(
-                self.similarities == self.similarities.max()
-            )
+            function_val = self.similarities + self.lambda_reg * self.reg_matrix
+            ind_num, segment_num = torch.where(function_val == function_val.max())
             self.similarities[ind_num] = torch.ones_like(self.similarities[ind_num]) * (
                 -torch.inf
             )
@@ -76,7 +77,7 @@ class GreedyOptimizer:
                     for candidate_j in range(self.n_segments):
                         if self.segment_indices[candidate_i, candidate_j] in matches:
                             continue
-                        self.similarities[candidate_i, candidate_j] = self.loss(
+                        self.update_reg(
                             candidate_i,
                             candidate_j,
                             chosen_segment_inds=chosen_segment_inds,
