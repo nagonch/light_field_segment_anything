@@ -34,10 +34,24 @@ class LF_segment_merger:
         self.s_size, self.t_size, self.u_size, self.v_size = segments.shape
         self.s_central, self.t_central = self.s_size // 2, self.t_size // 2
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
+        self.central_segments = self.get_central_segments()
         self.verbose = MERGER_CONFIG["verbose"]
         self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
         if self.verbose:
             os.makedirs("LF_ransac_output", exist_ok=True)
+
+    @torch.no_grad()
+    def get_central_segments(self):
+        central_segments = torch.unique(self.segments[self.s_central, self.t_central])[
+            1:
+        ]
+        segment_sums = torch.stack(
+            [(self.segments == i).sum() for i in central_segments]
+        ).cuda()
+        central_segments = central_segments[
+            torch.argsort(segment_sums, descending=True)
+        ]
+        return central_segments
 
     @torch.no_grad()
     def get_result_masks(self):
@@ -56,9 +70,15 @@ class LF_segment_merger:
                 self.segments,
                 torch.unique(self.segments[self.s_central, self.t_central]),
             )
-        ] = 0  # TODO: check what happens with unmatched
+        ] = 0
         return self.segments
 
 
 if __name__ == "__main__":
-    pass
+    from scipy.io import loadmat
+
+    segments = torch.load("segments.pt").cuda()
+    embeddings = torch.load("embeddings.pt")
+    LF = loadmat("LF.mat")["LF"]
+    merger = LF_segment_merger(segments, embeddings, LF)
+    merger.get_result_masks()
