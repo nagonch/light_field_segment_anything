@@ -1,4 +1,3 @@
-from utils import masks_regularization_score
 import torch
 
 
@@ -17,12 +16,13 @@ class GreedyOptimizer:
         self.lambda_reg = lambda_reg
         self.n_subviews, self.n_segments = similarities.shape
         self.similarities = similarities
-        self.mask_centroids = self.get_masks_centroids()
+        self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
 
     def get_masks_centroids(self):
         masks = self.segment_matrix.reshape(
             -1, self.segment_matrix.shape[-2], self.segment_matrix.shape[-1]
         )
+        masks = torch.cat((masks, self.central_segment[None]), dim=0)
         masks_x, masks_y = torch.meshgrid(
             (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
             indexing="ij",
@@ -33,53 +33,41 @@ class GreedyOptimizer:
         centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
         centroids = torch.stack((centroids_y, centroids_x)).T
         centroids -= centroids.mean(axis=0)
-        return centroids.reshape(
-            self.n_subviews,
-            self.n_segments,
-            2,
+        return (
+            centroids[:-1].reshape(
+                self.n_subviews,
+                self.n_segments,
+                2,
+            ),
+            centroids[-1],
         )
 
-    def covariance_regularization(masks, eps=1e-9):
-        masks_x, masks_y = torch.meshgrid(
-            (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
-            indexing="ij",
-        )
-        masks_x = masks_x.repeat(masks.shape[0], 1, 1)
-        masks_y = masks_y.repeat(masks.shape[0], 1, 1)
-        centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-        centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-        centroids = torch.stack((centroids_y, centroids_x)).T
-        centroids = centroids[~(torch.isnan(centroids).any(axis=1)), :]
-        centroids -= centroids.mean(axis=0)
-        cov = torch.cov(centroids.T)
-        eigvals = torch.linalg.eigvals(cov).abs()
-        score = eigvals.min() / (eigvals.max() + eps)
+    def covariance_regularization(self, segment_inds, eps=1e-9):
+        print(segment_inds.shape)
+        centroids = self.mask_centroids[segment_inds[:, 0], segment_inds[:, 1]]
+        centroids = torch.cat((centroids, self.central_segment_centroid[None]), dim=0)
+        sing_values = torch.svd(centroids, compute_uv=False)[1]
+        score = sing_values.min() / (sing_values.max() + eps)
         return score
 
     def loss(self, subview_ind, segment_ind, chosen_segment_inds=None):
         result = self.similarities[subview_ind, segment_ind]
         if chosen_segment_inds:
-            masks = [
-                self.segment_matrix[subview, segment]
-                for subview, segment in chosen_segment_inds
+            reg_segment_ids = chosen_segment_inds + [
+                torch.tensor([subview_ind, segment_ind]),
             ]
-            masks += [
-                self.segment_matrix[subview_ind, segment_ind],
-                self.central_segment,
-            ]
-            masks = torch.stack(masks)
-            result += self.lambda_reg * masks_regularization_score(masks)
+            reg_segment_ids = torch.stack(reg_segment_ids)
+            result += self.lambda_reg * self.covariance_regularization(reg_segment_ids)
         return result
 
     def run(self):
         matches = []
         chosen_segment_inds = []
         for i in range(self.n_subviews):
-            print(i)
             ind_num, segment_num = torch.where(sim_matrix == sim_matrix.max())
             sim_matrix[ind_num] = torch.ones_like(sim_matrix[ind_num]) * (-torch.inf)
             matches.append(self.segment_indices[ind_num[0], segment_num[0]])
-            chosen_segment_inds.append([ind_num[0], segment_num[0]])
+            chosen_segment_inds.append(torch.tensor([ind_num[0], segment_num[0]]))
             if i < self.n_subviews - 1:
                 for candidate_i in range(self.n_subviews):
                     for candidate_j in range(self.n_segments):
@@ -100,4 +88,4 @@ if __name__ == "__main__":
     central_mask = torch.load("central_mask.pt")
     opt = GreedyOptimizer(sim_matrix, segment_matrix, central_mask, segment_indices)
     result = opt.run()
-    print(result)
+    # print(result)
