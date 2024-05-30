@@ -100,6 +100,7 @@ class LF_segment_merger:
             .numpy()
             .astype(np.uint8)
         )
+        mask_image[mask_image == 0] = 255
         im = Image.fromarray(mask_image)
         return im
 
@@ -258,10 +259,12 @@ def get_merged_segments(segments, embeddings):
 
 if __name__ == "__main__":
     from scipy.io import loadmat
+    from data import LFDataset
 
     segments = torch.load("segments.pt").cuda()
     embeddings = torch.load("embeddings.pt")
-    LF = loadmat("LF.mat")["LF"]
+    dataset = LFDataset("UrbanLF_Syn/val")
+    LF = dataset[3].detach().cpu().numpy()
     merger = LF_segment_merger(segments, embeddings, LF)
     result_masks = merger.get_result_masks()
     torch.save(result_masks, "merged.pt")
