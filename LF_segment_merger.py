@@ -189,7 +189,12 @@ class LF_segment_merger:
             central_mask_num
         )
         optimizer = GreedyOptimizer(
-            sim_matrix, segment_matrix, central_mask, segment_indices
+            sim_matrix,
+            segment_matrix,
+            central_mask,
+            segment_indices,
+            central_mask_num,
+            self.LF,
         )
         matches = optimizer.run()
         return matches
