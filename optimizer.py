@@ -1,5 +1,8 @@
 import torch
 from utils import unravel_index, MERGER_CONFIG
+import os
+import numpy as np
+from PIL import Image
 
 
 class GreedyOptimizer:
@@ -9,9 +12,15 @@ class GreedyOptimizer:
         segment_matrix,
         central_segment,
         segment_indices,
+        central_segment_num,
+        LF,
+        verbose=MERGER_CONFIG["verbose"],
         lambda_reg=MERGER_CONFIG["lambda-reg"],
         min_similarity=MERGER_CONFIG["min-similarity"],
     ):
+        self.central_segment_num = central_segment_num
+        self.LF = LF
+        self.verbose = verbose
         self.segment_indices = segment_indices
         self.min_similarity = min_similarity
         self.segment_matrix = segment_matrix
@@ -22,6 +31,29 @@ class GreedyOptimizer:
         self.similarities_initial = torch.clone(self.similarities)
         self.mask_centroids, self.central_segment_centroid = self.get_masks_centroids()
         self.reg_matrix = torch.zeros_like(similarities).cuda()
+        if self.verbose:
+            os.makedirs(
+                f"LF_ransac_output/optimizer/{central_segment_num}", exist_ok=True
+            )
+            central_segment_im = self.get_segment_image(
+                self.central_segment, self.LF.shape[0] // 2, self.LF.shape[1] // 2
+            )
+            central_segment_im.save(
+                f"LF_ransac_output/optimizer/{central_segment_num}/central.png"
+            )
+
+    @torch.no_grad()
+    def get_segment_image(self, segment, s, t):
+        mask_image = (
+            (self.LF[s, t] * segment[:, :, None])
+            .detach()
+            .cpu()
+            .numpy()
+            .astype(np.uint8)
+        )
+        mask_image[mask_image == 0] = 255
+        im = Image.fromarray(mask_image)
+        return im
 
     def get_masks_centroids(self, eps=1e-9):
         masks = self.segment_matrix.reshape(
@@ -110,6 +142,19 @@ if __name__ == "__main__":
     segment_matrix = torch.load("segment_matrix.pt")
     segment_indices = torch.load("segment_indices.pt")
     central_mask = torch.load("central_mask.pt")
-    opt = GreedyOptimizer(sim_matrix, segment_matrix, central_mask, segment_indices)
+    from data import LFDataset
+    from utils import resize_LF
+
+    dataset = LFDataset("UrbanLF_Syn/val")
+    LF = torch.tensor(dataset[3]).detach().cpu().numpy()
+    LF = torch.tensor(resize_LF(LF, 256, 341)).cuda()
+    opt = GreedyOptimizer(
+        sim_matrix,
+        segment_matrix,
+        central_mask,
+        segment_indices,
+        3350,
+        LF,
+    )
     result = opt.run()
     print(result)
