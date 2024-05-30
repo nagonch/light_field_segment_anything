@@ -112,6 +112,30 @@ class GreedyOptimizer:
             ind_num, segment_num = unravel_index(
                 function_val.argmax(), (self.n_subviews, self.n_segments)
             )
+            if self.verbose:
+                os.makedirs(
+                    f"LF_ransac_output/optimizer/{self.central_segment_num}/{str(i).zfill(4)}",
+                    exist_ok=True,
+                )
+                function_squeezed = function_val.reshape(-1)
+                segments_squeezed = self.segment_matrix.reshape(
+                    -1, self.segment_matrix.shape[-2], self.segment_matrix.shape[-1]
+                )
+                sorted = torch.argsort(function_squeezed, descending=True)[
+                    : MERGER_CONFIG["top-n-segments-visualization"]
+                ]
+                segments_squeezed = segments_squeezed[sorted, :, :]
+                sorted = unravel_index(sorted, (self.n_subviews, self.n_segments))
+                for top_k, (segment_vis, subview_ind) in enumerate(
+                    zip(segments_squeezed, sorted[:, 0])
+                ):
+                    s, t = unravel_index(
+                        subview_ind, (self.LF.shape[0], self.LF.shape[1])
+                    )
+                    seg_img = self.get_segment_image(segment_vis, s, t)
+                    seg_img.save(
+                        f"LF_ransac_output/optimizer/{self.central_segment_num}/{str(i).zfill(4)}/{str(top_k).zfill(2)}.png"
+                    )
             self.similarities[ind_num] = torch.ones_like(self.similarities[ind_num]) * (
                 -torch.inf
             )
