@@ -5,14 +5,11 @@ from utils import (
     visualize_segments,
     SAM_CONFIG,
     MERGER_CONFIG,
-    save_LF_image,
     visualize_segmentation_mask,
 )
-from data import get_LF
 from sam_functions import get_sam
 from plenpy.lightfields import LightField
 import logging
-from scipy.io import loadmat
 from data import LFDataset
 from LF_segment_merger import LF_segment_merger
 
