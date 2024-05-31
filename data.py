@@ -8,18 +8,6 @@ from utils import save_LF_image
 from torchvision.transforms.functional import resize
 
 
-def get_LF(dir):
-    subviews = []
-    for img in list(sorted(os.listdir(dir))):
-        path = dir + "/" + img
-        subviews.append(np.array(Image.open(path))[:, :, :3])
-    n_apertures = int(np.sqrt(len(subviews)))
-    u, v, c = subviews[0].shape
-    LF = np.stack(subviews).reshape(n_apertures, n_apertures, u, v, c).astype(np.uint8)
-
-    return LF
-
-
 class LFDataset(Dataset):
     def __init__(self, data_path, return_disparity=False):
         self.data_path = data_path
