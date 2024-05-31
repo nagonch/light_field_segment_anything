@@ -103,6 +103,15 @@ class SimpleSAM:
         )
         return result_masks
 
+    @torch.no_grad()
+    def postprocess_embeddings(self):
+        emd_dict = {}
+        for item in os.listdir("embeddings"):
+            if item.endswith("pt"):
+                emd_dict.update(torch.load(f"embeddings/{item}"))
+                os.remove(f"embeddings/{item}")
+        torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
+
 
 def get_sam():
     sam = sam_model_registry["vit_h"](checkpoint=SAM_CONFIG["model-path"])
