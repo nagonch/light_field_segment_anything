@@ -152,5 +152,6 @@ def get_process_to_segments_dict(
 
 
 if __name__ == "__main__":
-    segments = torch.load("merged.pt").detach().cpu().numpy()
-    visualize_segmentation_mask(segments, "segments.mat")
+    pass
+    # segments = torch.load("merged.pt").detach().cpu().numpy()
+    # visualize_segmentation_mask(segments, "segments.mat")

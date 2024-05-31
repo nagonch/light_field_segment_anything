@@ -162,23 +162,24 @@ class GreedyOptimizer:
 
 
 if __name__ == "__main__":
-    sim_matrix = torch.load("sim_matrix.pt")
-    segment_matrix = torch.load("segment_matrix.pt")
-    segment_indices = torch.load("segment_indices.pt")
-    central_mask = torch.load("central_mask.pt")
-    from data import LFDataset
-    from utils import resize_LF
+    pass
+    # sim_matrix = torch.load("sim_matrix.pt")
+    # segment_matrix = torch.load("segment_matrix.pt")
+    # segment_indices = torch.load("segment_indices.pt")
+    # central_mask = torch.load("central_mask.pt")
+    # from data import LFDataset
+    # from utils import resize_LF
 
-    dataset = LFDataset("UrbanLF_Syn/val")
-    LF = torch.tensor(dataset[3]).detach().cpu().numpy()
-    LF = torch.tensor(resize_LF(LF, 256, 341)).cuda()
-    opt = GreedyOptimizer(
-        sim_matrix,
-        segment_matrix,
-        central_mask,
-        segment_indices,
-        3350,
-        LF,
-    )
-    result = opt.run()
-    print(result)
+    # dataset = LFDataset("UrbanLF_Syn/val")
+    # LF = torch.tensor(dataset[3]).detach().cpu().numpy()
+    # LF = torch.tensor(resize_LF(LF, 256, 341)).cuda()
+    # opt = GreedyOptimizer(
+    #     sim_matrix,
+    #     segment_matrix,
+    #     central_mask,
+    #     segment_indices,
+    #     3350,
+    #     LF,
+    # )
+    # result = opt.run()
+    # print(result)
