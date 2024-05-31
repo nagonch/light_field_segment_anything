@@ -36,7 +36,6 @@ def main(
     merged_filename=MERGER_CONFIG["merged-filename"],
     segments_checkpoint=SAM_CONFIG["sam-segments-checkpoint"],
     merged_checkpoint=MERGER_CONFIG["merged-checkpoint"],
-    vis_filename=MERGER_CONFIG["vis-filename"],
 ):
     if segments_checkpoint and os.path.exists(segments_filename):
         segments = torch.load(segments_filename).cuda()
@@ -48,7 +47,7 @@ def main(
         del simple_sam
         torch.cuda.empty_cache()
     if merged_checkpoint and os.path.exists(merged_filename):
-        merged_segments = torch.load(merged_filename)
+        merged_segments = torch.load(merged_filename).detach().cpu().numpy()
     else:
         merger = LF_segment_merger(
             torch.clone(segments), torch.load("embeddings.pt"), LF
@@ -76,5 +75,4 @@ if __name__ == "__main__":
     dataset = LFDataset("UrbanLF_Syn/val")
     LF = dataset[3].detach().cpu().numpy()
     LF_vis = LightField(LF)
-    # LF_vis.show()
     segments = main(LF)
