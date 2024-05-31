@@ -4,15 +4,16 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from utils import SAM_CONFIG
 from data import HCIOldDataset
 from torchvision.transforms.functional import resize
+import numpy as np
+from torch.nn import functional as F
 
 
-class SimpleSAM(nn.Module):
+class SimpleSAM:
 
     def __init__(
         self,
         sam_generator,
     ):
-        super().__init__()
         self.generator = sam_generator
 
     @torch.no_grad()
@@ -29,15 +30,32 @@ class SimpleSAM(nn.Module):
         return batch
 
     @torch.no_grad()
+    def get_masks_embeddings(self, masks, img_embedding):
+        result_embeddings = []
+        for mask in masks:
+            mask_x, mask_y = torch.where(mask == 1)
+            embeddings = img_embedding[:, :, mask_x, mask_y].mean(axis=-1)
+            result_embeddings.append(embeddings)
+        result = torch.cat(result_embeddings, dim=0)
+        return result
+
+    @torch.no_grad()
     def forward(
         self,
-        input_LF,
+        input_img,
     ):
-        embedding = self.generator.predictor.model.image_encoder(
-            self.preprocess_batch(torch.tensor(input_LF).cuda().permute(2, 0, 1)[None])
+        u, v, _ = input_img.shape
+        img_embedding = self.generator.predictor.model.image_encoder(
+            self.preprocess_batch(torch.tensor(input_img).cuda().permute(2, 0, 1)[None])
         )
-        masks = self.generator.generate(input_LF)
-        return masks
+        img_embedding = F.interpolate(
+            img_embedding,
+            size=(int(u), int(v)),
+            mode="bilinear",
+        )
+        masks = self.generator.generate(input_img)
+        embeddings = self.get_masks_embeddings(masks, img_embedding)
+        return masks, embeddings
 
 
 def get_sam():
