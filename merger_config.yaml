@@ -1,0 +1,16 @@
+min-mask-area-final: 0.001
+min-similarity: 0.9
+verbose: False
+top-n-segments-visualization: 10
+merged-filename: "merged.pt"
+merged-checkpoint: True
+mask-test-threshold: 5
+n-parallel-processes: 1
+ransac-max-outliers: 0.05
+ransac-max-iterations: 1
+embedding-coeff: 1
+lambda-reg: 0.3
+k-cutoff: 3
+k-means-reg-parameter: 0.01
+k-means-n-iterations: 100
+min-central-segments-for-parallel: 50

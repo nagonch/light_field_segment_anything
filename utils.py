@@ -8,14 +8,18 @@ from scipy.io import savemat
 from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
+from typing import Tuple
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
-with open("config.yaml") as f:
-    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+with open("sam_config.yaml") as f:
+    SAM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
+with open("merger_config.yaml") as f:
+    MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, filename):
+def visualize_segmentation_mask(segments, filename=None):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
     vis = np.transpose(
@@ -25,10 +29,11 @@ def visualize_segmentation_mask(segments, filename):
         ).reshape(s, u, t, v, 3),
         (0, 2, 1, 3, 4),
     )
-    savemat(
-        filename,
-        {"LF": vis},
-    )
+    if filename:
+        savemat(
+            filename,
+            {"LF": vis},
+        )
     segments = LightField(vis)
     segments.show()
 
@@ -42,6 +47,44 @@ def visualize_segments(segments, filename):
     )
     im = Image.fromarray(vis)
     im.save(filename)
+
+
+def unravel_index(
+    indices: torch.LongTensor,
+    shape: Tuple[int, ...],
+) -> torch.LongTensor:
+    r"""Converts flat indices into unraveled coordinates in a target shape.
+
+    This is a `torch` implementation of `numpy.unravel_index`.
+
+    Args:
+        indices: A tensor of (flat) indices, (*, N).
+        shape: The targeted shape, (D,).
+
+    Returns:
+        The unraveled coordinates, (*, N, D).
+    """
+
+    coord = []
+
+    for dim in reversed(shape):
+        coord.append(indices % dim)
+        indices = indices // dim
+
+    coord = torch.stack(coord[::-1], dim=-1).cuda()
+
+    return coord
+
+
+def resize_LF(LF, new_u, new_v):
+    s, t, u, v, _ = LF.shape
+    results = []
+    for s_i in range(s):
+        for t_i in range(t):
+            subview = Image.fromarray(LF[s_i, t_i]).resize((new_v, new_u))
+            subview = np.array(subview)
+            results.append(subview)
+    return np.stack(results).reshape(s, t, new_u, new_v, 3)
 
 
 def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
@@ -72,63 +115,25 @@ def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
     im.save(filename)
 
 
-def shift_binary_mask(binary_mask, uv_shift):
-    mask_u, mask_v = torch.where(binary_mask == 1)
-    mask_u += uv_shift[0]
-    mask_v += uv_shift[1]
-    filtering_mask = torch.ones_like(mask_u).to(torch.bool).cuda()
-    for mask in [
-        mask_u >= 0,
-        mask_u < binary_mask.shape[0],
-        mask_v >= 0,
-        mask_v < binary_mask.shape[1],
-    ]:
-        filtering_mask = torch.logical_and(filtering_mask, mask)
-    mask_u = mask_u[filtering_mask]
-    mask_v = mask_v[filtering_mask]
-    new_binary_mask = torch.zeros_like(binary_mask).cuda()
-    new_binary_mask[mask_u, mask_v] = 1
-    return new_binary_mask
-
-
-def project_point_onto_line(x, v, y):
-    # Calculate the vector from x to y
-    a = y - x
-
-    # Calculate the projection of a onto v
-    projection = torch.dot(a, v) / torch.dot(v, v) * v
-
-    # Calculate the scalar t
-    t = torch.dot(projection, v) / torch.dot(v, v)
-
-    return t
-
-
-def test_mask(mask, p, v):
-    v_len = torch.norm(v)
-    u_mask, v_mask = torch.where(mask == 1)
-    error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
-    return error.min() <= CONFIG["mask-test-threshold"]
-
-
-def binary_mask_centroid(mask):
-    nonzero_indices = torch.nonzero(mask)
-    centroid = nonzero_indices.float().mean(axis=0)
-    return centroid
-
-
-def get_subview_indices(s_size, t_size):
+def get_subview_indices(s_size, t_size, remove_central=False):
     rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
     cols = torch.arange(t_size).repeat(s_size)
 
     indices = torch.stack((rows, cols), dim=-1).cuda()
+    if remove_central:
+        indices = torch.stack(
+            [
+                element
+                for element in indices
+                if (element != torch.tensor([s_size // 2, t_size // 2]).cuda()).any()
+            ]
+        )
     return indices
 
 
 def get_process_to_segments_dict(
-    embeddings_filename, n_processes=CONFIG["n-parallel-processes"]
+    embeddings_dict, n_processes=MERGER_CONFIG["n-parallel-processes"]
 ):
-    embeddings_dict = torch.load(embeddings_filename)
     segment_nums = torch.Tensor(list(embeddings_dict.keys())).cuda().long()
     classes = (
         torch.stack([torch.tensor(emb[1]) for emb in embeddings_dict.values()])
@@ -144,17 +149,6 @@ def get_process_to_segments_dict(
         corresponding_segments = segment_nums[torch.where(cluster_nums == cluster_num)]
         result_mapping[cluster_num.item()] = corresponding_segments
     return result_mapping
-
-
-def calculate_outliers(tensor, k=1.5):
-    q1 = torch.quantile(tensor, 0.25)
-    q3 = torch.quantile(tensor, 0.75)
-    iqr = q3 - q1
-    lower_bound = q1 - k * iqr
-    upper_bound = q3 + k * iqr
-    outliers = torch.logical_or(tensor < lower_bound, tensor > upper_bound)
-    n_outliers = torch.sum(outliers).item()
-    return n_outliers
 
 
 if __name__ == "__main__":

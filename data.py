@@ -1,5 +1,4 @@
 import torch
-from utils import CONFIG
 import numpy as np
 from PIL import Image
 import os
@@ -11,10 +10,9 @@ from torchvision.transforms.functional import resize
 
 def get_LF(dir):
     subviews = []
-    u = v = CONFIG["lf-subview-max-size"]
     for img in list(sorted(os.listdir(dir))):
         path = dir + "/" + img
-        subviews.append(np.array(Image.open(path).resize((u, v)))[:, :, :3])
+        subviews.append(np.array(Image.open(path))[:, :, :3])
     n_apertures = int(np.sqrt(len(subviews)))
     u, v, c = subviews[0].shape
     LF = np.stack(subviews).reshape(n_apertures, n_apertures, u, v, c).astype(np.uint8)
@@ -23,8 +21,9 @@ def get_LF(dir):
 
 
 class LFDataset(Dataset):
-    def __init__(self, data_path):
+    def __init__(self, data_path, return_disparity=False):
         self.data_path = data_path
+        self.return_disparity = return_disparity
         self.frames = sorted(
             [
                 item
@@ -40,12 +39,20 @@ class LFDataset(Dataset):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         imgs = []
+        disparities = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
-            if not filename.endswith(".png"):
+            if (
+                filename.endswith("depth.png")
+                or filename.endswith("disparity.png")
+                or filename.endswith("label.png")
+            ):
                 continue
-            img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
-            img = (torch.tensor(img))[:, :, :3]
-            imgs.append(img)
+            if filename.endswith(".png"):
+                img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
+                img = (torch.tensor(img))[:, :, :3]
+                imgs.append(img)
+            elif filename.endswith("disparity.npy"):
+                disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -56,11 +63,39 @@ class LFDataset(Dataset):
             v,
             c,
         )
-        return LF
+        if self.return_disparity:
+            disparities = np.stack(disparities).reshape(
+                n_apertures,
+                n_apertures,
+                u,
+                v,
+            )
+            return LF, disparities
+        else:
+            return LF
 
 
 if __name__ == "__main__":
-    dataset = LFDataset("UrbanLF_Syn/test")
-    img = dataset[0][2:-2, 2:-2]
+    from torch.nn.functional import interpolate
+    from matplotlib import pyplot as plt
+
+    dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
+    img, disp = dataset[3]
+    disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
+    disp = (
+        interpolate(disp, (256, 341))[:, 0, :, :]
+        .reshape(9, 9, 256, 341)
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    segments = torch.load("merged.pt")
+    disparity = (disp * (segments == 3350)).mean()
+    print(disparity)
+    # plt.imshow(disp[4, 4], cmap="gray")
+    # plt.show()
+    # plt.close()
+    raise
+    print(img.shape, disp.shape)
     # print(img.shape)
-    save_LF_image(img, resize_to=None)
+    # save_LF_image(img, resize_to=None)
