@@ -77,15 +77,17 @@ class HCIOldDataset:
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
         gt_depth = torch.tensor(np.array(scene["GT_DEPTH"])).cuda()
         LF = torch.tensor(np.array(scene["LF"])).cuda()
-        return LF, gt_depth
+        labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        return LF, gt_depth, labels
 
 
 if __name__ == "__main__":
     from plenpy.lightfields import LightField
     import imgviz
+    from utils import visualize_segmentation_mask
 
     HCI_dataset = HCIOldDataset()
-    LF, depth = HCI_dataset.get_scene("stillLife")
+    LF, depth, labels = HCI_dataset.get_scene("horses")
     s, t, u, v, _ = LF.shape
     LF = LightField(LF.detach().cpu().numpy())
     LF.show()
@@ -108,3 +110,4 @@ if __name__ == "__main__":
     )
     depth = LightField(vis)
     depth.show()
+    visualize_segmentation_mask(labels)
