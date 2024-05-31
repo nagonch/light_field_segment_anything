@@ -8,7 +8,6 @@ from scipy.io import savemat
 from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
-import math
 from typing import Tuple
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
@@ -116,51 +115,6 @@ def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
     im.save(filename)
 
 
-def shift_binary_mask(binary_mask, uv_shift):
-    mask_u, mask_v = torch.where(binary_mask == 1)
-    mask_u += uv_shift[0]
-    mask_v += uv_shift[1]
-    filtering_mask = torch.ones_like(mask_u).to(torch.bool).cuda()
-    for mask in [
-        mask_u >= 0,
-        mask_u < binary_mask.shape[0],
-        mask_v >= 0,
-        mask_v < binary_mask.shape[1],
-    ]:
-        filtering_mask = torch.logical_and(filtering_mask, mask)
-    mask_u = mask_u[filtering_mask]
-    mask_v = mask_v[filtering_mask]
-    new_binary_mask = torch.zeros_like(binary_mask).cuda()
-    new_binary_mask[mask_u, mask_v] = 1
-    return new_binary_mask
-
-
-def project_point_onto_line(x, v, y):
-    # Calculate the vector from x to y
-    a = y - x
-
-    # Calculate the projection of a onto v
-    projection = torch.dot(a, v) / torch.dot(v, v) * v
-
-    # Calculate the scalar t
-    t = torch.dot(projection, v) / torch.dot(v, v)
-
-    return t
-
-
-def test_mask(mask, p, v):
-    v_len = torch.norm(v)
-    u_mask, v_mask = torch.where(mask == 1)
-    error = torch.abs(v[0] * (u_mask - p[0]) + v[1] * (v_mask - p[1])) / v_len
-    return error.min() <= MERGER_CONFIG["mask-test-threshold"]
-
-
-def binary_mask_centroid(mask):
-    nonzero_indices = torch.nonzero(mask)
-    centroid = nonzero_indices.float().mean(axis=0)
-    return centroid
-
-
 def get_subview_indices(s_size, t_size, remove_central=False):
     rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
     cols = torch.arange(t_size).repeat(s_size)
@@ -195,35 +149,6 @@ def get_process_to_segments_dict(
         corresponding_segments = segment_nums[torch.where(cluster_nums == cluster_num)]
         result_mapping[cluster_num.item()] = corresponding_segments
     return result_mapping
-
-
-def calculate_outliers(tensor, k=1.5):
-    q1 = torch.quantile(tensor, 0.25)
-    q3 = torch.quantile(tensor, 0.75)
-    iqr = q3 - q1
-    lower_bound = q1 - k * iqr
-    upper_bound = q3 + k * iqr
-    outliers = torch.logical_or(tensor < lower_bound, tensor > upper_bound)
-    n_outliers = torch.sum(outliers).item()
-    return n_outliers
-
-
-def masks_regularization_score(masks, eps=1e-9):
-    masks_x, masks_y = torch.meshgrid(
-        (torch.arange(masks.shape[1]).cuda(), torch.arange(masks.shape[2]).cuda()),
-        indexing="ij",
-    )
-    masks_x = masks_x.repeat(masks.shape[0], 1, 1)
-    masks_y = masks_y.repeat(masks.shape[0], 1, 1)
-    centroids_x = (masks_x * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-    centroids_y = (masks_y * masks).sum(axis=(1, 2)) / masks.sum(axis=(1, 2))
-    centroids = torch.stack((centroids_y, centroids_x)).T
-    centroids = centroids[~(torch.isnan(centroids).any(axis=1)), :]
-    centroids -= centroids.mean(axis=0)
-    cov = torch.cov(centroids.T)
-    eigvals = torch.linalg.eigvals(cov).abs()
-    score = eigvals.min() / (eigvals.max() + eps)
-    return score
 
 
 if __name__ == "__main__":
