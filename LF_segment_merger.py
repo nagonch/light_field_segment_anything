@@ -265,11 +265,11 @@ def get_merged_segments(segments, embeddings):
 if __name__ == "__main__":
     pass
     # from scipy.io import loadmat
-    # from data import LFDataset
+    # from data import UrbanLFDataset
 
     # segments = torch.load("segments.pt").cuda()
     # embeddings = torch.load("embeddings.pt")
-    # dataset = LFDataset("UrbanLF_Syn/val")
+    # dataset = UrbanLFDataset("val")
     # LF = dataset[3].detach().cpu().numpy()
     # merger = LF_segment_merger(segments, embeddings, LF)
     # result_masks = merger.get_result_masks()

@@ -10,7 +10,7 @@ from utils import (
 from sam_functions import get_sam
 from plenpy.lightfields import LightField
 import logging
-from data import LFDataset
+from data import UrbanLFDataset
 from LF_segment_merger import LF_segment_merger
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
@@ -69,7 +69,7 @@ def main(
 
 
 if __name__ == "__main__":
-    dataset = LFDataset("UrbanLF_Syn/val")
+    dataset = UrbanLFDataset("val")
     LF = dataset[3].detach().cpu().numpy()
     LF_vis = LightField(LF)
     segments = main(LF)

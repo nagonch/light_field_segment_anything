@@ -6,9 +6,9 @@ from torch.utils.data import Dataset
 import math
 
 
-class LFDataset(Dataset):
-    def __init__(self, data_path, return_disparity=False):
-        self.data_path = data_path
+class UrbanLFDataset(Dataset):
+    def __init__(self, type, return_disparity=False):
+        self.data_path = f"UrbanLF_Syn/{type}"
         self.return_disparity = return_disparity
         self.frames = sorted(
             [
@@ -49,7 +49,7 @@ class LFDataset(Dataset):
             v,
             c,
         )
-        if self.return_disparity:
+        if self.return_disparity and disparities:
             disparities = np.stack(disparities).reshape(
                 n_apertures,
                 n_apertures,
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # from torch.nn.functional import interpolate
     # from matplotlib import pyplot as plt
 
-    # dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
+    # dataset = UrbanLFDataset("val", return_disparity=True)
     # img, disp = dataset[3]
     # disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
     # disp = (
