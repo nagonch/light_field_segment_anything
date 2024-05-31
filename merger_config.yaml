@@ -3,7 +3,7 @@ min-similarity: 0.9
 verbose: False
 top-n-segments-visualization: 10
 merged-filename: "merged.pt"
-merged-checkpoint: True
+merged-checkpoint: False
 mask-test-threshold: 5
 n-parallel-processes: 1
 ransac-max-outliers: 0.05

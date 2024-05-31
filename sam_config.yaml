@@ -1,8 +1,8 @@
 min-mask-area: 0.001
-model-path: "SAM_model/sam_vit_b.pth"
+model-path: "SAM_model/sam_vit_h.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
-sam-segments-checkpoint: True
+sam-segments-checkpoint: False
 points-per-side: 40
 points-per-batch: 64
 points-per-batch-filtering: 64
