@@ -67,22 +67,44 @@ class HCIOldDataset:
         self.data_path = data_path
         self.scene_to_path = {}
         for scene in [
-            "buddha2",
             "horses",
             "papillon",
             "stillLife",
         ]:
-            self.scene_to_path[scene] = f"{data_path}/{scene}""
+            self.scene_to_path[scene] = f"{data_path}/{scene}"
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = torch.tensor(np.array(scene["GT_DEPTH"])).cuda()
         LF = torch.tensor(np.array(scene["LF"])).cuda()
-        return LF
+        return LF, gt_depth
 
 
 if __name__ == "__main__":
     from plenpy.lightfields import LightField
+    import imgviz
 
     HCI_dataset = HCIOldDataset()
-    LF = LightField(HCI_dataset.get_scene("buddha2").detach().cpu().numpy())
+    LF, depth = HCI_dataset.get_scene("stillLife")
+    s, t, u, v, _ = LF.shape
+    LF = LightField(LF.detach().cpu().numpy())
     LF.show()
+    depth = (
+        (torch.nan_to_num(depth, posinf=0.0).permute(0, 2, 1, 3))
+        .reshape(s * u, t * v)
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    vis = np.transpose(
+        imgviz.depth2rgb(depth).reshape(
+            s,
+            u,
+            t,
+            v,
+            3,
+        ),
+        (0, 2, 1, 3, 4),
+    )
+    depth = LightField(vis)
+    depth.show()
