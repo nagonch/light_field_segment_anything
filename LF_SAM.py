@@ -60,9 +60,9 @@ class SimpleSAM:
     @torch.no_grad()
     def segment_LF(self, LF):
         os.makedirs("embeddings", exist_ok=True)
-        result_masks = []
+        os.makedirs("segments", exist_ok=True)
         max_segment_num = -1
-        s, t, u, v, c = LF.shape
+        self.s, self.t, self.u, self.v, c = LF.shape
         LF = LF.reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
         for subview_num, subview in tqdm(enumerate(LF)):
             masks, embeddings = self.forward(subview)
@@ -94,23 +94,32 @@ class SimpleSAM:
                 embeddings_map,
                 f"embeddings/{str(subview_num).zfill(4)}.pt",
             )
-            del embeddings_map
+            torch.save(
+                segments,
+                f"segments/{str(subview_num).zfill(4)}.pt",
+            )
             max_segment_num = segments.max()
-            result_masks.append(segments)
-
-        result_masks = torch.stack(result_masks).reshape(
-            s, t, segments_result.shape[-2], segments_result.shape[-1]
-        )
-        return result_masks
+            del embeddings_map
+            del segments
 
     @torch.no_grad()
-    def postprocess_embeddings(self):
+    def postprocess_data(self):
         emd_dict = {}
         for item in os.listdir("embeddings"):
             if item.endswith("pt"):
                 emd_dict.update(torch.load(f"embeddings/{item}"))
                 os.remove(f"embeddings/{item}")
         torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
+        del emd_dict
+        result_masks = []
+        for item in os.listdir("segments"):
+            if item.endswith("pt"):
+                result_masks.append(torch.load(f"segments/{item}"))
+                os.remove(f"segments/{item}")
+        torch.save(
+            torch.stack(result_masks).reshape(self.s, self.t, self.u, self.v),
+            SAM_CONFIG["segments-filename"],
+        )
 
 
 def get_sam():
