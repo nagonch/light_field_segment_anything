@@ -7,10 +7,10 @@ from utils import (
     MERGER_CONFIG,
     visualize_segmentation_mask,
 )
-from sam_functions import get_sam
+from LF_SAM import get_sam
 from plenpy.lightfields import LightField
 import logging
-from data import UrbanLFDataset
+from data import UrbanLFDataset, HCIOldDataset
 from LF_segment_merger import LF_segment_merger
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
@@ -34,28 +34,25 @@ def main(
     segments_checkpoint=SAM_CONFIG["sam-segments-checkpoint"],
     merged_checkpoint=MERGER_CONFIG["merged-checkpoint"],
 ):
-    if segments_checkpoint and os.path.exists(segments_filename):
-        segments = torch.load(segments_filename).cuda()
-    else:
+    if not (segments_checkpoint and os.path.exists(segments_filename)):
         simple_sam = get_sam()
-        segments = simple_sam.segment_LF(LF)
-        simple_sam.postprocess_embeddings()
-        torch.save(segments, segments_filename)
+        simple_sam.segment_LF(LF)
+        simple_sam.postprocess_data()
         del simple_sam
         torch.cuda.empty_cache()
+    segments = torch.load(segments_filename).cuda()[1:-1, 1:-1]
+    # LF = LF[1:-1, 1:-1]
+    visualize_segmentation_mask(
+        segments.detach().cpu().numpy(),
+    )
     if merged_checkpoint and os.path.exists(merged_filename):
         merged_segments = torch.load(merged_filename).detach().cpu().numpy()
     else:
-        merger = LF_segment_merger(
-            torch.clone(segments), torch.load("embeddings.pt"), LF
-        )
+        merger = LF_segment_merger(segments, torch.load("embeddings.pt"), LF)
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(merged_segments, merged_filename)
     LF = LightField(LF)
     LF.show()
-    visualize_segmentation_mask(
-        segments.detach().cpu().numpy(),
-    )
     visualize_segmentation_mask(
         merged_segments,
     )
@@ -69,7 +66,9 @@ def main(
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFDataset("val")
-    LF = dataset[3].detach().cpu().numpy()
+    # dataset = UrbanLFDataset("val")
+    # LF = dataset[3].detach().cpu().numpy()
+    dataset = HCIOldDataset()
+    LF, _, _ = dataset.get_scene("horses")
     LF_vis = LightField(LF)
     segments = main(LF)
