@@ -75,8 +75,8 @@ class HCIOldDataset:
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
-        gt_depth = torch.tensor(np.array(scene["GT_DEPTH"])).cuda()
-        LF = torch.tensor(np.array(scene["LF"])).cuda()
+        gt_depth = np.array(scene["GT_DEPTH"])
+        LF = np.array(scene["LF"])
         labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
         return LF, gt_depth, labels
 
