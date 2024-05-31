@@ -125,7 +125,9 @@ class SimpleSAM:
 def get_sam():
     sam = sam_model_registry["vit_h"](checkpoint=SAM_CONFIG["model-path"])
     sam = sam.to(device="cuda")
-    model = SimpleSAM(SamAutomaticMaskGenerator(sam))
+    model = SimpleSAM(
+        SamAutomaticMaskGenerator(sam, points_per_side=SAM_CONFIG["points-per-side"])
+    )
 
     return model
 
