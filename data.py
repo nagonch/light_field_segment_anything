@@ -76,26 +76,26 @@ class LFDataset(Dataset):
 
 
 if __name__ == "__main__":
-    from torch.nn.functional import interpolate
-    from matplotlib import pyplot as plt
+    pass
+    # from torch.nn.functional import interpolate
+    # from matplotlib import pyplot as plt
 
-    dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
-    img, disp = dataset[3]
-    disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
-    disp = (
-        interpolate(disp, (256, 341))[:, 0, :, :]
-        .reshape(9, 9, 256, 341)
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    segments = torch.load("merged.pt")
-    disparity = (disp * (segments == 3350)).mean()
-    print(disparity)
+    # dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
+    # img, disp = dataset[3]
+    # disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
+    # disp = (
+    #     interpolate(disp, (256, 341))[:, 0, :, :]
+    #     .reshape(9, 9, 256, 341)
+    #     .detach()
+    #     .cpu()
+    #     .numpy()
+    # )
+    # segments = torch.load("merged.pt")
+    # disparity = (disp * (segments == 3350)).mean()
+    # print(disparity)
     # plt.imshow(disp[4, 4], cmap="gray")
     # plt.show()
     # plt.close()
-    raise
-    print(img.shape, disp.shape)
+    # print(img.shape, disp.shape)
     # print(img.shape)
     # save_LF_image(img, resize_to=None)
