@@ -69,18 +69,14 @@ class HCIOldDataset:
         for scene in [
             "buddha2",
             "horses",
-            "medieval",
-            "monasRoom",
             "papillon",
             "stillLife",
         ]:
-            self.scene_to_path[scene] = f"{data_path}/blender/{scene}"
-        for scene in ["couple", "cube", "maria", "pyramide", "statue", "transparency"]:
-            self.scene_to_path[scene] = f"{data_path}/gantry/{scene}"
+            self.scene_to_path[scene] = f"{data_path}/{scene}""
 
     def get_scene(self, name):
-        LF = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")["LF"]
-        LF = torch.tensor(np.array(LF)).cuda()
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        LF = torch.tensor(np.array(scene["LF"])).cuda()
         return LF
 
 
@@ -88,5 +84,5 @@ if __name__ == "__main__":
     from plenpy.lightfields import LightField
 
     HCI_dataset = HCIOldDataset()
-    LF = LightField(HCI_dataset.get_scene("transparency").detach().cpu().numpy())
+    LF = LightField(HCI_dataset.get_scene("buddha2").detach().cpu().numpy())
     LF.show()
