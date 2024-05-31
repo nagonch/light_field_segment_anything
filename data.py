@@ -4,11 +4,12 @@ from PIL import Image
 import os
 from torch.utils.data import Dataset
 import math
+import h5py
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, type, return_disparity=False):
-        self.data_path = f"UrbanLF_Syn/{type}"
+    def __init__(self, section, return_disparity=False):
+        self.data_path = f"UrbanLF_Syn/{section}"
         self.return_disparity = return_disparity
         self.frames = sorted(
             [
@@ -61,27 +62,31 @@ class UrbanLFDataset(Dataset):
             return LF
 
 
-if __name__ == "__main__":
-    pass
-    # from torch.nn.functional import interpolate
-    # from matplotlib import pyplot as plt
+class HCIOldDataset:
+    def __init__(self, data_path="HCI_dataset_old"):
+        self.data_path = data_path
+        self.scene_to_path = {}
+        for scene in [
+            "buddha2",
+            "horses",
+            "medieval",
+            "monasRoom",
+            "papillon",
+            "stillLife",
+        ]:
+            self.scene_to_path[scene] = f"{data_path}/blender/{scene}"
+        for scene in ["couple", "cube", "maria", "pyramide", "statue", "transparency"]:
+            self.scene_to_path[scene] = f"{data_path}/gantry/{scene}"
 
-    # dataset = UrbanLFDataset("val", return_disparity=True)
-    # img, disp = dataset[3]
-    # disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
-    # disp = (
-    #     interpolate(disp, (256, 341))[:, 0, :, :]
-    #     .reshape(9, 9, 256, 341)
-    #     .detach()
-    #     .cpu()
-    #     .numpy()
-    # )
-    # segments = torch.load("merged.pt")
-    # disparity = (disp * (segments == 3350)).mean()
-    # print(disparity)
-    # plt.imshow(disp[4, 4], cmap="gray")
-    # plt.show()
-    # plt.close()
-    # print(img.shape, disp.shape)
-    # print(img.shape)
-    # save_LF_image(img, resize_to=None)
+    def get_scene(self, name):
+        LF = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")["LF"]
+        LF = torch.tensor(np.array(LF)).cuda()
+        return LF
+
+
+if __name__ == "__main__":
+    from plenpy.lightfields import LightField
+
+    HCI_dataset = HCIOldDataset()
+    LF = LightField(HCI_dataset.get_scene("transparency").detach().cpu().numpy())
+    LF.show()
