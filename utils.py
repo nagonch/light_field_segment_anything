@@ -49,6 +49,17 @@ def visualize_segments(segments, filename):
     im.save(filename)
 
 
+def stack_segments(segments):
+    s, t, u, v = segments[0].shape
+    segments_result = np.zeros((s, t, u, v)).astype(np.int32)
+    segment_num = 0
+    for segment in segments:
+        segments_result[segment] = segment_num + 1
+        segment_num += 1
+    segments = segments_result
+    return segments_result
+
+
 def unravel_index(
     indices: torch.LongTensor,
     shape: Tuple[int, ...],

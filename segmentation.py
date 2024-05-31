@@ -7,6 +7,7 @@ from utils import (
     MERGER_CONFIG,
     visualize_segmentation_mask,
 )
+from utils import stack_segments
 from LF_SAM import get_sam
 from plenpy.lightfields import LightField
 import logging
@@ -17,12 +18,17 @@ logging.getLogger("plenpy").setLevel(logging.WARNING)
 
 
 def post_process_segments(segments):
-    u, v = segments.shape[-2:]
+    s, t, u, v = segments.shape
     result_segments = []
     min_mask_area = int(MERGER_CONFIG["min-mask-area-final"] * u * v)
     for i in np.unique(segments)[1:]:
         seg_i = segments == i
-        if seg_i.sum(axis=(2, 3)).mean() >= min_mask_area:
+        seg_sum = seg_i.sum(axis=(2, 3))
+        if (
+            seg_sum.mean() >= min_mask_area
+            and (seg_sum > min_mask_area).sum() / (s * t)
+            >= MERGER_CONFIG["subview-percentage"]
+        ):
             result_segments.append(seg_i)
     return result_segments
 
@@ -41,25 +47,25 @@ def main(
         del simple_sam
         torch.cuda.empty_cache()
     segments = torch.load(segments_filename).cuda()[1:-1, 1:-1]
-    # LF = LF[1:-1, 1:-1]
     visualize_segmentation_mask(
         segments.detach().cpu().numpy(),
     )
     if merged_checkpoint and os.path.exists(merged_filename):
-        merged_segments = torch.load(merged_filename).detach().cpu().numpy()
+        merged_segments = torch.load(merged_filename)
     else:
         merger = LF_segment_merger(segments, torch.load("embeddings.pt"), LF)
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(merged_segments, merged_filename)
     LF = LightField(LF)
     LF.show()
+    merged_segments = post_process_segments(merged_segments)
+    merged_segments = stack_segments(merged_segments)
     visualize_segmentation_mask(
         merged_segments,
     )
-    merged_segments = post_process_segments(merged_segments)
-    for i, segment in enumerate(merged_segments):
+    for i, segment in enumerate(np.unique(merged_segments)):
         visualize_segments(
-            segment.astype(np.uint32),
+            (merged_segments == segment).astype(np.uint32),
             f"imgs/{str(i).zfill(3)}.png",
         )
     return merged_segments
@@ -69,6 +75,6 @@ if __name__ == "__main__":
     # dataset = UrbanLFDataset("val")
     # LF = dataset[3].detach().cpu().numpy()
     dataset = HCIOldDataset()
-    LF, _, _ = dataset.get_scene("horses")
+    LF, _, _ = dataset.get_scene("papillon")
     LF_vis = LightField(LF)
     segments = main(LF)
