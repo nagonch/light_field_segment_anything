@@ -75,10 +75,17 @@ class HCIOldDataset:
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
-        gt_depth = np.array(scene["GT_DEPTH"])
         LF = np.array(scene["LF"])
+        return LF
+
+    def get_labels(self, name):
         labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
-        return LF, gt_depth, labels
+        return labels
+
+    def get_depth(self, name):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        return gt_depth
 
 
 if __name__ == "__main__":
@@ -87,16 +94,14 @@ if __name__ == "__main__":
     from utils import visualize_segmentation_mask
 
     HCI_dataset = HCIOldDataset()
-    LF, depth, labels = HCI_dataset.get_scene("horses")
+    LF = HCI_dataset.get_scene("horses")
+    depth = HCI_dataset.get_depth("horses")
+    labels = HCI_dataset.get_labels("horses")
     s, t, u, v, _ = LF.shape
-    LF = LightField(LF.detach().cpu().numpy())
-    LF.show()
-    depth = (
-        (torch.nan_to_num(depth, posinf=0.0).permute(0, 2, 1, 3))
-        .reshape(s * u, t * v)
-        .detach()
-        .cpu()
-        .numpy()
+    LF_vis = LightField(LF)
+    LF_vis.show()
+    depth = (np.transpose(np.nan_to_num(depth, posinf=0.0), (0, 2, 1, 3))).reshape(
+        s * u, t * v
     )
     vis = np.transpose(
         imgviz.depth2rgb(depth).reshape(
@@ -110,4 +115,4 @@ if __name__ == "__main__":
     )
     depth = LightField(vis)
     depth.show()
-    visualize_segmentation_mask(labels)
+    visualize_segmentation_mask(labels, LF)

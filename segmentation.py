@@ -71,6 +71,6 @@ if __name__ == "__main__":
     # dataset = UrbanLFDataset("val")
     # LF = dataset[3].detach().cpu().numpy()
     dataset = HCIOldDataset()
-    LF, _, _ = dataset.get_scene("papillon")
+    LF = dataset.get_scene("papillon")
     LF_vis = LightField(LF)
     segments = main(LF)
