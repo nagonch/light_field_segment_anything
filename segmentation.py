@@ -55,7 +55,6 @@ def main(
     else:
         merger = LF_segment_merger(segments, torch.load("embeddings.pt"), LF)
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
-        torch.save(merged_segments, merged_filename)
     merged_segments = post_process_segments(merged_segments)
     merged_segments = stack_segments(merged_segments)
     visualize_segmentation_mask(merged_segments, LF)
@@ -64,6 +63,7 @@ def main(
             (merged_segments == segment).astype(np.uint32),
             f"imgs/{str(i).zfill(3)}.png",
         )
+    torch.save(merged_segments, merged_filename)
     return merged_segments
 
 
