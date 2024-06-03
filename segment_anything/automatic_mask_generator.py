@@ -182,18 +182,9 @@ class SamAutomaticMaskGenerator:
         # Write mask records
         curr_anns = []
         for idx in range(len(mask_data["segmentations"])):
-            ann = {
-                "segmentation": mask_data["segmentations"][idx],
-                "area": area_from_rle(mask_data["rles"][idx]),
-                "bbox": box_xyxy_to_xywh(mask_data["boxes"][idx]).tolist(),
-                "predicted_iou": mask_data["iou_preds"][idx].item(),
-                "point_coords": [mask_data["points"][idx].tolist()],
-                "stability_score": mask_data["stability_score"][idx].item(),
-                "crop_box": box_xyxy_to_xywh(mask_data["crop_boxes"][idx]).tolist(),
-            }
-            curr_anns.append(ann)
+            curr_anns.append(torch.tensor(mask_data["segmentations"][idx]).cuda())
 
-        return curr_anns
+        return torch.stack(curr_anns)
 
     def _generate_masks(self, image: np.ndarray) -> MaskData:
         orig_size = image.shape[:2]

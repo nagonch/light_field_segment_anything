@@ -4,11 +4,12 @@ from PIL import Image
 import os
 from torch.utils.data import Dataset
 import math
+import h5py
 
 
-class LFDataset(Dataset):
-    def __init__(self, data_path, return_disparity=False):
-        self.data_path = data_path
+class UrbanLFDataset(Dataset):
+    def __init__(self, section, return_disparity=False):
+        self.data_path = f"UrbanLF_Syn/{section}"
         self.return_disparity = return_disparity
         self.frames = sorted(
             [
@@ -49,7 +50,7 @@ class LFDataset(Dataset):
             v,
             c,
         )
-        if self.return_disparity:
+        if self.return_disparity and disparities:
             disparities = np.stack(disparities).reshape(
                 n_apertures,
                 n_apertures,
@@ -61,27 +62,52 @@ class LFDataset(Dataset):
             return LF
 
 
-if __name__ == "__main__":
-    pass
-    # from torch.nn.functional import interpolate
-    # from matplotlib import pyplot as plt
+class HCIOldDataset:
+    def __init__(self, data_path="HCI_dataset_old"):
+        self.data_path = data_path
+        self.scene_to_path = {}
+        for scene in [
+            "horses",
+            "papillon",
+            "stillLife",
+        ]:
+            self.scene_to_path[scene] = f"{data_path}/{scene}"
 
-    # dataset = LFDataset("UrbanLF_Syn/val", return_disparity=True)
-    # img, disp = dataset[3]
-    # disp = torch.tensor(disp).reshape(-1, 480, 640).cuda()[None].permute(1, 0, 2, 3)
-    # disp = (
-    #     interpolate(disp, (256, 341))[:, 0, :, :]
-    #     .reshape(9, 9, 256, 341)
-    #     .detach()
-    #     .cpu()
-    #     .numpy()
-    # )
-    # segments = torch.load("merged.pt")
-    # disparity = (disp * (segments == 3350)).mean()
-    # print(disparity)
-    # plt.imshow(disp[4, 4], cmap="gray")
-    # plt.show()
-    # plt.close()
-    # print(img.shape, disp.shape)
-    # print(img.shape)
-    # save_LF_image(img, resize_to=None)
+    def get_scene(self, name):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        LF = np.array(scene["LF"])
+        labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        return LF, gt_depth, labels
+
+
+if __name__ == "__main__":
+    from plenpy.lightfields import LightField
+    import imgviz
+    from utils import visualize_segmentation_mask
+
+    HCI_dataset = HCIOldDataset()
+    LF, depth, labels = HCI_dataset.get_scene("horses")
+    s, t, u, v, _ = LF.shape
+    LF = LightField(LF.detach().cpu().numpy())
+    LF.show()
+    depth = (
+        (torch.nan_to_num(depth, posinf=0.0).permute(0, 2, 1, 3))
+        .reshape(s * u, t * v)
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    vis = np.transpose(
+        imgviz.depth2rgb(depth).reshape(
+            s,
+            u,
+            t,
+            v,
+            3,
+        ),
+        (0, 2, 1, 3, 4),
+    )
+    depth = LightField(vis)
+    depth.show()
+    visualize_segmentation_mask(labels)
