@@ -46,7 +46,7 @@ def main(
         simple_sam.postprocess_data()
         del simple_sam
         torch.cuda.empty_cache()
-    segments = torch.load(segments_filename).cuda()[1:-1, 1:-1]
+    segments = torch.load(segments_filename).cuda()
     visualize_segmentation_mask(
         segments.detach().cpu().numpy(),
     )
