@@ -87,6 +87,25 @@ class HCIOldDataset:
         gt_depth = np.array(scene["GT_DEPTH"])
         return gt_depth
 
+    def get_disparity(self, name, eps=1e-9):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        s_size, t_size, u_size, v_size = gt_depth.shape
+        dH = scene.attrs["dH"][0]
+        f = scene.attrs["focalLength"][0]
+        shift = scene.attrs["shift"][0]
+        disparity = np.zeros((s_size, t_size, u_size, v_size, 2))
+        central_ind = s_size // 2
+        for s in range(s_size):
+            for t in range(t_size):
+                disparity[s, t, :, :, 0] = (dH * (central_ind - s)) * f / (
+                    gt_depth[s, t] + eps
+                ) - shift * (central_ind - s)
+                disparity[s, t, :, :, 1] = (dH * (central_ind - t)) * f / (
+                    gt_depth[s, t] + eps
+                ) - shift * (central_ind - t)
+        return disparity
+
 
 if __name__ == "__main__":
     from plenpy.lightfields import LightField
@@ -94,6 +113,8 @@ if __name__ == "__main__":
     from utils import visualize_segmentation_mask
 
     HCI_dataset = HCIOldDataset()
+    disparity = HCI_dataset.get_disparity("horses")[:, :, :, :]
+    disparity = np.linalg.norm(disparity, axis=-1)
     LF = HCI_dataset.get_scene("horses")
     depth = HCI_dataset.get_depth("horses")
     labels = HCI_dataset.get_labels("horses")
@@ -115,4 +136,18 @@ if __name__ == "__main__":
     )
     depth = LightField(vis)
     depth.show()
+    s, t, u, v = disparity.shape
+    disparity = (np.transpose(disparity, (0, 2, 1, 3))).reshape(s * u, t * v)
+    vis = np.transpose(
+        imgviz.depth2rgb(disparity).reshape(
+            s,
+            u,
+            t,
+            v,
+            3,
+        ),
+        (0, 2, 1, 3, 4),
+    )
+    disparity = LightField(vis)
+    disparity.show()
     visualize_segmentation_mask(labels, LF)
