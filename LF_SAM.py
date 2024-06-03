@@ -126,7 +126,15 @@ def get_sam():
     sam = sam_model_registry["vit_h"](checkpoint=SAM_CONFIG["model-path"])
     sam = sam.to(device="cuda")
     model = SimpleSAM(
-        SamAutomaticMaskGenerator(sam, points_per_side=SAM_CONFIG["points-per-side"])
+        SamAutomaticMaskGenerator(
+            sam,
+            points_per_side=SAM_CONFIG["points-per-side"],
+            points_per_batch=SAM_CONFIG["points-per-batch"],
+            pred_iou_thresh=SAM_CONFIG["pred-iou-thresh"],
+            stability_score_thresh=SAM_CONFIG["stability-score-thresh"],
+            stability_score_offset=SAM_CONFIG["stability-score-offset"],
+            box_nms_thresh=SAM_CONFIG["box-nms-thresh"],
+        )
     )
 
     return model
