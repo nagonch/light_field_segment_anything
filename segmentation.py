@@ -40,6 +40,8 @@ def main(
     segments_checkpoint=SAM_CONFIG["sam-segments-checkpoint"],
     merged_checkpoint=MERGER_CONFIG["merged-checkpoint"],
 ):
+    LF_viz = LightField(LF)
+    LF_viz.show()
     if not (segments_checkpoint and os.path.exists(segments_filename)):
         simple_sam = get_sam()
         simple_sam.segment_LF(LF)
@@ -47,22 +49,16 @@ def main(
         del simple_sam
         torch.cuda.empty_cache()
     segments = torch.load(segments_filename).cuda()
-    visualize_segmentation_mask(
-        segments.detach().cpu().numpy(),
-    )
+    visualize_segmentation_mask(segments.detach().cpu().numpy(), LF)
     if merged_checkpoint and os.path.exists(merged_filename):
         merged_segments = torch.load(merged_filename)
     else:
         merger = LF_segment_merger(segments, torch.load("embeddings.pt"), LF)
         merged_segments = merger.get_result_masks().detach().cpu().numpy()
         torch.save(merged_segments, merged_filename)
-    LF = LightField(LF)
-    LF.show()
     merged_segments = post_process_segments(merged_segments)
     merged_segments = stack_segments(merged_segments)
-    visualize_segmentation_mask(
-        merged_segments,
-    )
+    visualize_segmentation_mask(merged_segments, LF)
     for i, segment in enumerate(np.unique(merged_segments)):
         visualize_segments(
             (merged_segments == segment).astype(np.uint32),

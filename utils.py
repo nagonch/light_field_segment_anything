@@ -19,12 +19,14 @@ with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, filename=None):
+def visualize_segmentation_mask(segments, LF, filename=None):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
+    LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
     vis = np.transpose(
         imgviz.label2rgb(
             label=segments,
+            image=LF,
             colormap=imgviz.label_colormap(segments.max() + 1),
         ).reshape(s, u, t, v, 3),
         (0, 2, 1, 3, 4),

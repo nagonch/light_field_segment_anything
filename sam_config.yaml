@@ -1,4 +1,4 @@
-min-mask-area: 0.001
+min-mask-area: 100
 model-path: "SAM_model/sam_vit_h.pth"
 segments-filename: "segments.pt"
 embeddings-filename: "embeddings.pt"
