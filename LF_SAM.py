@@ -112,7 +112,7 @@ class SimpleSAM:
         torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
         del emd_dict
         result_masks = []
-        for item in os.listdir("segments"):
+        for item in sorted(os.listdir("segments")):
             if item.endswith("pt"):
                 result_masks.append(torch.load(f"segments/{item}"))
                 os.remove(f"segments/{item}")
