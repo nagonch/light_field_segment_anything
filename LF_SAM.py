@@ -100,6 +100,11 @@ class SimpleSAM:
             )
             max_segment_num = segments.max()
             del embeddings_map
+            del embeddings
+            del embedding_values
+            del masks
+            del segments_result
+            del item
             del segments
 
     @torch.no_grad()
