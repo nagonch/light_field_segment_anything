@@ -139,6 +139,7 @@ def get_sam():
             stability_score_thresh=SAM_CONFIG["stability-score-thresh"],
             stability_score_offset=SAM_CONFIG["stability-score-offset"],
             box_nms_thresh=SAM_CONFIG["box-nms-thresh"],
+            min_mask_region_area=SAM_CONFIG["min-mask-area"],
         )
     )
 
