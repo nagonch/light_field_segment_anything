@@ -27,12 +27,11 @@ def labels_per_pixel(labels, disparity):
             labels_projected[s, t, u_st[mask], v_st[mask]] = l[
                 u_space.reshape(-1)[mask], v_space.reshape(-1)[mask]
             ]
-    labels_projected = labels_projected.reshape(s_size * t_size, u_size * v_size).T
     lengths = []
-    for label_set in labels_projected:
+    for label_set in labels_projected.reshape(s_size * t_size, u_size * v_size).T:
         lengths.append(len(set(label_set.tolist())))
     result = torch.tensor(lengths).cuda().float().mean()
-    return result
+    return result, labels_projected
 
 
 if __name__ == "__main__":
@@ -40,7 +39,7 @@ if __name__ == "__main__":
     LF = dataset.get_scene("papillon")
     disparity = torch.tensor(dataset.get_disparity("papillon")).cuda()
     labels = torch.tensor(torch.load("past_merges/merged_papillon.pt")).cuda()
-    result = labels_per_pixel(labels, disparity)
+    result, labels_projected = labels_per_pixel(labels, disparity)
     visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
-    visualize_segmentation_mask(result.detach().cpu().numpy(), None)
+    visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
     print(result)
