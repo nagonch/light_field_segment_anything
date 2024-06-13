@@ -27,11 +27,11 @@ def labels_per_pixel(labels, disparity):
             labels_projected[s, t, u_st[mask].long(), v_st[mask].long()] = l[
                 u_space.reshape(-1)[mask], v_space.reshape(-1)[mask]
             ]
+    labels_projected = labels_projected.reshape(s_size * t_size, u_size * v_size).T
+    labels_projected = labels_projected[labels_projected[:, s_size * t_size // 2] != 0]
     lengths = []
-    for label_set in labels_projected.reshape(s_size * t_size, u_size * v_size).T:
-        central_label = label_set.reshape(s_size, t_size)[s_size // 2, t_size // 2]
-        if central_label != 0:
-            lengths.append(len(set(label_set.tolist())))
+    for label_set in labels_projected:
+        lengths.append(len(set(label_set.tolist())))
     result = torch.tensor(lengths).cuda().float().mean()
     return result
 
