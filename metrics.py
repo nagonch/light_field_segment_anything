@@ -28,15 +28,11 @@ def labels_per_pixel(labels, disparity):
                 u_space.reshape(-1)[mask], v_space.reshape(-1)[mask]
             ]
     lengths = []
-    for label_set in labels.reshape(s_size * t_size, u_size * v_size).T:
-        lengths.append(len(set(label_set.tolist())))
-    result = torch.tensor(lengths).cuda().float().mean()
-    print(result)
-    lengths = []
     for label_set in labels_projected.reshape(s_size * t_size, u_size * v_size).T:
-        lengths.append(len(set(label_set.tolist())))
+        central_label = label_set.reshape(s_size, t_size)[s_size // 2, t_size // 2]
+        if central_label != 0:
+            lengths.append(len(set(label_set.tolist())))
     result = torch.tensor(lengths).cuda().float().mean()
-    print(result)
     return result
 
 
@@ -45,6 +41,7 @@ if __name__ == "__main__":
     LF = dataset.get_scene("stillLife")
     disparity = torch.tensor(dataset.get_disparity("stillLife")).cuda()
     labels = torch.tensor(torch.load("past_merges/merged_still_life.pt")).cuda()
-    labels_projected = labels_per_pixel(labels, disparity)
-    visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
-    visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
+    lpr = labels_per_pixel(labels, disparity)
+    print(lpr)
+    # visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
+    # visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
