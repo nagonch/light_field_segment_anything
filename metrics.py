@@ -39,6 +39,40 @@ class ConsistencyMetrics:
         result = torch.tensor(lengths).cuda().float().mean()
         return result
 
+    def self_similarity(self, eps=1e-9):
+        labels_projected = self.labels_projected
+        results = []
+        for label_number in torch.unique(
+            labels_projected[
+                labels_projected.shape[0] // 2, labels_projected.shape[1] // 2
+            ]
+        )[1:]:
+            mask_filtered = (self.labels_projected == label_number).to(torch.int32)
+            masks = mask_filtered.reshape(
+                -1, mask_filtered.shape[-2], mask_filtered.shape[-1]
+            )
+            masks_x, masks_y = torch.meshgrid(
+                (
+                    torch.arange(masks.shape[1]).cuda(),
+                    torch.arange(masks.shape[2]).cuda(),
+                ),
+                indexing="ij",
+            )
+            masks_x = masks_x.repeat(masks.shape[0], 1, 1)
+            masks_y = masks_y.repeat(masks.shape[0], 1, 1)
+            centroids_x = (masks_x * masks).sum(axis=(1, 2)) / (
+                masks.sum(axis=(1, 2)) + eps
+            )
+            centroids_y = (masks_y * masks).sum(axis=(1, 2)) / (
+                masks.sum(axis=(1, 2)) + eps
+            )
+            centroids = torch.stack((centroids_y, centroids_x)).T
+            main_centroid = centroids[centroids.shape[0] // 2]
+            metric = torch.norm(centroids - main_centroid, p=2, dim=1)
+            metric = metric.sum() / (metric.shape[0] - 1)
+            results.append(metric)
+        return torch.tensor(metric).mean()
+
 
 if __name__ == "__main__":
     dataset = HCIOldDataset()
@@ -46,6 +80,6 @@ if __name__ == "__main__":
     disparity = torch.tensor(dataset.get_disparity("stillLife")).cuda()
     labels = torch.tensor(torch.load("past_merges/merged_still_life.pt")).cuda()
     metrics_estimator = ConsistencyMetrics(labels, disparity)
-    print(metrics_estimator.labels_per_pixel())
+    print(metrics_estimator.self_similarity())
     # visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
     # visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
