@@ -21,25 +21,30 @@ def labels_per_pixel(labels, disparity):
         for t in range(t_size):
             disp = disparity[s, t]
             l = labels[s, t]
-            u_st = (u_space + disp[:, :, 0]).reshape(-1).long()
-            v_st = (v_space + disp[:, :, 1]).reshape(-1).long()
+            u_st = (u_space - disp[:, :, 0]).reshape(-1)
+            v_st = (v_space + disp[:, :, 1]).reshape(-1)
             mask = (u_st >= 0) & (u_st < u_size) & (v_st >= 0) & (v_st < v_size)
-            labels_projected[s, t, u_st[mask], v_st[mask]] = l[
+            labels_projected[s, t, u_st[mask].long(), v_st[mask].long()] = l[
                 u_space.reshape(-1)[mask], v_space.reshape(-1)[mask]
             ]
+    lengths = []
+    for label_set in labels.reshape(s_size * t_size, u_size * v_size).T:
+        lengths.append(len(set(label_set.tolist())))
+    result = torch.tensor(lengths).cuda().float().mean()
+    print(result)
     lengths = []
     for label_set in labels_projected.reshape(s_size * t_size, u_size * v_size).T:
         lengths.append(len(set(label_set.tolist())))
     result = torch.tensor(lengths).cuda().float().mean()
-    return result, labels_projected
+    print(result)
+    return result
 
 
 if __name__ == "__main__":
     dataset = HCIOldDataset()
-    LF = dataset.get_scene("papillon")
-    disparity = torch.tensor(dataset.get_disparity("papillon")).cuda()
-    labels = torch.tensor(torch.load("past_merges/merged_papillon.pt")).cuda()
-    result, labels_projected = labels_per_pixel(labels, disparity)
+    LF = dataset.get_scene("stillLife")
+    disparity = torch.tensor(dataset.get_disparity("stillLife")).cuda()
+    labels = torch.tensor(torch.load("past_merges/merged_still_life.pt")).cuda()
+    labels_projected = labels_per_pixel(labels, disparity)
     visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
     visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
-    print(result)
