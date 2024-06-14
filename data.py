@@ -125,6 +125,9 @@ if __name__ == "__main__":
     from plenpy.lightfields import LightField
     import imgviz
     from utils import visualize_segmentation_mask
+    from matplotlib import pyplot as plt
+    from scipy import ndimage
+    from utils import remap_labels
 
     # HCI_dataset = HCIOldDataset()
     # LF = HCI_dataset.get_scene("stillLife")
@@ -132,6 +135,11 @@ if __name__ == "__main__":
     # s, t, u, v, _ = LF.shape
     # LF_vis = LightField(LF)
     # LF_vis.show()
-    dataset = UrbanLFDataset("val", return_labels=True)
-    LF, labels = dataset[1]
-    visualize_segmentation_mask(labels, LF)
+    # dataset = UrbanLFDataset("val", return_labels=True)
+    # LF, labels = dataset[1]
+    dataset = HCIOldDataset()
+    LF = dataset.get_scene("horses")
+    labels = torch.tensor(dataset.get_labels("horses")).cuda()
+    # visualize_segmentation_mask(labels, LF)
+    labels_remapped = remap_labels(labels)
+    visualize_segmentation_mask(labels_remapped, LF)

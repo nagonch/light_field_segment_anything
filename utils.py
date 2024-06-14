@@ -9,6 +9,7 @@ from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
 from typing import Tuple
+from scipy import ndimage
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -49,6 +50,19 @@ def visualize_segments(segments, filename):
     )
     im = Image.fromarray(vis)
     im.save(filename)
+
+
+def remap_labels(labels):
+    max_label = 0
+    labels_remapped = torch.zeros(labels.shape).to(torch.int32)
+    structure_4d = ndimage.generate_binary_structure(4, 4)
+    for label in torch.unique(labels)[1:]:
+        img = (labels == label).to(torch.int32)
+        img = torch.tensor(ndimage.label(img.cpu().numpy(), structure_4d)[0]).cuda()
+        for unique_label in torch.unique(img)[1:]:
+            labels_remapped[img == unique_label] = max_label + unique_label
+        max_label = labels_remapped.max()
+    return labels_remapped
 
 
 def stack_segments(segments):
