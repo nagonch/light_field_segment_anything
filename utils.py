@@ -54,7 +54,7 @@ def visualize_segments(segments, filename):
 
 def remap_labels(labels):
     max_label = 0
-    labels_remapped = torch.zeros(labels.shape).to(torch.int32)
+    labels_remapped = torch.zeros(labels.shape).to(torch.int32).cuda()
     structure_4d = ndimage.generate_binary_structure(4, 4)
     for label in torch.unique(labels)[1:]:
         img = (labels == label).to(torch.int32)
