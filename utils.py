@@ -60,7 +60,10 @@ def remap_labels(labels):
         img = (labels == label).to(torch.int32)
         img = torch.tensor(ndimage.label(img.cpu().numpy(), structure_4d)[0]).cuda()
         for unique_label in torch.unique(img)[1:]:
-            labels_remapped[img == unique_label] = max_label + unique_label
+            if (img == unique_label).sum(axis=(2, 3)).float().mean() >= MERGER_CONFIG[
+                "min-avg-labels-gt-merger"
+            ]:
+                labels_remapped[img == unique_label] = max_label + unique_label
         max_label = labels_remapped.max()
     return labels_remapped
 
