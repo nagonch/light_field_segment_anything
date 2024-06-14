@@ -8,9 +8,10 @@ import h5py
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, section, return_disparity=False):
+    def __init__(self, section, return_disparity=False, return_labels=False):
         self.data_path = f"UrbanLF_Syn/{section}"
         self.return_disparity = return_disparity
+        self.return_labels = return_labels
         self.frames = sorted(
             [
                 item
@@ -27,6 +28,7 @@ class UrbanLFDataset(Dataset):
         frame = self.frames[idx]
         imgs = []
         disparities = []
+        labels = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
             if (
                 filename.endswith("depth.png")
@@ -40,6 +42,8 @@ class UrbanLFDataset(Dataset):
                 imgs.append(img)
             elif filename.endswith("disparity.npy"):
                 disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
+            elif filename.endswith("label.npy"):
+                labels.append(np.load(f"{self.data_path}/{frame}/{filename}"))
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -50,6 +54,9 @@ class UrbanLFDataset(Dataset):
             v,
             c,
         )
+        return_tuple = [
+            LF,
+        ]
         if self.return_disparity and disparities:
             disparities = np.stack(disparities).reshape(
                 n_apertures,
@@ -57,9 +64,16 @@ class UrbanLFDataset(Dataset):
                 u,
                 v,
             )
-            return LF, disparities
-        else:
-            return LF
+            return_tuple.append(disparities)
+        if self.return_labels and labels:
+            labels = np.stack(labels).reshape(
+                n_apertures,
+                n_apertures,
+                u,
+                v,
+            )
+            return_tuple.append(labels)
+        return return_tuple
 
 
 class HCIOldDataset:
@@ -112,42 +126,12 @@ if __name__ == "__main__":
     import imgviz
     from utils import visualize_segmentation_mask
 
-    HCI_dataset = HCIOldDataset()
-    disparity = HCI_dataset.get_disparity("horses")[:, :, :, :]
-    disparity = np.linalg.norm(disparity, axis=-1)
-    LF = HCI_dataset.get_scene("horses")
-    depth = HCI_dataset.get_depth("horses")
-    labels = HCI_dataset.get_labels("horses")
-    s, t, u, v, _ = LF.shape
-    LF_vis = LightField(LF)
-    LF_vis.show()
-    depth = (np.transpose(np.nan_to_num(depth, posinf=0.0), (0, 2, 1, 3))).reshape(
-        s * u, t * v
-    )
-    vis = np.transpose(
-        imgviz.depth2rgb(depth).reshape(
-            s,
-            u,
-            t,
-            v,
-            3,
-        ),
-        (0, 2, 1, 3, 4),
-    )
-    depth = LightField(vis)
-    depth.show()
-    s, t, u, v = disparity.shape
-    disparity = (np.transpose(disparity, (0, 2, 1, 3))).reshape(s * u, t * v)
-    vis = np.transpose(
-        imgviz.depth2rgb(disparity).reshape(
-            s,
-            u,
-            t,
-            v,
-            3,
-        ),
-        (0, 2, 1, 3, 4),
-    )
-    disparity = LightField(vis)
-    disparity.show()
+    # HCI_dataset = HCIOldDataset()
+    # LF = HCI_dataset.get_scene("stillLife")
+    # labels = HCI_dataset.get_labels("stillLife")
+    # s, t, u, v, _ = LF.shape
+    # LF_vis = LightField(LF)
+    # LF_vis.show()
+    dataset = UrbanLFDataset("val", return_labels=True)
+    LF, labels = dataset[1]
     visualize_segmentation_mask(labels, LF)
