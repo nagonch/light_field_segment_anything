@@ -41,9 +41,13 @@ class UrbanLFDataset(Dataset):
                 img = (torch.tensor(img))[:, :, :3]
                 imgs.append(img)
             elif filename.endswith("disparity.npy"):
-                disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
+                disparities.append(
+                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
+                )
             elif filename.endswith("label.npy"):
-                labels.append(np.load(f"{self.data_path}/{frame}/{filename}"))
+                labels.append(
+                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
+                )
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -58,20 +62,29 @@ class UrbanLFDataset(Dataset):
             LF,
         ]
         if self.return_disparity and disparities:
-            disparities = np.stack(disparities).reshape(
-                n_apertures,
-                n_apertures,
-                u,
-                v,
+            disparities = (
+                torch.stack(disparities)
+                .reshape(
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                )
+                .cuda()
             )
             return_tuple.append(disparities)
         if self.return_labels and labels:
-            labels = np.stack(labels).reshape(
-                n_apertures,
-                n_apertures,
-                u,
-                v,
+            labels = (
+                torch.stack(labels)
+                .reshape(
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                )
+                .cuda()
             )
+            labels[torch.isin(labels, torch.tensor([7, 8, 12, 14]).cuda())] = 0
             return_tuple.append(labels)
         return return_tuple
 
@@ -129,17 +142,8 @@ if __name__ == "__main__":
     from scipy import ndimage
     from utils import remap_labels
 
-    # HCI_dataset = HCIOldDataset()
-    # LF = HCI_dataset.get_scene("stillLife")
-    # labels = HCI_dataset.get_labels("stillLife")
-    # s, t, u, v, _ = LF.shape
-    # LF_vis = LightField(LF)
-    # LF_vis.show()
-    # dataset = UrbanLFDataset("val", return_labels=True)
-    # LF, labels = dataset[1]
-    dataset = HCIOldDataset()
-    LF = dataset.get_scene("horses")
-    labels = torch.tensor(dataset.get_labels("horses")).cuda()
-    # visualize_segmentation_mask(labels, LF)
+    dataset = UrbanLFDataset("val", return_labels=True)
+    LF, labels = dataset[5]
+    visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
     labels_remapped = remap_labels(labels)
-    visualize_segmentation_mask(labels_remapped, LF)
+    visualize_segmentation_mask(labels_remapped.cpu().numpy(), LF.cpu().numpy())
