@@ -3,6 +3,7 @@ from utils import unravel_index, MERGER_CONFIG
 import os
 import numpy as np
 from PIL import Image
+import torch.nn.functional as F
 
 
 class GreedyOptimizer:
@@ -83,12 +84,24 @@ class GreedyOptimizer:
             centroids[-1],
         )
 
-    def svd_regularization(self, segment_inds, eps=1e-9):
+    def svd_regularization(self, segment_inds):
         centroids = self.mask_centroids[segment_inds[:, 0], segment_inds[:, 1]]
-        centroids = torch.cat((centroids, self.central_segment_centroid[None]), dim=0)
-        cov = torch.cov(centroids.T)
-        sing_values = torch.svd(cov, compute_uv=False)[1]
-        score = sing_values.min() / (sing_values.max() + eps)
+        st = unravel_index(segment_inds[:, 0], (self.LF.shape[0], self.LF.shape[1]))
+        st = torch.cat(
+            (
+                st,
+                torch.tensor([self.LF.shape[0] // 2, self.LF.shape[1] // 2])[
+                    None
+                ].cuda(),
+            ),
+            dim=0,
+        )
+        st = torch.cat((st, torch.ones((st.shape[0], 1)).cuda()), dim=1).float()
+        uv = torch.cat((centroids, self.central_segment_centroid[None]), dim=0).float()
+        solution = torch.linalg.lstsq(st, uv).solution
+        score = F.cosine_similarity(
+            (st @ solution).reshape(-1)[None], uv.reshape(-1)[None]
+        )[0]
 
         return score
 
