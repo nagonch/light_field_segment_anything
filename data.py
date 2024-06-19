@@ -5,6 +5,7 @@ import os
 from torch.utils.data import Dataset
 import math
 import h5py
+from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
