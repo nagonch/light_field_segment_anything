@@ -15,3 +15,4 @@ subview-percentage: 0.8
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
 min-central-segments-for-parallel: 50
+min-avg-labels-gt-merger: 100
