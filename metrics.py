@@ -82,17 +82,17 @@ class AccuracyMetrics:
         self.n_pixels = s * t * u * v
 
     def achievable_accuracy(self):
-        predictions_modified = torch.clone(self.predictions)
+        predictions_modified = torch.zeros_like(self.predictions)
         for label in torch.unique(self.predictions)[1:]:
             mask = self.predictions == label
             gt_label = self.gt_labels[mask]
             predictions_modified[self.predictions == label] = torch.mode(
                 gt_label
-            ).values.long()
+            ).values
         accuracies = []
         for label in torch.unique(self.gt_labels):
-            mask_gt = self.gt_labels == label
-            mask_pred = predictions_modified == label
+            mask_gt = (self.gt_labels == label).long()
+            mask_pred = (predictions_modified == label).long()
             acc = (mask_gt == mask_pred).sum() / self.n_pixels
             accuracies.append(acc)
         return torch.tensor(accuracies).cuda().mean().item(), predictions_modified
