@@ -66,13 +66,15 @@ class GreedyOptimizer:
             indexing="ij",
         )
         masks_x = masks_x.repeat(masks.shape[0], 1, 1)
-        masks_y = masks_y.repeat(masks.shape[0], 1, 1)
         centroids_x = (masks_x * masks).sum(axis=(1, 2)) / (
             masks.sum(axis=(1, 2)) + eps
         )
+        del masks_x
+        masks_y = masks_y.repeat(masks.shape[0], 1, 1)
         centroids_y = (masks_y * masks).sum(axis=(1, 2)) / (
             masks.sum(axis=(1, 2)) + eps
         )
+        del masks_y
         centroids = torch.stack((centroids_y, centroids_x)).T
         centroids -= centroids.mean(axis=0)
         return (
