@@ -84,7 +84,7 @@ class UrbanLFDataset(Dataset):
                 )
                 .cuda()
             )
-            labels[torch.isin(labels, torch.tensor([7, 8, 12, 14]).cuda())] = 0
+            labels = remap_labels(labels)
             return_tuple.append(labels)
         return return_tuple
 
@@ -143,7 +143,5 @@ if __name__ == "__main__":
     from utils import remap_labels
 
     dataset = UrbanLFDataset("val", return_labels=True)
-    for i in range(len(dataset)):
-        LF, labels = dataset[i]
-        labels_remapped = remap_labels(labels)
-        visualize_segmentation_mask(labels_remapped.cpu().numpy(), LF.cpu().numpy())
+    LF, labels = dataset[3]
+    visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
