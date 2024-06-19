@@ -41,7 +41,7 @@ def main(
     merged_checkpoint=MERGER_CONFIG["merged-checkpoint"],
 ):
     LF_viz = LightField(LF)
-    # LF_viz.show()
+    LF_viz.show()
     if not (segments_checkpoint and os.path.exists(segments_filename)):
         simple_sam = get_sam()
         simple_sam.segment_LF(LF)
@@ -49,7 +49,7 @@ def main(
         del simple_sam
         torch.cuda.empty_cache()
     segments = torch.load(segments_filename).cuda()
-    # visualize_segmentation_mask(segments.detach().cpu().numpy(), LF)
+    visualize_segmentation_mask(segments.detach().cpu().numpy(), LF)
     if merged_checkpoint and os.path.exists(merged_filename):
         merged_segments = torch.load(merged_filename)
     else:
