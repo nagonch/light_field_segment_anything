@@ -10,7 +10,7 @@ ransac-max-outliers: 0.05
 ransac-max-iterations: 1
 embedding-coeff: 1
 lambda-reg: 0.3
-k-cutoff: 2
+k-cutoff: 6
 subview-percentage: 0.8
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
