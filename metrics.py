@@ -1,4 +1,4 @@
-from data import HCIOldDataset
+from data import HCIOldDataset, UrbanLFDataset
 import torch
 from matplotlib import pyplot as plt
 from scipy.io import savemat
@@ -74,12 +74,37 @@ class ConsistencyMetrics:
         return torch.tensor(metric).mean()
 
 
+class AccuracyMetrics:
+    def __init__(self, predictions, gt_labels):
+        self.predictions = predictions
+        self.gt_labels = gt_labels
+        s, t, u, v = self.predictions.shape
+        self.n_pixels = s * t * u * v
+
+    def achievable_accuracy(self):
+        predictions_modified = torch.clone(self.predictions)
+        for label in torch.unique(self.predictions)[1:]:
+            mask = self.predictions == label
+            gt_label = self.gt_labels[mask]
+            predictions_modified[self.predictions == label] = torch.mode(
+                gt_label
+            ).values.long()
+        accuracies = []
+        for label in torch.unique(self.gt_labels):
+            mask_gt = self.gt_labels == label
+            mask_pred = predictions_modified == label
+            acc = (mask_gt == mask_pred).sum() / self.n_pixels
+            accuracies.append(acc)
+        return torch.tensor(accuracies).cuda().mean().item(), predictions_modified
+
+
 if __name__ == "__main__":
-    dataset = HCIOldDataset()
-    LF = dataset.get_scene("stillLife")
-    disparity = torch.tensor(dataset.get_disparity("stillLife")).cuda()
-    labels = torch.tensor(torch.load("past_merges/merged_still_life.pt")).cuda()
-    metrics_estimator = ConsistencyMetrics(labels, disparity)
-    print(metrics_estimator.self_similarity())
-    # visualize_segmentation_mask(labels.detach().cpu().numpy(), None)
-    # visualize_segmentation_mask(labels_projected.detach().cpu().numpy(), None)
+    dataset = UrbanLFDataset("val", return_labels=True)
+    LF, labels = dataset[3]
+    labels = labels[2:-2, 2:-2]
+    predictions = torch.tensor(torch.load("merged.pt")).cuda()
+    acc_metrics = AccuracyMetrics(predictions, labels)
+    achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
+    print(achievable_accuracy)
+    visualize_segmentation_mask(labels.cpu().numpy(), None)
+    visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
