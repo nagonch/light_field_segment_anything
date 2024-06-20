@@ -112,9 +112,8 @@ class AccuracyMetrics:
         for label in torch.unique(self.gt_labels):
             total_penalty = 0
             gt_region = self.gt_labels == label
-            visualize_segmentation_mask(gt_region.cpu().numpy(), None)
             superpixel_labels = torch.unique(self.predictions[gt_region])
-            for superpixel_label in superpixel_labels:
+            for superpixel_label in superpixel_labels[1:]:
                 predicted_region = self.predictions == superpixel_label
                 overlap = (predicted_region.long() * gt_region.long()).sum()
                 total_penalty += min(overlap, predicted_region.sum() - overlap)
@@ -130,10 +129,11 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    # print(acc_metrics.undersegmentation_error())
-    achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
-    coverage = acc_metrics.coverage()
-    print(achievable_accuracy, coverage)
-    visualize_segmentation_mask(labels.cpu().numpy(), None)
-    # visualize_segmentation_mask(predictions.cpu().numpy(), None)
-    visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
+    print(acc_metrics.undersegmentation_error())
+    # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
+    # print(achievable_accuracy)
+    # coverage = acc_metrics.coverage()
+    # print(achievable_accuracy, coverage)
+    # visualize_segmentation_mask(labels.cpu().numpy(), None)
+    # # visualize_segmentation_mask(predictions.cpu().numpy(), None)
+    # visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
