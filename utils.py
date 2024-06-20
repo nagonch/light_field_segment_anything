@@ -56,7 +56,7 @@ def remap_labels(labels):
     max_label = 0
     labels_remapped = torch.zeros(labels.shape).to(torch.int32).cuda()
     structure_4d = ndimage.generate_binary_structure(4, 4)
-    for label in torch.unique(labels)[1:]:
+    for label in torch.unique(labels):
         img = (labels == label).to(torch.int32)
         img = torch.tensor(ndimage.label(img.cpu().numpy(), structure_4d)[0]).cuda()
         for unique_label in torch.unique(img)[1:]:
