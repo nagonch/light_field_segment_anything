@@ -82,29 +82,58 @@ class AccuracyMetrics:
         self.n_pixels = s * t * u * v
 
     def achievable_accuracy(self):
-        predictions_modified = torch.zeros_like(self.predictions)
+        predictions_modified = torch.zeros_like(self.predictions).long()
         for label in torch.unique(self.predictions)[1:]:
             mask = self.predictions == label
             gt_label = self.gt_labels[mask]
             predictions_modified[self.predictions == label] = torch.mode(
                 gt_label
-            ).values
-        accuracies = []
+            ).values.long()
+        predictions_modified_reshape = predictions_modified.reshape(-1)
+        result = (
+            (
+                predictions_modified_reshape[predictions_modified_reshape != 0]
+                == self.gt_labels.reshape(-1)[predictions_modified_reshape != 0]
+            )
+            .float()
+            .mean()
+            .item()
+        )
+        return result, predictions_modified
+
+    def coverage(self):
+        return (self.predictions > 0).float().mean().item()
+
+    def undersegmentation_error(self):
+        """
+        [Neubert, Protzel, 2012]
+        """
+        undersegmentation_errors = []
         for label in torch.unique(self.gt_labels):
-            mask_gt = (self.gt_labels == label).long()
-            mask_pred = (predictions_modified == label).long()
-            acc = (mask_gt == mask_pred).sum() / self.n_pixels
-            accuracies.append(acc)
-        return torch.tensor(accuracies).cuda().mean().item(), predictions_modified
+            total_penalty = 0
+            gt_region = self.gt_labels == label
+            visualize_segmentation_mask(gt_region.cpu().numpy(), None)
+            superpixel_labels = torch.unique(self.predictions[gt_region])
+            for superpixel_label in superpixel_labels:
+                predicted_region = self.predictions == superpixel_label
+                overlap = (predicted_region.long() * gt_region.long()).sum()
+                total_penalty += min(overlap, predicted_region.sum() - overlap)
+            undersegmentation_errors.append(total_penalty / gt_region.sum())
+        return torch.tensor(undersegmentation_errors).cuda().mean().item()
 
 
 if __name__ == "__main__":
+    from utils import remap_labels
+
     dataset = UrbanLFDataset("val", return_labels=True)
     LF, labels = dataset[3]
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
+    # print(acc_metrics.undersegmentation_error())
     achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
-    print(achievable_accuracy)
+    coverage = acc_metrics.coverage()
+    print(achievable_accuracy, coverage)
     visualize_segmentation_mask(labels.cpu().numpy(), None)
+    # visualize_segmentation_mask(predictions.cpu().numpy(), None)
     visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
