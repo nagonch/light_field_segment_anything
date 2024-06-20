@@ -145,6 +145,24 @@ class AccuracyMetrics:
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
 
+    def compactness(self, eps=1e-9):
+        """
+        A. Schick, M. Fischer, R. Stiefelhagen.
+        Measuring and evaluating the compactness of superpixels.
+        International Conference on Pattern Recognition, 2012, pp. 930-934.
+        """
+        result = 0
+        for label in torch.unique(self.predictions)[1:]:
+            mask = self.predictions == label
+            s, t, u, v = mask.shape
+            area = mask[s // 2, t // 2].sum()
+            gradient_x, gradient_y = torch.gradient(mask[s // 2, t // 2].float())
+            edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
+            perim = edges.sum()
+            Q_s = 4 * torch.pi * area / (perim**2 + eps)
+            result += Q_s * area / (u * v)
+        return result
+
     def undersegmentation_error(self):
         """
         P. Neubert, P. Protzel.
@@ -170,13 +188,14 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    recall, visualization = acc_metrics.boundary_recall()
-    print(recall)
+    print(acc_metrics.compactness())
+    # recall, visualization = acc_metrics.boundary_recall()
+    # print(recall)
     # print(acc_metrics.undersegmentation_error())
     # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
     # print(achievable_accuracy)
     # # coverage = acc_metrics.coverage()
-    visualize_segmentation_mask(labels.cpu().numpy(), None)
-    visualize_segmentation_mask(predictions.cpu().numpy(), None)
-    visualize_segmentation_mask(visualization.cpu().numpy(), None)
+    # visualize_segmentation_mask(labels.cpu().numpy(), None)
+    # visualize_segmentation_mask(predictions.cpu().numpy(), None)
+    # visualize_segmentation_mask(visualization.cpu().numpy(), None)
     # visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
