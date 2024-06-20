@@ -106,6 +106,7 @@ class AccuracyMetrics:
     def boundary_recall(self):
         true_positives = 0
         totals = 0
+        visualization = torch.zeros_like(self.predictions)
         for s in range(self.gt_labels.shape[0]):
             for t in range(self.gt_labels.shape[1]):
                 gradient_x_gt, gradient_y_gt = torch.gradient(
@@ -121,9 +122,10 @@ class AccuracyMetrics:
                 )
                 d_map = (d_map > 0).long()[0, 0]
                 result_values = d_map[edges_gt == 1]
+                visualization[s, t] = 2 * d_map + (edges_gt == 1).long()
                 true_positives += result_values.sum().item()
                 totals += result_values.shape[0]
-        return true_positives / totals
+        return true_positives / totals, visualization
 
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
@@ -146,18 +148,18 @@ class AccuracyMetrics:
 
 
 if __name__ == "__main__":
-    from utils import remap_labels
-
     dataset = UrbanLFDataset("val", return_labels=True)
     LF, labels = dataset[3]
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.boundary_recall())
+    recall, visualization = acc_metrics.boundary_recall()
+    print(recall)
     # print(acc_metrics.undersegmentation_error())
     # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
     # print(achievable_accuracy)
     # # coverage = acc_metrics.coverage()
-    # visualize_segmentation_mask(labels.cpu().numpy(), None)
-    # # visualize_segmentation_mask(predictions.cpu().numpy(), None)
+    visualize_segmentation_mask(labels.cpu().numpy(), None)
+    visualize_segmentation_mask(predictions.cpu().numpy(), None)
+    visualize_segmentation_mask(visualization.cpu().numpy(), None)
     # visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
