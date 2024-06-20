@@ -6,6 +6,7 @@ from collections import defaultdict
 from tqdm import tqdm
 from utils import visualize_segmentation_mask
 import torch.nn.functional as F
+from utils import remap_labels
 
 
 class ConsistencyMetrics:
@@ -145,6 +146,15 @@ class AccuracyMetrics:
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
 
+    def oversegmentation_number(self):
+        gt_labels_remapped = remap_labels(labels)
+        overseg_numbers = []
+        for label in torch.unique(gt_labels_remapped):
+            mask = gt_labels_remapped == label
+            overseg_number_i = torch.unique(self.predictions[mask]).shape[0]
+            overseg_numbers.append(overseg_number_i)
+        return torch.tensor(overseg_numbers).cuda().float().mean().item()
+
     def compactness(self, eps=1e-9):
         """
         A. Schick, M. Fischer, R. Stiefelhagen.
@@ -188,7 +198,7 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.compactness())
+    print(acc_metrics.oversegmentation_number())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
