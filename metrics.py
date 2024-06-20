@@ -101,6 +101,25 @@ class AccuracyMetrics:
         )
         return result, predictions_modified
 
+    def boundary_recall(self):
+        gt_edges = torch.zeros_like(self.gt_labels)
+        predicted_edges = torch.zeros_like(self.predictions)
+        for s in range(self.gt_labels.shape[0]):
+            for t in range(self.gt_labels.shape[1]):
+                gradient_x_gt, gradient_y_gt = torch.gradient(
+                    self.gt_labels[s, t].float()
+                )
+                gradient_gt = (
+                    torch.sqrt(gradient_x_gt**2 + gradient_y_gt**2) > 0
+                ).long()
+                gt_edges[s, t] = gradient_gt
+
+                gradient_x, gradient_y = torch.gradient(self.predictions[s, t].float())
+                gradient = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
+                predicted_edges[s, t] = gradient
+        visualize_segmentation_mask(gt_edges.cpu().numpy(), None)
+        visualize_segmentation_mask(predicted_edges.cpu().numpy(), None)
+
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
 
@@ -129,11 +148,11 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.undersegmentation_error())
+    acc_metrics.boundary_recall()
+    # print(acc_metrics.undersegmentation_error())
     # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
     # print(achievable_accuracy)
-    # coverage = acc_metrics.coverage()
-    # print(achievable_accuracy, coverage)
+    # # coverage = acc_metrics.coverage()
     # visualize_segmentation_mask(labels.cpu().numpy(), None)
     # # visualize_segmentation_mask(predictions.cpu().numpy(), None)
     # visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
