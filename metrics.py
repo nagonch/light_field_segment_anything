@@ -5,6 +5,7 @@ from scipy.io import savemat
 from collections import defaultdict
 from tqdm import tqdm
 from utils import visualize_segmentation_mask
+import torch.nn.functional as F
 
 
 class ConsistencyMetrics:
@@ -80,6 +81,7 @@ class AccuracyMetrics:
         self.gt_labels = gt_labels
         s, t, u, v = self.predictions.shape
         self.n_pixels = s * t * u * v
+        self.boundary_d = 2
 
     def achievable_accuracy(self):
         predictions_modified = torch.zeros_like(self.predictions).long()
@@ -102,21 +104,26 @@ class AccuracyMetrics:
         return result, predictions_modified
 
     def boundary_recall(self):
-        gt_edges = torch.zeros_like(self.gt_labels)
-        predicted_edges = torch.zeros_like(self.predictions)
+        true_positives = 0
+        totals = 0
         for s in range(self.gt_labels.shape[0]):
             for t in range(self.gt_labels.shape[1]):
                 gradient_x_gt, gradient_y_gt = torch.gradient(
                     self.gt_labels[s, t].float()
                 )
                 edges_gt = (torch.sqrt(gradient_x_gt**2 + gradient_y_gt**2) > 0).long()
-                gt_edges[s, t] = edges_gt
-
                 gradient_x, gradient_y = torch.gradient(self.predictions[s, t].float())
                 edges_pred = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-                predicted_edges[s, t] = edges_pred
-        visualize_segmentation_mask(gt_edges.cpu().numpy(), None)
-        visualize_segmentation_mask(predicted_edges.cpu().numpy(), None)
+                kernel = torch.ones((1, 1, 5, 5)).cuda()
+                d_map = F.conv2d(
+                    F.pad(edges_pred, (2, 2, 2, 2), value=0)[None][None].float(),
+                    kernel.float(),
+                )
+                d_map = (d_map > 0).long()[0, 0]
+                result_values = d_map[edges_gt == 1]
+                true_positives += result_values.sum().item()
+                totals += result_values.shape[0]
+        return true_positives / totals
 
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
@@ -146,7 +153,7 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    acc_metrics.boundary_recall()
+    print(acc_metrics.boundary_recall())
     # print(acc_metrics.undersegmentation_error())
     # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
     # print(achievable_accuracy)
