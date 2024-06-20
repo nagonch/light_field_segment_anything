@@ -41,6 +41,11 @@ class ConsistencyMetrics:
         return result
 
     def self_similarity(self, eps=1e-9):
+        """
+        Zhu, Hao, Qi Zhang, and Qing Wang.
+        "4D light field superpixel and segmentation."
+        Proceedings of the IEEE conference on computer vision and pattern recognition. 2017.
+        """
         labels_projected = self.labels_projected
         results = []
         for label_number in torch.unique(
@@ -84,6 +89,11 @@ class AccuracyMetrics:
         self.boundary_d = 2
 
     def achievable_accuracy(self):
+        """
+        M. Y. Lui, O. Tuzel, S. Ramalingam, R. Chellappa.
+        Entropy rate superpixel segmentation.
+        IEEE Conference on Computer Vision and Pattern Recognition, 2011, pp. 2097-2104.
+        """
         predictions_modified = torch.zeros_like(self.predictions).long()
         for label in torch.unique(self.predictions)[1:]:
             mask = self.predictions == label
@@ -104,6 +114,11 @@ class AccuracyMetrics:
         return result, predictions_modified
 
     def boundary_recall(self):
+        """
+        P. Neubert, P. Protzel.
+        Superpixel benchmark and comparison.
+        Forum Bildverarbeitung, 2012.
+        """
         true_positives = 0
         totals = 0
         visualization = torch.zeros_like(self.predictions)
@@ -132,7 +147,9 @@ class AccuracyMetrics:
 
     def undersegmentation_error(self):
         """
-        [Neubert, Protzel, 2012]
+        P. Neubert, P. Protzel.
+        Superpixel benchmark and comparison.
+        Forum Bildverarbeitung, 2012.
         """
         undersegmentation_errors = []
         for label in torch.unique(self.gt_labels):
