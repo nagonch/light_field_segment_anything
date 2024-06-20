@@ -85,7 +85,8 @@ class UrbanLFDataset(Dataset):
                 )
                 .cuda()
             )
-            labels = remap_labels(labels) + 1
+            # labels = remap_labels(labels)
+            labels += 1
             return_tuple.append(labels)
         return return_tuple
 
