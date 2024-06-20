@@ -109,14 +109,12 @@ class AccuracyMetrics:
                 gradient_x_gt, gradient_y_gt = torch.gradient(
                     self.gt_labels[s, t].float()
                 )
-                gradient_gt = (
-                    torch.sqrt(gradient_x_gt**2 + gradient_y_gt**2) > 0
-                ).long()
-                gt_edges[s, t] = gradient_gt
+                edges_gt = (torch.sqrt(gradient_x_gt**2 + gradient_y_gt**2) > 0).long()
+                gt_edges[s, t] = edges_gt
 
                 gradient_x, gradient_y = torch.gradient(self.predictions[s, t].float())
-                gradient = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-                predicted_edges[s, t] = gradient
+                edges_pred = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
+                predicted_edges[s, t] = edges_pred
         visualize_segmentation_mask(gt_edges.cpu().numpy(), None)
         visualize_segmentation_mask(predicted_edges.cpu().numpy(), None)
 
