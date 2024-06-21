@@ -9,9 +9,7 @@ from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(
-        self, data_path="UrbanLF_Syn/val", return_disparity=False, return_labels=False
-    ):
+    def __init__(self, data_path, return_disparity=False, return_labels=False):
         self.data_path = data_path
         self.return_disparity = return_disparity
         self.return_labels = return_labels
@@ -65,19 +63,22 @@ class UrbanLFDataset(Dataset):
             LF,
         ]
         if self.return_labels and labels:
-            labels = (
-                torch.stack(labels)
-                .reshape(
-                    n_apertures,
-                    n_apertures,
-                    u,
-                    v,
+            if len(labels) == 1:
+                return_tuple.append(labels[0])
+            else:
+                labels = (
+                    torch.stack(labels)
+                    .reshape(
+                        n_apertures,
+                        n_apertures,
+                        u,
+                        v,
+                    )
+                    .cuda()
                 )
-                .cuda()
-            )
-            # labels = remap_labels(labels)
-            labels += 1
-            return_tuple.append(labels)
+                # labels = remap_labels(labels)
+                labels += 1
+                return_tuple.append(labels)
         if self.return_disparity and disparities:
             disparities = (
                 torch.stack(disparities)
@@ -146,6 +147,8 @@ if __name__ == "__main__":
     from scipy import ndimage
     from utils import remap_labels
 
-    dataset = UrbanLFDataset("val", return_labels=True)
+    dataset = UrbanLFDataset("UrbanLF_Real/val", return_labels=True)
     LF, labels = dataset[3]
+    print(labels.shape, LF.shape)
+    raise
     visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
