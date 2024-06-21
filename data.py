@@ -62,18 +62,6 @@ class UrbanLFDataset(Dataset):
         return_tuple = [
             LF,
         ]
-        if self.return_disparity and disparities:
-            disparities = (
-                torch.stack(disparities)
-                .reshape(
-                    n_apertures,
-                    n_apertures,
-                    u,
-                    v,
-                )
-                .cuda()
-            )
-            return_tuple.append(disparities)
         if self.return_labels and labels:
             labels = (
                 torch.stack(labels)
@@ -88,6 +76,18 @@ class UrbanLFDataset(Dataset):
             # labels = remap_labels(labels)
             labels += 1
             return_tuple.append(labels)
+        if self.return_disparity and disparities:
+            disparities = (
+                torch.stack(disparities)
+                .reshape(
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                )
+                .cuda()
+            )
+            return_tuple.append(disparities)
         return return_tuple
 
 
