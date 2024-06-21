@@ -28,6 +28,11 @@ class ConsistencyMetrics:
                 ]
 
     def labels_per_pixel(self):
+        """
+        Khan, N., Zhang, Q., Kasser, L., Stone, H., Kim, M. H., & Tompkin, J. (2019).
+        View-consistent 4D light field superpixel segmentation.
+        In Proceedings of the IEEE/CVF International Conference on Computer Vision (pp. 7811-7819).
+        """
         s_size, t_size, u_size, v_size = self.labels_projected.shape
         labels_projected = self.labels_projected.reshape(
             s_size * t_size, u_size * v_size
