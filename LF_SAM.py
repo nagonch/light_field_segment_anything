@@ -100,6 +100,11 @@ class SimpleSAM:
             )
             max_segment_num = segments.max()
             del embeddings_map
+            del embeddings
+            del embedding_values
+            del masks
+            del segments_result
+            del item
             del segments
 
     @torch.no_grad()
@@ -112,7 +117,7 @@ class SimpleSAM:
         torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
         del emd_dict
         result_masks = []
-        for item in os.listdir("segments"):
+        for item in sorted(os.listdir("segments")):
             if item.endswith("pt"):
                 result_masks.append(torch.load(f"segments/{item}"))
                 os.remove(f"segments/{item}")
@@ -134,6 +139,7 @@ def get_sam():
             stability_score_thresh=SAM_CONFIG["stability-score-thresh"],
             stability_score_offset=SAM_CONFIG["stability-score-offset"],
             box_nms_thresh=SAM_CONFIG["box-nms-thresh"],
+            min_mask_region_area=SAM_CONFIG["min-mask-area"],
         )
     )
 

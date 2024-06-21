@@ -31,7 +31,6 @@ class LF_segment_merger:
         self.subview_indices = get_subview_indices(self.s_size, self.t_size)
         self.central_segments = self.get_central_segments()
         self.verbose = MERGER_CONFIG["verbose"]
-        self.embedding_coeff = MERGER_CONFIG["embedding-coeff"]
         self.k_cutoff = MERGER_CONFIG["k-cutoff"]
         if self.verbose:
             os.makedirs("LF_ransac_output", exist_ok=True)
@@ -50,20 +49,18 @@ class LF_segment_merger:
         return central_segments
 
     @torch.no_grad()
-    def shuffle_indices(self):
-        indices_shuffled = self.subview_indices[
-            torch.randperm(self.subview_indices.shape[0])
-        ]
-        indices_shuffled = torch.stack(
+    def filter_indices(self):
+        indices_filtered = self.subview_indices
+        indices_filtered = torch.stack(
             [
                 element
-                for element in indices_shuffled
+                for element in indices_filtered
                 if (
                     element != torch.tensor([self.s_central, self.t_central]).cuda()
                 ).any()
             ]
         )
-        return indices_shuffled
+        return indices_filtered
 
     @torch.no_grad()
     def filter_segments(self, subview_segments):
@@ -122,7 +119,6 @@ class LF_segment_merger:
             central_embedding, embeddings.shape[0], dim=0
         )
         similarities = F.cosine_similarity(embeddings, central_embedding)
-        similarities = self.embedding_coeff * similarities
         if self.verbose:
             os.makedirs(
                 f"LF_ransac_output/{central_mask_num.item()}/fit/{str(s.item()).zfill(2)}_{str(t.item()).zfill(2)}",
@@ -162,7 +158,7 @@ class LF_segment_merger:
             .cuda()
             .long()
         )
-        for i_ind, (s, t) in enumerate(self.shuffle_indices()):
+        for i_ind, (s, t) in enumerate(self.filter_indices()):
             similarities, subview_segment_indices = self.get_subview_masks_similarities(
                 central_mask_num, s, t
             )

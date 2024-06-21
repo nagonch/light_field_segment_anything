@@ -5,12 +5,14 @@ import os
 from torch.utils.data import Dataset
 import math
 import h5py
+from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, section, return_disparity=False):
+    def __init__(self, section, return_disparity=False, return_labels=False):
         self.data_path = f"UrbanLF_Syn/{section}"
         self.return_disparity = return_disparity
+        self.return_labels = return_labels
         self.frames = sorted(
             [
                 item
@@ -27,6 +29,7 @@ class UrbanLFDataset(Dataset):
         frame = self.frames[idx]
         imgs = []
         disparities = []
+        labels = []
         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
             if (
                 filename.endswith("depth.png")
@@ -39,7 +42,13 @@ class UrbanLFDataset(Dataset):
                 img = (torch.tensor(img))[:, :, :3]
                 imgs.append(img)
             elif filename.endswith("disparity.npy"):
-                disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
+                disparities.append(
+                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
+                )
+            elif filename.endswith("label.npy"):
+                labels.append(
+                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
+                )
         LF = torch.stack(imgs).cuda()
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -50,16 +59,36 @@ class UrbanLFDataset(Dataset):
             v,
             c,
         )
-        if self.return_disparity and disparities:
-            disparities = np.stack(disparities).reshape(
-                n_apertures,
-                n_apertures,
-                u,
-                v,
+        return_tuple = [
+            LF,
+        ]
+        if self.return_labels and labels:
+            labels = (
+                torch.stack(labels)
+                .reshape(
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                )
+                .cuda()
             )
-            return LF, disparities
-        else:
-            return LF
+            # labels = remap_labels(labels)
+            labels += 1
+            return_tuple.append(labels)
+        if self.return_disparity and disparities:
+            disparities = (
+                torch.stack(disparities)
+                .reshape(
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                )
+                .cuda()
+            )
+            return_tuple.append(disparities)
+        return return_tuple
 
 
 class HCIOldDataset:
@@ -75,39 +104,46 @@ class HCIOldDataset:
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
-        gt_depth = np.array(scene["GT_DEPTH"])
         LF = np.array(scene["LF"])
+        return LF
+
+    def get_labels(self, name):
         labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
-        return LF, gt_depth, labels
+        return labels
+
+    def get_depth(self, name):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        return gt_depth
+
+    def get_disparity(self, name, eps=1e-9):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        s_size, t_size, u_size, v_size = gt_depth.shape
+        dH = scene.attrs["dH"][0]
+        f = scene.attrs["focalLength"][0]
+        shift = scene.attrs["shift"][0]
+        disparity = np.zeros((s_size, t_size, u_size, v_size, 2))
+        central_ind = s_size // 2
+        for s in range(s_size):
+            for t in range(t_size):
+                disparity[s, t, :, :, 0] = (dH * (central_ind - s)) * f / (
+                    gt_depth[s, t] + eps
+                ) - shift * (central_ind - s)
+                disparity[s, t, :, :, 1] = (dH * (central_ind - t)) * f / (
+                    gt_depth[s, t] + eps
+                ) - shift * (central_ind - t)
+        return disparity
 
 
 if __name__ == "__main__":
     from plenpy.lightfields import LightField
     import imgviz
     from utils import visualize_segmentation_mask
+    from matplotlib import pyplot as plt
+    from scipy import ndimage
+    from utils import remap_labels
 
-    HCI_dataset = HCIOldDataset()
-    LF, depth, labels = HCI_dataset.get_scene("horses")
-    s, t, u, v, _ = LF.shape
-    LF = LightField(LF.detach().cpu().numpy())
-    LF.show()
-    depth = (
-        (torch.nan_to_num(depth, posinf=0.0).permute(0, 2, 1, 3))
-        .reshape(s * u, t * v)
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    vis = np.transpose(
-        imgviz.depth2rgb(depth).reshape(
-            s,
-            u,
-            t,
-            v,
-            3,
-        ),
-        (0, 2, 1, 3, 4),
-    )
-    depth = LightField(vis)
-    depth.show()
-    visualize_segmentation_mask(labels)
+    dataset = UrbanLFDataset("val", return_labels=True)
+    LF, labels = dataset[3]
+    visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())

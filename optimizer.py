@@ -3,6 +3,7 @@ from utils import unravel_index, MERGER_CONFIG
 import os
 import numpy as np
 from PIL import Image
+import torch.nn.functional as F
 
 
 class GreedyOptimizer:
@@ -65,13 +66,15 @@ class GreedyOptimizer:
             indexing="ij",
         )
         masks_x = masks_x.repeat(masks.shape[0], 1, 1)
-        masks_y = masks_y.repeat(masks.shape[0], 1, 1)
         centroids_x = (masks_x * masks).sum(axis=(1, 2)) / (
             masks.sum(axis=(1, 2)) + eps
         )
+        del masks_x
+        masks_y = masks_y.repeat(masks.shape[0], 1, 1)
         centroids_y = (masks_y * masks).sum(axis=(1, 2)) / (
             masks.sum(axis=(1, 2)) + eps
         )
+        del masks_y
         centroids = torch.stack((centroids_y, centroids_x)).T
         centroids -= centroids.mean(axis=0)
         return (

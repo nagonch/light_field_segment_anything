@@ -9,6 +9,7 @@ from plenpy.lightfields import LightField
 import logging
 from k_means import k_means
 from typing import Tuple
+from scipy import ndimage
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -19,12 +20,14 @@ with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, filename=None):
+def visualize_segmentation_mask(segments, LF, filename=None):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
+    LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
     vis = np.transpose(
         imgviz.label2rgb(
             label=segments,
+            image=LF,
             colormap=imgviz.label_colormap(segments.max() + 1),
         ).reshape(s, u, t, v, 3),
         (0, 2, 1, 3, 4),
@@ -47,6 +50,22 @@ def visualize_segments(segments, filename):
     )
     im = Image.fromarray(vis)
     im.save(filename)
+
+
+def remap_labels(labels):
+    max_label = 0
+    labels_remapped = torch.zeros(labels.shape).to(torch.int32).cuda()
+    structure_4d = ndimage.generate_binary_structure(4, 4)
+    for label in torch.unique(labels):
+        img = (labels == label).to(torch.int32)
+        img = torch.tensor(ndimage.label(img.cpu().numpy(), structure_4d)[0]).cuda()
+        for unique_label in torch.unique(img)[1:]:
+            if (img == unique_label).sum(axis=(2, 3)).float().mean() >= MERGER_CONFIG[
+                "min-avg-labels-gt-merger"
+            ]:
+                labels_remapped[img == unique_label] = max_label + unique_label
+        max_label = labels_remapped.max()
+    return labels_remapped
 
 
 def stack_segments(segments):
