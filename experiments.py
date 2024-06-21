@@ -3,3 +3,39 @@
 # 3. Segment dataset with SAM and save corresponding lightfields and embeddings
 # 4. Merge segments and save the results
 # 5. Calculate metrics and save them to table
+from data import HCIOldDataset, UrbanLFDataset
+import yaml
+import os
+from utils import SAM_CONFIG, MERGER_CONFIG
+
+with open("experiment_config.yaml") as f:
+    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
+
+def prepare_exp():
+    exp_name = EXP_CONFIG["exp-name"]
+    os.makedirs(f"experiments/{exp_name}", exist_ok=True)
+    filenames = ["sam_config.yaml", "merger_config.yaml", "exp_config.yaml"]
+    configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
+    for config, filename in zip(configs, filenames):
+        with open(f"experiments/{exp_name}/{filename}", "w") as outfile:
+            yaml.dump(config, outfile, default_flow_style=False)
+
+
+def get_datset():
+    name_to_dataset = {
+        "HCI": HCIOldDataset(),
+        "URBAN_SYN": UrbanLFDataset("UrbanLF_Syn/val"),
+        "URBAN_REAL": UrbanLFDataset("UrbanLF_Real/val"),
+    }
+    datset_name = EXP_CONFIG["dataset-name"]
+    dataset = name_to_dataset.get(datset_name)
+    if not dataset:
+        raise ValueError(f"{EXP_CONFIG['dataset-name']} is not a valid datset name")
+    return dataset
+
+
+if __name__ == "__main__":
+    prepare_exp()
+    dataset = get_datset()
+    print(type(dataset))
