@@ -9,8 +9,10 @@ from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, section, return_disparity=False, return_labels=False):
-        self.data_path = f"UrbanLF_Syn/{section}"
+    def __init__(
+        self, data_path="UrbanLF_Syn/val", return_disparity=False, return_labels=False
+    ):
+        self.data_path = data_path
         self.return_disparity = return_disparity
         self.return_labels = return_labels
         self.frames = sorted(
