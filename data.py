@@ -9,7 +9,7 @@ from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, data_path, return_disparity=False, return_labels=False):
+    def __init__(self, data_path, return_disparity=False, return_labels=True):
         self.data_path = data_path
         self.return_disparity = return_disparity
         self.return_labels = return_labels
@@ -94,25 +94,28 @@ class UrbanLFDataset(Dataset):
         return return_tuple
 
 
-class HCIOldDataset:
+class HCIOldDataset(Dataset):
     def __init__(self, data_path="HCI_dataset_old"):
         self.data_path = data_path
         self.scene_to_path = {}
-        for scene in [
+        self.scenes = [
             "horses",
             "papillon",
             "stillLife",
-        ]:
+        ]
+        for scene in self.scenes:
             self.scene_to_path[scene] = f"{data_path}/{scene}"
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
-        LF = np.array(scene["LF"])
+        LF = torch.tensor(np.array(scene["LF"])).cuda()
         return LF
 
     def get_labels(self, name):
-        labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
-        return labels
+        labels = np.array(
+            h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        )
+        return torch.tensor(labels).cuda()
 
     def get_depth(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
@@ -138,6 +141,15 @@ class HCIOldDataset:
                 ) - shift * (central_ind - t)
         return disparity
 
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_name = self.scenes[idx]
+        LF = self.get_scene(scene_name)
+        labels = self.get_labels(scene_name)
+        return LF, labels
+
 
 if __name__ == "__main__":
     from plenpy.lightfields import LightField
@@ -150,5 +162,8 @@ if __name__ == "__main__":
     dataset = UrbanLFDataset("UrbanLF_Real/val", return_labels=True)
     LF, labels = dataset[3]
     print(labels.shape, LF.shape)
+    dataset_HCI = HCIOldDataset()
+    LF, labels = dataset_HCI[2]
+    print(LF.shape, labels.shape)
     raise
     visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
