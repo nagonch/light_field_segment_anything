@@ -90,8 +90,8 @@ class AccuracyMetrics:
     def __init__(self, predictions, gt_labels):
         self.predictions = predictions
         self.gt_labels = gt_labels
-        s, t, u, v = self.predictions.shape
-        self.n_pixels = s * t * u * v
+        self.s, self.t, self.u, self.v = self.predictions.shape
+        self.n_pixels = self.s * self.t * self.u * self.v
         self.boundary_d = 2
 
     def achievable_accuracy(self):
@@ -151,14 +151,30 @@ class AccuracyMetrics:
     def coverage(self):
         return (self.predictions > 0).float().mean().item()
 
-    def oversegmentation_number(self):
-        gt_labels_remapped = remap_labels(labels)
-        overseg_numbers = []
-        for label in torch.unique(gt_labels_remapped):
-            mask = gt_labels_remapped == label
-            overseg_number_i = torch.unique(self.predictions[mask]).shape[0]
-            overseg_numbers.append(overseg_number_i)
-        return torch.tensor(overseg_numbers).cuda().float().mean().item()
+    def size_metrics(self, eps=1e-9):
+        superpixel_sizes = []
+        gt_segment_sizes = []
+        for label in torch.unique(self.gt_labels):
+            gt_segment = self.gt_labels[self.s // 2, self.t // 2] == label
+            gt_segment_size = gt_segment.sum()
+            for superpixel_num in torch.unique(
+                self.predictions[self.s // 2, self.t // 2][gt_segment]
+            ):
+                if superpixel_num == 0:
+                    continue
+                superpixel = (
+                    self.predictions[self.s // 2, self.t // 2] == superpixel_num
+                )
+                superpixel_size = superpixel.sum()
+                superpixel_sizes.append(superpixel_size)
+                gt_segment_sizes.append(gt_segment_size)
+        superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
+        gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
+        mean_superpixel_size = superpixel_sizes.mean()
+        superpixel_to_gt_segment_ratio = (
+            superpixel_sizes / (gt_segment_sizes + eps)
+        ).mean()
+        return mean_superpixel_size, superpixel_to_gt_segment_ratio
 
     def compactness(self, eps=1e-9):
         """
@@ -203,7 +219,7 @@ if __name__ == "__main__":
     labels = labels[2:-2, 2:-2]
     predictions = torch.tensor(torch.load("merged.pt")).cuda()
     acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.oversegmentation_number())
+    print(acc_metrics.size_metrics())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
