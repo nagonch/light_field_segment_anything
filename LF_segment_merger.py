@@ -198,7 +198,7 @@ class LF_segment_merger:
     @torch.no_grad()
     def get_result_masks(self):
         self.merged_segments = []
-        for segment_num in tqdm(self.central_segments):
+        for segment_num in self.central_segments:
             segment_embedding = self.embeddings.get(segment_num.item(), None)
             if segment_embedding is None:
                 continue
