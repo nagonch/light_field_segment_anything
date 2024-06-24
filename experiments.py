@@ -7,6 +7,9 @@ from LF_segment_merger import LF_segment_merger
 import torch
 from metrics import ConsistencyMetrics, AccuracyMetrics
 import pandas as pd
+import warnings
+
+warnings.filterwarnings("ignore")
 
 
 def prepare_exp():
@@ -58,6 +61,7 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
+        print(LF.shape)
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,

@@ -3,6 +3,7 @@ import os
 from experiments import get_datset
 from plenpy.lightfields import LightField
 import torch
+import pandas as pd
 
 
 def visualize(frame_number):
@@ -24,5 +25,12 @@ def visualize(frame_number):
         visualize_segmentation_mask(merged_segments)
 
 
+def get_metrics_df():
+    if os.path.exists(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv"):
+        df = pd.read_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
+        print(df)
+
+
 if __name__ == "__main__":
+    get_metrics_df()
     visualize(0)
