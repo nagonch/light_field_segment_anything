@@ -20,10 +20,11 @@ with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def visualize_segmentation_mask(segments, LF, filename=None):
+def visualize_segmentation_mask(segments, LF=None, filename=None):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
-    LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
+    if LF is not None:
+        LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
     vis = np.transpose(
         imgviz.label2rgb(
             label=segments,
