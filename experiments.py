@@ -23,7 +23,7 @@ def prepare_exp():
             raise FileExistsError(
                 f"experiments/{exp_name} exists. Continue progress or delete"
             )
-    filenames = ["sam_config.yaml", "merger_config.yaml", "exp_config.yaml"]
+    filenames = ["sam_config.yaml", "merger_config.yaml", "experiment_config.yaml"]
     configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
         with open(f"experiments/{exp_name}/{filename}", "w") as outfile:
@@ -58,6 +58,7 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
+        LF = LF[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,

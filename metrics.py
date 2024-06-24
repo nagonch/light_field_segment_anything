@@ -99,8 +99,8 @@ class ConsistencyMetrics:
 
 class AccuracyMetrics:
     def __init__(self, predictions, gt_labels):
-        self.predictions = predictions.cuda()
-        self.gt_labels = gt_labels.cuda()
+        self.predictions = torch.tensor(predictions).cuda()
+        self.gt_labels = torch.tensor(gt_labels).cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
         self.n_pixels = self.s * self.t * self.u * self.v
         self.boundary_d = 2
