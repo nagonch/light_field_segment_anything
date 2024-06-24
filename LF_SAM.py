@@ -108,13 +108,13 @@ class SimpleSAM:
             del segments
 
     @torch.no_grad()
-    def postprocess_data(self):
+    def postprocess_data(self, embeddings_save_path, segments_save_path):
         emd_dict = {}
         for item in os.listdir("embeddings"):
             if item.endswith("pt"):
                 emd_dict.update(torch.load(f"embeddings/{item}"))
                 os.remove(f"embeddings/{item}")
-        torch.save(emd_dict, SAM_CONFIG["embeddings-filename"])
+        torch.save(emd_dict, embeddings_save_path)
         del emd_dict
         result_masks = []
         for item in sorted(os.listdir("segments")):
@@ -123,7 +123,7 @@ class SimpleSAM:
                 os.remove(f"segments/{item}")
         torch.save(
             torch.stack(result_masks).reshape(self.s, self.t, self.u, self.v),
-            SAM_CONFIG["segments-filename"],
+            segments_save_path,
         )
 
 

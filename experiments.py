@@ -6,6 +6,7 @@
 from data import HCIOldDataset, UrbanLFDataset
 import yaml
 import os
+from LF_SAM import get_sam
 from utils import SAM_CONFIG, MERGER_CONFIG
 
 with open("experiment_config.yaml") as f:
@@ -14,7 +15,7 @@ with open("experiment_config.yaml") as f:
 
 def prepare_exp():
     exp_name = EXP_CONFIG["exp-name"]
-    os.makedirs(f"experiments/{exp_name}", exist_ok=True)
+    os.makedirs(f"experiments/{exp_name}")
     filenames = ["sam_config.yaml", "merger_config.yaml", "exp_config.yaml"]
     configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
@@ -35,7 +36,20 @@ def get_datset():
     return dataset
 
 
+def get_sam_data(dataset):
+    simple_sam = get_sam()
+    for idx in range(len(dataset)):
+        idx_padded = str(idx).zfill(4)
+        LF, _ = dataset[idx]
+        LF = LF.cpu().numpy()
+        simple_sam.segment_LF(LF)
+        simple_sam.postprocess_data(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth",
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}.pth",
+        )
+
+
 if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
-    print(type(dataset))
+    get_sam_data(dataset)
