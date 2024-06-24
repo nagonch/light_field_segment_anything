@@ -58,7 +58,6 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
-        LF = LF[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,
