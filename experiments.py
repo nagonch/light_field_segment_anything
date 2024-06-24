@@ -56,7 +56,6 @@ def get_sam_data(dataset):
             continue
         LF, _, _ = dataset[idx]
         LF = LF.cpu().numpy()
-        # LF = LF[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,
@@ -97,7 +96,6 @@ def calculate_metrics(dataset):
     for idx in range(len(dataset)):
         idx_padded = str(idx).zfill(4)
         _, labels, disparity = dataset[idx]
-        # labels = labels[:2, :2]
         predictions = torch.load(
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
