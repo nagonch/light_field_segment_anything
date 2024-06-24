@@ -8,6 +8,7 @@ import torch
 from metrics import ConsistencyMetrics, AccuracyMetrics
 import pandas as pd
 import warnings
+from tqdm.auto import tqdm
 
 warnings.filterwarnings("ignore")
 
@@ -48,7 +49,7 @@ def get_datset():
 
 def get_sam_data(dataset):
     simple_sam = get_sam()
-    for idx in range(len(dataset)):
+    for idx in tqdm(range(len(dataset)), desc="sam segmenting", position=0, leave=True):
         idx_padded = str(idx).zfill(4)
         emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
         sam_segments_filename = (
@@ -61,7 +62,6 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
-        print(LF.shape)
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,
@@ -70,7 +70,9 @@ def get_sam_data(dataset):
 
 
 def get_merged_data(dataset):
-    for idx in range(len(dataset)):
+    for idx in tqdm(
+        range(len(dataset)), desc="segment merging", position=0, leave=True
+    ):
         LF, _, _ = dataset[idx]
         idx_padded = str(idx).zfill(4)
         emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
@@ -98,7 +100,9 @@ def get_merged_data(dataset):
 
 def calculate_metrics(dataset):
     metrics_dataframe = []
-    for idx in range(len(dataset)):
+    for idx in tqdm(
+        range(len(dataset)), desc="metrics calculation", position=0, leave=True
+    ):
         idx_padded = str(idx).zfill(4)
         _, labels, disparity = dataset[idx]
         predictions = torch.load(

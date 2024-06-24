@@ -1,4 +1,4 @@
 exp-name: test
 dataset-name: HCI
-continue-progress: True
+continue-progress: False
 restart-merging: False

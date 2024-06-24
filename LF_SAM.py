@@ -64,7 +64,13 @@ class SimpleSAM:
         max_segment_num = -1
         self.s, self.t, self.u, self.v, c = LF.shape
         LF = LF.reshape(-1, LF.shape[2], LF.shape[3], LF.shape[4])
-        for subview_num, subview in enumerate(LF):
+        for subview_num, subview in tqdm(
+            enumerate(LF),
+            desc="sam LF batching",
+            position=1,
+            leave=False,
+            total=LF.shape[0],
+        ):
             masks, embeddings = self.forward(subview)
             item = zip(masks, embeddings)
             masks = sorted(item, key=(lambda x: x[0].sum()), reverse=True)
