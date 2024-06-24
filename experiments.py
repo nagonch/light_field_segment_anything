@@ -45,7 +45,7 @@ def get_sam_data(dataset):
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth",
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}.pth",
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth",
         )
 
 
