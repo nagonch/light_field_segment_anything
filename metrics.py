@@ -170,10 +170,10 @@ class AccuracyMetrics:
                 gt_segment_sizes.append(gt_segment_size)
         superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
         gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
-        mean_superpixel_size = superpixel_sizes.mean()
+        mean_superpixel_size = superpixel_sizes.mean().item()
         superpixel_to_gt_segment_ratio = (
-            superpixel_sizes / (gt_segment_sizes + eps)
-        ).mean()
+            (superpixel_sizes / (gt_segment_sizes + eps)).mean().item()
+        )
         return mean_superpixel_size, superpixel_to_gt_segment_ratio
 
     def compactness(self, eps=1e-9):
@@ -192,7 +192,7 @@ class AccuracyMetrics:
             perim = edges.sum()
             Q_s = 4 * torch.pi * area / (perim**2 + eps)
             result += Q_s * area / (u * v)
-        return result
+        return result.item()
 
     def undersegmentation_error(self):
         """
@@ -211,6 +211,24 @@ class AccuracyMetrics:
                 total_penalty += min(overlap, predicted_region.sum() - overlap)
             undersegmentation_errors.append(total_penalty / gt_region.sum())
         return torch.tensor(undersegmentation_errors).cuda().mean().item()
+
+    def get_metrics_dict(self):
+        achievable_accuracy, _ = self.achievable_accuracy()
+        boundary_recall, _ = self.boundary_recall()
+        coverage = self.coverage()
+        mean_superpixel_size, superpixel_to_gt_segment_ratio = self.size_metrics()
+        compactness = self.compactness()
+        undersegmentation_error = self.undersegmentation_error()
+        result = {
+            "achievable_accuracy": achievable_accuracy,
+            "boundary_recall": boundary_recall,
+            "coverage": coverage,
+            "mean_superpixel_size": mean_superpixel_size,
+            "superpixel_to_gt_segment_ratio": superpixel_to_gt_segment_ratio,
+            "compactness": compactness,
+            "undersegmentation_error": undersegmentation_error,
+        }
+        return result
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from LF_SAM import get_sam
 from utils import SAM_CONFIG, MERGER_CONFIG
 from LF_segment_merger import LF_segment_merger
 import torch
+from metrics import ConsistencyMetrics, AccuracyMetrics
 
 with open("experiment_config.yaml") as f:
     EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -90,8 +91,22 @@ def get_merged_data(dataset):
         )
 
 
+def calculate_metrics(dataset):
+    for idx in range(len(dataset)):
+        idx_padded = str(idx).zfill(4)
+        _, labels = dataset[idx]
+        labels = labels[:2, :2]
+        predictions = torch.load(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
+        )
+        accuracy_metrics = AccuracyMetrics(predictions, labels)
+        accuracy_metrics_dict = accuracy_metrics.get_metrics_dict()
+        print(accuracy_metrics_dict)
+
+
 if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     get_sam_data(dataset)
     get_merged_data(dataset)
+    calculate_metrics(dataset)
