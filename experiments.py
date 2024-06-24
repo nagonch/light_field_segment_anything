@@ -1,8 +1,3 @@
-# 1. Load data (LF + gt labels. Datasets: HCI, UrbanLF_Syn_val (later add train), UrbanLF_Real_val (later add train))
-# 2. Create folder with f"{experiment_name}". Save both configs there
-# 3. Segment dataset with SAM and save corresponding lightfields and embeddings
-# 4. Merge segments and save the results
-# 5. Calculate metrics and save them to table
 from data import HCIOldDataset, UrbanLFDataset
 import yaml
 import os
@@ -11,6 +6,7 @@ from utils import SAM_CONFIG, MERGER_CONFIG
 from LF_segment_merger import LF_segment_merger
 import torch
 from metrics import ConsistencyMetrics, AccuracyMetrics
+import pandas as pd
 
 with open("experiment_config.yaml") as f:
     EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -59,7 +55,8 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
-        LF = LF.cpu().numpy()[:2, :2]
+        LF = LF.cpu().numpy()
+        # LF = LF[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,
@@ -92,19 +89,27 @@ def get_merged_data(dataset):
 
 
 def calculate_metrics(dataset):
+    metrics_dataframe = []
     for idx in range(len(dataset)):
         idx_padded = str(idx).zfill(4)
         _, labels, disparity = dataset[idx]
-        labels = labels[:2, :2]
+        # labels = labels[:2, :2]
         predictions = torch.load(
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
         consistensy_metrics = ConsistencyMetrics(predictions, disparity)
-        consistensy_metrics_dict = consistensy_metrics.get_metrics_dict()
+        metrics_dict = consistensy_metrics.get_metrics_dict()
         accuracy_metrics = AccuracyMetrics(predictions, labels)
-        accuracy_metrics_dict = accuracy_metrics.get_metrics_dict()
-        print(accuracy_metrics_dict)
-        print(consistensy_metrics_dict)
+        metrics_dict.update(accuracy_metrics.get_metrics_dict())
+        metrics_dataframe.append(metrics_dict)
+    metrics_dataframe = pd.DataFrame(metrics_dataframe)
+    if hasattr(dataset, "scenes"):
+        metrics_dataframe.index = dataset.scenes
+    mean_values = pd.DataFrame(metrics_dataframe.mean()).T
+    mean_values.index = ["mean"]
+    metrics_dataframe = pd.concat([metrics_dataframe, mean_values])
+    metrics_dataframe.to_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
+    print(metrics_dataframe)
 
 
 if __name__ == "__main__":
