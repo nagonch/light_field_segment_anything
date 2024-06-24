@@ -85,7 +85,7 @@ class ConsistencyMetrics:
             metric = torch.norm(centroids - main_centroid, p=2, dim=1)
             metric = metric.sum() / (metric.shape[0] - 1)
             results.append(metric)
-        return torch.tensor(metric).mean().item()
+        return torch.tensor(results).mean().item()
 
     def get_metrics_dict(self):
         labels_per_pixel = self.labels_per_pixel()
