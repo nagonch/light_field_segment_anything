@@ -1,10 +1,10 @@
-min-similarity: 0.85
-verbose: False
-top-n-segments-visualization: 10
-mask-test-threshold: 5
-n-parallel-processes: 1
+min-similarity: 0.75
 lambda-reg: 0.3
 k-cutoff: 6
+
+verbose: False
+top-n-segments-visualization: 10
+n-parallel-processes: 1
 k-means-reg-parameter: 0.01
 k-means-n-iterations: 100
 min-central-segments-for-parallel: 50
