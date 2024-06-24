@@ -102,6 +102,7 @@ class HCIOldDataset(Dataset):
             "horses",
             "papillon",
             "stillLife",
+            "buddha",
         ]
         for scene in self.scenes:
             self.scene_to_path[scene] = f"{data_path}/{scene}"
@@ -160,11 +161,11 @@ if __name__ == "__main__":
     from scipy import ndimage
     from utils import remap_labels
 
-    dataset = UrbanLFDataset("UrbanLF_Real/val", return_labels=True)
-    LF, labels = dataset[3]
-    print(labels.shape, LF.shape)
+    # dataset = UrbanLFDataset("UrbanLF_Real/val", return_labels=True)
+    # LF, labels = dataset[3]
+    # print(labels.shape, LF.shape)
     dataset_HCI = HCIOldDataset()
-    LF, labels = dataset_HCI[2]
-    print(LF.shape, labels.shape)
+    LF, labels, disparity = dataset_HCI[-1]
+    print(LF.shape, labels.shape, disparity.shape)
     raise
     visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
