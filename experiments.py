@@ -58,7 +58,7 @@ def get_sam_data(dataset):
             and os.path.exists(sam_segments_filename)
         ):
             continue
-        LF, _ = dataset[idx]
+        LF, _, _ = dataset[idx]
         LF = LF.cpu().numpy()[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
@@ -69,7 +69,7 @@ def get_sam_data(dataset):
 
 def get_merged_data(dataset):
     for idx in range(len(dataset)):
-        LF, _ = dataset[idx]
+        LF, _, _ = dataset[idx]
         LF = LF.cpu().numpy()
         idx_padded = str(idx).zfill(4)
         emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
@@ -94,14 +94,17 @@ def get_merged_data(dataset):
 def calculate_metrics(dataset):
     for idx in range(len(dataset)):
         idx_padded = str(idx).zfill(4)
-        _, labels = dataset[idx]
+        _, labels, disparity = dataset[idx]
         labels = labels[:2, :2]
         predictions = torch.load(
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
+        consistensy_metrics = ConsistencyMetrics(predictions, disparity)
+        consistensy_metrics_dict = consistensy_metrics.get_metrics_dict()
         accuracy_metrics = AccuracyMetrics(predictions, labels)
         accuracy_metrics_dict = accuracy_metrics.get_metrics_dict()
         print(accuracy_metrics_dict)
+        print(consistensy_metrics_dict)
 
 
 if __name__ == "__main__":

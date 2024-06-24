@@ -9,7 +9,7 @@ from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, data_path, return_disparity=False, return_labels=True):
+    def __init__(self, data_path, return_disparity=True, return_labels=True):
         self.data_path = data_path
         self.return_disparity = return_disparity
         self.return_labels = return_labels
@@ -139,7 +139,7 @@ class HCIOldDataset(Dataset):
                 disparity[s, t, :, :, 1] = (dH * (central_ind - t)) * f / (
                     gt_depth[s, t] + eps
                 ) - shift * (central_ind - t)
-        return disparity
+        return torch.tensor(disparity).cuda()
 
     def __len__(self):
         return len(self.scenes)
@@ -148,7 +148,8 @@ class HCIOldDataset(Dataset):
         scene_name = self.scenes[idx]
         LF = self.get_scene(scene_name)
         labels = self.get_labels(scene_name)
-        return LF, labels
+        disparity = self.get_disparity(scene_name)
+        return LF, labels, disparity
 
 
 if __name__ == "__main__":

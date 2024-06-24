@@ -10,16 +10,16 @@ from utils import remap_labels
 
 
 class ConsistencyMetrics:
-    def __init__(self, labels, disparity):
-        s_size, t_size, u_size, v_size = labels.shape
+    def __init__(self, predictions, disparity):
+        s_size, t_size, u_size, v_size = predictions.shape
         u_space, v_space = torch.meshgrid(
             (torch.arange(u_size).cuda(), torch.arange(v_size).cuda())
         )
-        self.labels_projected = torch.zeros_like(labels).cuda()
+        self.labels_projected = torch.zeros_like(predictions).cuda()
         for s in range(s_size):
             for t in range(t_size):
                 disp = disparity[s, t]
-                l = labels[s, t]
+                l = predictions[s, t]
                 u_st = (u_space - disp[:, :, 0]).reshape(-1)
                 v_st = (v_space + disp[:, :, 1]).reshape(-1)
                 mask = (u_st >= 0) & (u_st < u_size) & (v_st >= 0) & (v_st < v_size)
@@ -43,7 +43,7 @@ class ConsistencyMetrics:
         lengths = []
         for label_set in labels_projected:
             lengths.append(len(set(label_set.tolist())))
-        result = torch.tensor(lengths).cuda().float().mean()
+        result = torch.tensor(lengths).cuda().float().mean().item()
         return result
 
     def self_similarity(self, eps=1e-9):
@@ -83,7 +83,16 @@ class ConsistencyMetrics:
             metric = torch.norm(centroids - main_centroid, p=2, dim=1)
             metric = metric.sum() / (metric.shape[0] - 1)
             results.append(metric)
-        return torch.tensor(metric).mean()
+        return torch.tensor(metric).mean().item()
+
+    def get_metrics_dict(self):
+        labels_per_pixel = self.labels_per_pixel()
+        self_similarity = self.self_similarity()
+        result = {
+            "labels_per_pixel": labels_per_pixel,
+            "self_similarity": self_similarity,
+        }
+        return result
 
 
 class AccuracyMetrics:
