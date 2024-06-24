@@ -8,6 +8,8 @@ import yaml
 import os
 from LF_SAM import get_sam
 from utils import SAM_CONFIG, MERGER_CONFIG
+from LF_segment_merger import LF_segment_merger
+import torch
 
 with open("experiment_config.yaml") as f:
     EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -15,7 +17,12 @@ with open("experiment_config.yaml") as f:
 
 def prepare_exp():
     exp_name = EXP_CONFIG["exp-name"]
-    os.makedirs(f"experiments/{exp_name}")
+    try:
+        os.makedirs(f"experiments/{exp_name}", exist_ok=EXP_CONFIG["continue-progress"])
+    except FileExistsError:
+        raise FileExistsError(
+            f"experiments/{exp_name} exists. Continue progress or delete"
+        )
     filenames = ["sam_config.yaml", "merger_config.yaml", "exp_config.yaml"]
     configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
@@ -40,12 +47,46 @@ def get_sam_data(dataset):
     simple_sam = get_sam()
     for idx in range(len(dataset)):
         idx_padded = str(idx).zfill(4)
+        emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
+        sam_segments_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
+        )
+        if (
+            EXP_CONFIG["continue-progress"]
+            and os.path.exists(emb_filename)
+            and os.path.exists(sam_segments_filename)
+        ):
+            continue
         LF, _ = dataset[idx]
-        LF = LF.cpu().numpy()
+        LF = LF.cpu().numpy()[:2, :2]
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth",
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth",
+            emb_filename,
+            sam_segments_filename,
+        )
+
+
+def get_merged_data(dataset):
+    for idx in range(len(dataset)):
+        LF, _ = dataset[idx]
+        LF = LF.cpu().numpy()
+        idx_padded = str(idx).zfill(4)
+        emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
+        sam_segments_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
+        )
+        result_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
+        )
+        embeddings = torch.load(emb_filename)
+        if EXP_CONFIG["continue-progress"] and os.path.exists(result_filename):
+            continue
+        segments = torch.load(sam_segments_filename).cuda()
+        merger = LF_segment_merger(segments, embeddings, LF)
+        merged_segments = merger.get_result_masks()
+        torch.save(
+            merged_segments,
+            result_filename,
         )
 
 
@@ -53,3 +94,4 @@ if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     get_sam_data(dataset)
+    get_merged_data(dataset)
