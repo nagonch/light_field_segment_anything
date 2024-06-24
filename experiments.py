@@ -96,6 +96,10 @@ def get_merged_data(dataset):
             merged_segments,
             result_filename,
         )
+        del segments
+        del embeddings
+        del merger
+        del merged_segments
 
 
 def calculate_metrics(dataset):
