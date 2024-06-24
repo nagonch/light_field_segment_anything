@@ -11,6 +11,8 @@ from utils import remap_labels
 
 class ConsistencyMetrics:
     def __init__(self, predictions, disparity):
+        predictions = torch.tensor(predictions).cuda()
+        disparity = torch.tensor(disparity).cuda()
         s_size, t_size, u_size, v_size = predictions.shape
         u_space, v_space = torch.meshgrid(
             (torch.arange(u_size).cuda(), torch.arange(v_size).cuda())
@@ -97,8 +99,8 @@ class ConsistencyMetrics:
 
 class AccuracyMetrics:
     def __init__(self, predictions, gt_labels):
-        self.predictions = predictions
-        self.gt_labels = gt_labels
+        self.predictions = predictions.cuda()
+        self.gt_labels = gt_labels.cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
         self.n_pixels = self.s * self.t * self.u * self.v
         self.boundary_d = 2

@@ -49,7 +49,7 @@ class UrbanLFDataset(Dataset):
                 labels.append(
                     torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
                 )
-        LF = torch.stack(imgs).cuda()
+        LF = torch.stack(imgs)
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
         LF = LF.reshape(
@@ -58,7 +58,7 @@ class UrbanLFDataset(Dataset):
             u,
             v,
             c,
-        )
+        ).numpy()
         return_tuple = [
             LF,
         ]
@@ -74,7 +74,7 @@ class UrbanLFDataset(Dataset):
                         u,
                         v,
                     )
-                    .cuda()
+                    .numpy()
                 )
                 # labels = remap_labels(labels)
                 labels += 1
@@ -88,7 +88,7 @@ class UrbanLFDataset(Dataset):
                     u,
                     v,
                 )
-                .cuda()
+                .numpy()
             )
             return_tuple.append(disparities)
         return return_tuple
@@ -108,14 +108,14 @@ class HCIOldDataset(Dataset):
 
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
-        LF = torch.tensor(np.array(scene["LF"])).cuda()
+        LF = np.array(scene["LF"])
         return LF
 
     def get_labels(self, name):
         labels = np.array(
             h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
         )
-        return torch.tensor(labels).cuda()
+        return labels
 
     def get_depth(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
@@ -139,7 +139,7 @@ class HCIOldDataset(Dataset):
                 disparity[s, t, :, :, 1] = (dH * (central_ind - t)) * f / (
                     gt_depth[s, t] + eps
                 ) - shift * (central_ind - t)
-        return torch.tensor(disparity).cuda()
+        return disparity
 
     def __len__(self):
         return len(self.scenes)

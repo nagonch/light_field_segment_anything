@@ -19,6 +19,9 @@ with open("sam_config.yaml") as f:
 with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
+with open("experiment_config.yaml") as f:
+    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
 
 def visualize_segmentation_mask(segments, LF=None, filename=None):
     s, t, u, v = segments.shape

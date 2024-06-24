@@ -2,14 +2,11 @@ from data import HCIOldDataset, UrbanLFDataset
 import yaml
 import os
 from LF_SAM import get_sam
-from utils import SAM_CONFIG, MERGER_CONFIG
+from utils import SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG
 from LF_segment_merger import LF_segment_merger
 import torch
 from metrics import ConsistencyMetrics, AccuracyMetrics
 import pandas as pd
-
-with open("experiment_config.yaml") as f:
-    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def prepare_exp():
@@ -17,9 +14,15 @@ def prepare_exp():
     try:
         os.makedirs(f"experiments/{exp_name}", exist_ok=EXP_CONFIG["continue-progress"])
     except FileExistsError:
-        raise FileExistsError(
-            f"experiments/{exp_name} exists. Continue progress or delete"
-        )
+        if any(
+            [
+                not filename.endswith(".yaml")
+                for filename in os.listdir(f"experiments/{exp_name}")
+            ]
+        ):
+            raise FileExistsError(
+                f"experiments/{exp_name} exists. Continue progress or delete"
+            )
     filenames = ["sam_config.yaml", "merger_config.yaml", "exp_config.yaml"]
     configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
@@ -55,7 +58,6 @@ def get_sam_data(dataset):
         ):
             continue
         LF, _, _ = dataset[idx]
-        LF = LF.cpu().numpy()
         simple_sam.segment_LF(LF)
         simple_sam.postprocess_data(
             emb_filename,
@@ -66,7 +68,6 @@ def get_sam_data(dataset):
 def get_merged_data(dataset):
     for idx in range(len(dataset)):
         LF, _, _ = dataset[idx]
-        LF = LF.cpu().numpy()
         idx_padded = str(idx).zfill(4)
         emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
         sam_segments_filename = (
