@@ -55,10 +55,12 @@ def get_sam_data(dataset):
         sam_segments_filename = (
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
         )
-        if (
-            EXP_CONFIG["continue-progress"]
-            and os.path.exists(emb_filename)
-            and os.path.exists(sam_segments_filename)
+        merged_segments_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
+        )
+        if EXP_CONFIG["continue-progress"] and (
+            (os.path.exists(emb_filename) and os.path.exists(sam_segments_filename))
+            or os.path.exists(merged_segments_filename)
         ):
             continue
         LF, _, _ = dataset[idx]
