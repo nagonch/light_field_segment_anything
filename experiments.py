@@ -84,13 +84,13 @@ def get_merged_data(dataset):
         result_filename = (
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
-        embeddings = torch.load(emb_filename)
         if (
             EXP_CONFIG["continue-progress"]
             and os.path.exists(result_filename)
             and not EXP_CONFIG["restart-merging"]
         ):
             continue
+        embeddings = torch.load(emb_filename)
         segments = torch.load(sam_segments_filename).cuda()
         merger = LF_segment_merger(segments, embeddings, LF)
         merged_segments = merger.get_result_masks()
