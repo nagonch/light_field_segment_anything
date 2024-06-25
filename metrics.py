@@ -82,10 +82,17 @@ class ConsistencyMetrics:
             )
             centroids = torch.stack((centroids_y, centroids_x)).T
             main_centroid = centroids[centroids.shape[0] // 2]
+            centroids = torch.cat(
+                (
+                    centroids[: centroids.shape[0] // 2, :],
+                    centroids[centroids.shape[0] // 2 + 1 :, :],
+                ),
+                dim=0,
+            )
             metric = torch.norm(centroids - main_centroid, p=2, dim=1)
-            metric = metric.sum() / (metric.shape[0] - 1)
+            metric = torch.mode(metric).values
             results.append(metric)
-        return torch.tensor(results).mean().item()
+        return torch.mode(torch.tensor(results)).values.item()
 
     def get_metrics_dict(self):
         labels_per_pixel = self.labels_per_pixel()
@@ -243,12 +250,13 @@ class AccuracyMetrics:
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFDataset("val", return_labels=True)
-    LF, labels = dataset[3]
-    labels = labels[2:-2, 2:-2]
-    predictions = torch.tensor(torch.load("merged.pt")).cuda()
-    acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.size_metrics())
+    dataset = HCIOldDataset()
+    LF, labels, disparity = dataset[1]
+    predictions = torch.tensor(
+        torch.load("experiments/HCI_main_scenes/0001_result.pth")
+    ).cuda()
+    metrics = ConsistencyMetrics(predictions, disparity)
+    print(metrics.self_similarity())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
