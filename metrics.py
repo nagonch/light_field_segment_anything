@@ -160,7 +160,7 @@ class AccuracyMetrics:
         return true_positives / totals, visualization
 
     def coverage(self):
-        return (self.predictions > 0).float().mean().item()
+        return (self.predictions >= 1).float().mean().item()
 
     def size_metrics(self, eps=1e-9):
         superpixel_sizes = []
