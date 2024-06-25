@@ -90,9 +90,9 @@ class ConsistencyMetrics:
                 dim=0,
             )
             metric = torch.norm(centroids - main_centroid, p=2, dim=1)
-            metric = torch.mode(metric).values
-            results.append(metric)
-        return torch.mode(torch.tensor(results)).values.item()
+            metric_val = torch.median(metric)
+            results.append(metric_val)
+        return torch.tensor(results).median().item()
 
     def get_metrics_dict(self):
         labels_per_pixel = self.labels_per_pixel()
