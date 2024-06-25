@@ -41,7 +41,9 @@ def visualize(frame_number):
 def get_metrics_df():
     print("printing metrics:")
     if os.path.exists(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv"):
-        df = pd.read_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
+        df = pd.read_csv(
+            f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv", index_col=0
+        )
         print(f"{df}\n\n")
 
 
