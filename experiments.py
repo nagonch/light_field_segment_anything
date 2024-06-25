@@ -75,7 +75,6 @@ def get_merged_data(dataset):
     for idx in tqdm(
         range(len(dataset)), desc="segment merging", position=0, leave=True
     ):
-        LF, _, _ = dataset[idx]
         idx_padded = str(idx).zfill(4)
         emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
         sam_segments_filename = (
@@ -90,6 +89,7 @@ def get_merged_data(dataset):
             and not EXP_CONFIG["restart-merging"]
         ):
             continue
+        LF, _, _ = dataset[idx]
         embeddings = torch.load(emb_filename)
         segments = torch.load(sam_segments_filename).cuda()
         merger = LF_segment_merger(segments, embeddings, LF)
