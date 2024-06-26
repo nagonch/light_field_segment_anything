@@ -36,6 +36,7 @@ def visualize(frame_number):
         visualize_segmentation_mask(uncovered_segments)
         print("visualizing achievable accuracy")
         visualize_segmentation_mask(vis)
+        visualize_segmentation_mask(vis == labels)
 
 
 def get_metrics_df():
