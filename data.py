@@ -5,6 +5,7 @@ import os
 from torch.utils.data import Dataset
 import math
 import h5py
+from torch.nn.functional import normalize
 from utils import remap_labels
 
 
@@ -88,9 +89,21 @@ class UrbanLFDataset(Dataset):
                     u,
                     v,
                 )
-                .numpy()
+                .cuda()
             )
-            return_tuple.append(disparities)
+            s_size, t_size, u_size, v_size = disparities.shape
+            result_disparities = torch.zeros((s_size, t_size, u_size, v_size, 2)).cuda()
+            central_ind = s_size // 2
+            for s in range(s_size):
+                for t in range(t_size):
+                    epipolar_vector = (
+                        torch.tensor([central_ind - s, central_ind - t]).float().cuda()
+                    )
+                    epipolar_vector = normalize(epipolar_vector, dim=-1)
+                    result_disparities[s, t] = (
+                        epipolar_vector * disparities[s, t, :, :, None]
+                    )
+            return_tuple.append(result_disparities.cpu().numpy())
         return return_tuple
 
 
@@ -161,11 +174,11 @@ if __name__ == "__main__":
     from scipy import ndimage
     from utils import remap_labels
 
-    # dataset = UrbanLFDataset("UrbanLF_Real/val", return_labels=True)
-    # LF, labels = dataset[3]
-    # print(labels.shape, LF.shape)
-    dataset_HCI = HCIOldDataset()
-    LF, labels, disparity = dataset_HCI[-1]
-    print(LF.shape, labels.shape, disparity.shape)
+    dataset = UrbanLFDataset("UrbanLF_Syn/val")
+    LF, labels, disps = dataset[3]
+    print(labels.shape, LF.shape, disps.shape)
+    # dataset_HCI = HCIOldDataset()
+    # LF, labels, disparity = dataset_HCI[-1]
+    # print(LF.shape, labels.shape, disparity.shape)
     raise
     visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
