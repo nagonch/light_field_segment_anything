@@ -134,7 +134,7 @@ class AccuracyMetrics:
             .float()
             .mean()
             .item()
-        )
+        )  # label 0 is considered "unsegmented region" outside of the coverage for our method
         return result, predictions_modified
 
     def boundary_recall(self):
