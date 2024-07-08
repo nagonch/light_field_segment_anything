@@ -122,9 +122,9 @@ def calculate_metrics(dataset):
     metrics_dataframe = pd.DataFrame(metrics_dataframe)
     if hasattr(dataset, "scenes"):
         metrics_dataframe.index = dataset.scenes
-    mean_values = pd.DataFrame(metrics_dataframe.median()).T
-    mean_values.index = ["median"]
-    metrics_dataframe = pd.concat([metrics_dataframe, mean_values])
+    median_values = pd.DataFrame(metrics_dataframe.median()).T
+    median_values.index = ["median"]
+    metrics_dataframe = pd.concat([metrics_dataframe, median_values])
     metrics_dataframe.to_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
     print(metrics_dataframe)
 
