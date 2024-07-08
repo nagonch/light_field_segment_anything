@@ -204,12 +204,15 @@ class AccuracyMetrics:
         for label in torch.unique(self.predictions)[1:]:
             mask = self.predictions == label
             s, t, u, v = mask.shape
-            area = mask[s // 2, t // 2].sum()
-            gradient_x, gradient_y = torch.gradient(mask[s // 2, t // 2].float())
-            edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-            perim = edges.sum()
-            Q_s = 4 * torch.pi * area / (perim**2 + eps)
-            result += Q_s * area / (u * v)
+            for s_i in range(s):
+                for t_i in range(t):
+                    area = mask[s_i, t_i].sum()
+                    gradient_x, gradient_y = torch.gradient(mask[s_i, t_i].float())
+                    edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
+                    perim = edges.sum()
+                    Q_s = 4 * torch.pi * area / (perim**2 + eps)
+                    result += Q_s * area / (u * v)
+        result = result / (s * t)
         return result.item()
 
     def undersegmentation_error(self):
@@ -254,7 +257,7 @@ if __name__ == "__main__":
     LF, labels, disparity = dataset[3]
     predictions = torch.tensor(torch.load("0003_result.pth")).cuda()
     metrics = AccuracyMetrics(predictions, labels)
-    print(metrics.achievable_accuracy()[0])
+    print(metrics.compactness())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
