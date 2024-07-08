@@ -173,16 +173,15 @@ class AccuracyMetrics:
         s, t, u, v = self.predictions.shape
         superpixel_sizes = []
         gt_segment_sizes = []
-        for label in torch.unique(self.gt_labels):
-            gt_segment = self.gt_labels == label
-            gt_segment_size = gt_segment.sum()
-            for superpixel_num in torch.unique(self.predictions[gt_segment]):
-                if superpixel_num == 0:
-                    continue
-                superpixel = self.predictions == superpixel_num
-                superpixel_size = superpixel.sum()
-                superpixel_sizes.append(superpixel_size / (s * t))
-                gt_segment_sizes.append(gt_segment_size / (s * t))
+        for label in torch.unique(self.predictions)[1:]:
+            mask = self.predictions == label
+            gt_labels = self.gt_labels[mask]
+            gt_label = torch.mode(gt_labels).values.long()
+            gt_mask = self.gt_labels == gt_label
+            mask_size = mask.sum() / (s * t)
+            gt_mask_size = gt_mask.sum() / (s * t)
+            superpixel_sizes.append(mask_size)
+            gt_segment_sizes.append(gt_mask_size)
         superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
         gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
         mean_superpixel_size = superpixel_sizes.mean().item()
