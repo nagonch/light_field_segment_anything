@@ -123,7 +123,7 @@ class AccuracyMetrics:
             mask = self.predictions == label
             gt_label = self.gt_labels[mask]
             predictions_modified[self.predictions == label] = torch.mode(
-                gt_label
+                gt_label  # superpixel's GT label is the GT label it intersects with highest area
             ).values.long()
         predictions_modified_reshape = predictions_modified.reshape(-1)
         result = (
@@ -251,12 +251,10 @@ class AccuracyMetrics:
 
 if __name__ == "__main__":
     dataset = HCIOldDataset()
-    LF, labels, disparity = dataset[1]
-    predictions = torch.tensor(
-        torch.load("experiments/HCI_main_scenes/0001_result.pth")
-    ).cuda()
-    metrics = ConsistencyMetrics(predictions, disparity)
-    print(metrics.self_similarity())
+    LF, labels, disparity = dataset[3]
+    predictions = torch.tensor(torch.load("0003_result.pth")).cuda()
+    metrics = AccuracyMetrics(predictions, labels)
+    print(metrics.achievable_accuracy()[0])
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
