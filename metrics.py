@@ -170,22 +170,19 @@ class AccuracyMetrics:
         return (self.predictions >= 1).float().mean().item()
 
     def size_metrics(self, eps=1e-9):
+        s, t, u, v = self.predictions.shape
         superpixel_sizes = []
         gt_segment_sizes = []
         for label in torch.unique(self.gt_labels):
-            gt_segment = self.gt_labels[self.s // 2, self.t // 2] == label
+            gt_segment = self.gt_labels == label
             gt_segment_size = gt_segment.sum()
-            for superpixel_num in torch.unique(
-                self.predictions[self.s // 2, self.t // 2][gt_segment]
-            ):
+            for superpixel_num in torch.unique(self.predictions[gt_segment]):
                 if superpixel_num == 0:
                     continue
-                superpixel = (
-                    self.predictions[self.s // 2, self.t // 2] == superpixel_num
-                )
+                superpixel = self.predictions == superpixel_num
                 superpixel_size = superpixel.sum()
-                superpixel_sizes.append(superpixel_size)
-                gt_segment_sizes.append(gt_segment_size)
+                superpixel_sizes.append(superpixel_size / (s * t))
+                gt_segment_sizes.append(gt_segment_size / (s * t))
         superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
         gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
         mean_superpixel_size = superpixel_sizes.mean().item()
@@ -257,7 +254,7 @@ if __name__ == "__main__":
     LF, labels, disparity = dataset[3]
     predictions = torch.tensor(torch.load("0003_result.pth")).cuda()
     metrics = AccuracyMetrics(predictions, labels)
-    print(metrics.compactness())
+    print(metrics.size_metrics())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())
