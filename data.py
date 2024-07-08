@@ -92,18 +92,22 @@ class UrbanLFDataset(Dataset):
                 .cuda()
             )
             s_size, t_size, u_size, v_size = disparities.shape
-            result_disparities = torch.zeros((s_size, t_size, u_size, v_size, 2)).cuda()
-            central_ind = s_size // 2
+            disparities_result = torch.zeros(
+                (
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                    2,
+                )
+            ).cuda()
             for s in range(s_size):
                 for t in range(t_size):
-                    epipolar_vector = (
-                        torch.tensor([central_ind - s, central_ind - t]).float().cuda()
+                    baseline = (
+                        torch.tensor([s_size // 2 - s, t_size // 2 + t]).float().cuda()
                     )
-                    epipolar_vector = normalize(epipolar_vector, dim=-1)
-                    result_disparities[s, t] = (
-                        epipolar_vector * disparities[s, t, :, :, None]
-                    )
-            return_tuple.append(result_disparities.cpu().numpy())
+                    disparities_result[s, t] = disparities[s, t][:, :, None] * baseline
+            return_tuple.append(disparities_result)
         return return_tuple
 
 
@@ -174,11 +178,24 @@ if __name__ == "__main__":
     from scipy import ndimage
     from utils import remap_labels
 
-    dataset = UrbanLFDataset("UrbanLF_Syn/val")
-    LF, labels, disps = dataset[3]
-    print(labels.shape, LF.shape, disps.shape)
-    # dataset_HCI = HCIOldDataset()
-    # LF, labels, disparity = dataset_HCI[-1]
-    # print(LF.shape, labels.shape, disparity.shape)
+    urb_dataset = UrbanLFDataset("UrbanLF_Syn/val")
+    _, _, urb_disps = urb_dataset[3]
+    print(urb_disps)
     raise
-    visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
+    urb_disps = urb_disps[4:5, :, :, :, 0, None].cpu().numpy()
+    urb_disps_vis = np.zeros(
+        (
+            urb_disps.shape[0],
+            urb_disps.shape[1],
+            urb_disps.shape[2],
+            urb_disps.shape[3],
+            3,
+        )
+    )
+    for i in range(urb_disps.shape[0]):
+        for j in range(urb_disps.shape[1]):
+            urb_disps_vis[i, j] = imgviz.depth2rgb(
+                urb_disps[i, j, :, :, 0],
+            )
+    LF = LightField(urb_disps_vis)
+    LF.show()
