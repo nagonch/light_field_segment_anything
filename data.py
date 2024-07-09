@@ -6,7 +6,8 @@ from torch.utils.data import Dataset
 import math
 import h5py
 from torch.nn.functional import normalize
-from utils import remap_labels
+
+# from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
@@ -80,6 +81,8 @@ class UrbanLFDataset(Dataset):
                 # labels = remap_labels(labels)
                 labels += 1
                 return_tuple.append(labels)
+        elif self.return_labels:
+            return_tuple.append(None)
         if self.return_disparity and disparities:
             disparities = (
                 torch.stack(disparities)
@@ -108,6 +111,8 @@ class UrbanLFDataset(Dataset):
                     )
                     disparities_result[s, t] = disparities[s, t][:, :, None] * baseline
             return_tuple.append(disparities_result)
+        elif self.return_disparity:
+            return_tuple.append(None)
         return return_tuple
 
 
