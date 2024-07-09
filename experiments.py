@@ -114,9 +114,14 @@ def calculate_metrics(dataset):
         predictions = torch.load(
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
-        consistensy_metrics = ConsistencyMetrics(predictions, disparity)
-        metrics_dict = consistensy_metrics.get_metrics_dict()
-        accuracy_metrics = AccuracyMetrics(predictions, labels)
+        metrics_dict = {}
+        is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
+        if not is_real:
+            consistensy_metrics = ConsistencyMetrics(predictions, disparity)
+            metrics_dict.update(consistensy_metrics.get_metrics_dict())
+        accuracy_metrics = AccuracyMetrics(
+            predictions, labels, only_central_subview=is_real
+        )
         metrics_dict.update(accuracy_metrics.get_metrics_dict())
         metrics_dataframe.append(metrics_dict)
     metrics_dataframe = pd.DataFrame(metrics_dataframe)

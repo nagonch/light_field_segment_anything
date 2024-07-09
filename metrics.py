@@ -105,7 +105,11 @@ class ConsistencyMetrics:
 
 
 class AccuracyMetrics:
-    def __init__(self, predictions, gt_labels):
+    def __init__(self, predictions, gt_labels, only_central_subview=False):
+        if only_central_subview:
+            s, t, u, v = predictions.shape
+            predictions = predictions[s // 2, t // 2, :, :][None, None, :, :]
+            gt_labels = gt_labels[None, None, :, :]
         self.predictions = torch.tensor(predictions).cuda()
         self.gt_labels = torch.tensor(gt_labels).cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
