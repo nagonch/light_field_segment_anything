@@ -148,7 +148,7 @@ class GreedyOptimizer:
                 for candidate_i in range(self.n_subviews):
                     for candidate_j in range(self.n_segments):
                         if self.similarities[candidate_i, candidate_j] == -torch.inf:
-                            continue
+                            continue  # don't update regularization for already chosen segments to save time
                         self.update_reg(
                             candidate_i,
                             candidate_j,
