@@ -112,6 +112,7 @@ class GreedyOptimizer:
             function_val = (
                 1 - self.lambda_reg
             ) * self.similarities + self.lambda_reg * self.reg_matrix
+            function_val = torch.nan_to_num(function_val, nan=-torch.inf)
             ind_num, segment_num = unravel_index(
                 function_val.argmax(), (self.n_subviews, self.n_segments)
             )  # matches for this iteration
