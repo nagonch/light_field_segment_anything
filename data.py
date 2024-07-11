@@ -188,14 +188,9 @@ class MMSPG(Dataset):
         scene_path = f"{self.path}/{self.scenes[idx]}"
         LF = h5py.File(scene_path, "r")["LF"]
         LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
-        LF = LF[3:-3, 3:-3]
+        LF = LF[3:-3, 3:-3].astype(np.uint8)
         return LF, None, None
 
 
 if __name__ == "__main__":
     pass
-    # from plenpy.lightfields import LightField
-
-    # dataset = MMSPG()
-    # LF = LightField(dataset[4])
-    # LF.show()
