@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 import math
 import h5py
 from torch.nn.functional import normalize
+from scipy.io import loadmat
 
 # from utils import remap_labels
 
@@ -175,32 +176,26 @@ class HCIOldDataset(Dataset):
         return LF, labels, disparity
 
 
-if __name__ == "__main__":
-    from plenpy.lightfields import LightField
-    import imgviz
-    from utils import visualize_segmentation_mask
-    from matplotlib import pyplot as plt
-    from scipy import ndimage
-    from utils import remap_labels
+class MMSPG(Dataset):
+    def __init__(self):
+        self.path = "MMSPG"
+        self.scenes = os.listdir(self.path)
 
-    urb_dataset = UrbanLFDataset("UrbanLF_Syn/val")
-    _, _, urb_disps = urb_dataset[3]
-    print(urb_disps)
-    raise
-    urb_disps = urb_disps[4:5, :, :, :, 0, None].cpu().numpy()
-    urb_disps_vis = np.zeros(
-        (
-            urb_disps.shape[0],
-            urb_disps.shape[1],
-            urb_disps.shape[2],
-            urb_disps.shape[3],
-            3,
-        )
-    )
-    for i in range(urb_disps.shape[0]):
-        for j in range(urb_disps.shape[1]):
-            urb_disps_vis[i, j] = imgviz.depth2rgb(
-                urb_disps[i, j, :, :, 0],
-            )
-    LF = LightField(urb_disps_vis)
-    LF.show()
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_path = f"{self.path}/{self.scenes[idx]}"
+        LF = h5py.File(scene_path, "r")["LF"]
+        LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
+        LF = LF[3:-3, 3:-3]
+        return LF
+
+
+if __name__ == "__main__":
+    pass
+    # from plenpy.lightfields import LightField
+
+    # dataset = MMSPG()
+    # LF = LightField(dataset[4])
+    # LF.show()
