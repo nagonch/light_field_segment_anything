@@ -177,9 +177,10 @@ class HCIOldDataset(Dataset):
 
 
 class MMSPG(Dataset):
-    def __init__(self):
+    def __init__(self, convert=True):
         self.path = "MMSPG"
         self.scenes = os.listdir(self.path)
+        self.convert = convert
 
     def __len__(self):
         return len(self.scenes)
@@ -188,7 +189,9 @@ class MMSPG(Dataset):
         scene_path = f"{self.path}/{self.scenes[idx]}"
         LF = h5py.File(scene_path, "r")["LF"]
         LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
-        LF = LF[3:-3, 3:-3].astype(np.uint8)
+        LF = LF[3:-3, 3:-3]
+        if self.convert:
+            LF = LF.astype(np.int32)
         return LF, None, None
 
 
