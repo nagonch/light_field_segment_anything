@@ -189,7 +189,7 @@ class MMSPG(Dataset):
         LF = h5py.File(scene_path, "r")["LF"]
         LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
         LF = LF[3:-3, 3:-3]
-        return LF
+        return LF, _, _
 
 
 if __name__ == "__main__":
