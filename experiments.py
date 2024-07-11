@@ -1,4 +1,4 @@
-from data import HCIOldDataset, UrbanLFDataset
+from data import HCIOldDataset, UrbanLFDataset, MMSPG
 import yaml
 import os
 from LF_SAM import get_sam
@@ -39,6 +39,7 @@ def get_datset():
         "HCI": HCIOldDataset(),
         "URBAN_SYN": UrbanLFDataset("UrbanLF_Syn/val"),
         "URBAN_REAL": UrbanLFDataset("UrbanLF_Real/val"),
+        "MMSPG": MMSPG(),
     }
     datset_name = EXP_CONFIG["dataset-name"]
     dataset = name_to_dataset.get(datset_name)
@@ -139,4 +140,5 @@ if __name__ == "__main__":
     dataset = get_datset()
     get_sam_data(dataset)
     get_merged_data(dataset)
-    calculate_metrics(dataset)
+    if not EXP_CONFIG["dataset-name"] == "MMSPG":
+        calculate_metrics(dataset)
