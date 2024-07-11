@@ -1,6 +1,6 @@
 min-similarity: 0.75
 lambda-reg: 0.3
-k-cutoff: 6
+k-cutoff: 4
 
 verbose: False
 top-n-segments-visualization: 10
