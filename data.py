@@ -7,6 +7,7 @@ import math
 import h5py
 from torch.nn.functional import normalize
 from scipy.io import loadmat
+import cv2
 
 # from utils import remap_labels
 
@@ -190,10 +191,13 @@ class MMSPG(Dataset):
         LF = h5py.File(scene_path, "r")["LF"]
         LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
         LF = LF[3:-3, 3:-3]
-        if self.convert:
-            LF = LF.astype(np.int32)
+        LF = (LF // 256).astype(np.uint8)
         return LF, None, None
 
 
 if __name__ == "__main__":
-    pass
+    from plenpy.lightfields import LightField
+
+    dataset = MMSPG()
+    LF = LightField(dataset[0][0])
+    LF.show()
