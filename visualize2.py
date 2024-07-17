@@ -41,20 +41,28 @@ def save_LF(LF, folder):
             img.save(f"{folder}/{str(i).zfill(4)}_{str(j_real).zfill(4)}.png")
 
 
+LF_ONLY = False
+
 exp_dir = f"experiments/{EXP_CONFIG['exp-name']}"
 for i in tqdm(range(len(dataset))):
     if not os.path.exists(f"{exp_dir}/{str(i).zfill(4)}_result.pth"):
         continue
     LF, _, _ = dataset[i]
-    mask = torch.load(f"{exp_dir}/{str(i).zfill(4)}_result.pth")
-    mask = filter_the_mask(mask)
-    mask = mask.cpu().numpy()
-    vis_mask = visualize_segmentation_mask(mask, LF, just_return=True)
-    vis_boundaries = (
-        visualize_segmentation_mask(mask, LF, only_boundaries=True, just_return=True)
-        * 255
-    ).astype(np.uint8)
     os.makedirs(f"{exp_dir}/{str(i).zfill(4)}", exist_ok=True)
-    os.makedirs(f"{exp_dir}/{str(i).zfill(4)}_bound", exist_ok=True)
-    save_LF(vis_mask, f"{exp_dir}/{str(i).zfill(4)}")
-    save_LF(vis_boundaries, f"{exp_dir}/{str(i).zfill(4)}_bound")
+    if LF_ONLY:
+        save_LF(LF, f"{exp_dir}/{str(i).zfill(4)}")
+    else:
+        os.makedirs(f"{exp_dir}/{str(i).zfill(4)}_mask", exist_ok=True)
+        os.makedirs(f"{exp_dir}/{str(i).zfill(4)}_bound", exist_ok=True)
+        mask = torch.load(f"{exp_dir}/{str(i).zfill(4)}_result.pth")
+        mask = filter_the_mask(mask)
+        mask = mask.cpu().numpy()
+        vis_mask = visualize_segmentation_mask(mask, LF, just_return=True)
+        vis_boundaries = (
+            visualize_segmentation_mask(
+                mask, LF, only_boundaries=True, just_return=True
+            )
+            * 255
+        ).astype(np.uint8)
+        save_LF(vis_mask, f"{exp_dir}/{str(i).zfill(4)}_mask")
+        save_LF(vis_boundaries, f"{exp_dir}/{str(i).zfill(4)}_bound")
