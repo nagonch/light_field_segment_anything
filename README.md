@@ -6,13 +6,13 @@
 - Ubuntu 20.04.6 LTS
 
 # Installing
-Download SAM weights (required, 2.4G, ~30 seconds):
+Download **SAM weights** (required, 2.4G, ~30 seconds):
 ```
 mkdir SAM_model
 wget "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth" -O SAM_model/sam_vit_h.pth
 ```
 
-Create virtual environment and run the requirements:
+Create **virtual environment** and run the **requirements**:
 ```
 python -m venv venv
 source venv/bin/activate
