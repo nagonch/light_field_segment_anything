@@ -1,5 +1,3 @@
-""" By Matthew Baas (rf5.github.io) """
-
 import torch
 import torch.nn.functional as F
 import yaml
