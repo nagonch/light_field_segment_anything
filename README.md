@@ -3,6 +3,8 @@
 - CUDA 12.0
 - RTX 3070
 - 8GB available memory
+- 
+
 # Installing
 Download SAM weights:
 ```
@@ -19,11 +21,18 @@ pip install -r requirements.txt
 Download **HCI dataset** (346 MB free space):
 ```
 bash download_hci.sh
+```
 
-Download **MMSPG dataset** (optional, 2.1 GB free space):
+Download **MMSPG dataset** (optional, 2.1 GB free space, around 1 minute waiting):
 ```
 bash download_MMSPG.sh
 ```
+
+Download **UrbanLF dataset** (both real and synthetic, optional, 5 GB free space, around 5 minutes waiting):
+```
+bash download_urbanlf.sh
+```
+
 # Running
 1. In `experiment_config.yaml`, enter exp-name (to save the data from the run)
 2. In `dataset-name`, select the dataset. options: `[HCI, URBAN_REAL, URBAN_SYN, MMSPG]`. The chosen dataset must be downloaded
