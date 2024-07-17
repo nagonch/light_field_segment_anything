@@ -112,9 +112,10 @@ class GreedyOptimizer:
             function_val = (
                 1 - self.lambda_reg
             ) * self.similarities + self.lambda_reg * self.reg_matrix
+            function_val = torch.nan_to_num(function_val, nan=-torch.inf)
             ind_num, segment_num = unravel_index(
                 function_val.argmax(), (self.n_subviews, self.n_segments)
-            )
+            )  # matches for this iteration
             if self.verbose:
                 os.makedirs(
                     f"LF_ransac_output/optimizer/{self.central_segment_num}/{str(i).zfill(4)}",
@@ -141,14 +142,14 @@ class GreedyOptimizer:
                     )
             self.similarities[ind_num] = torch.ones_like(self.similarities[ind_num]) * (
                 -torch.inf
-            )
+            )  # so that matches for this iteration are never chose again
             matches.append(self.segment_indices[ind_num, segment_num].item())
             chosen_segment_inds.append(torch.tensor([ind_num, segment_num]))
             if i < self.n_subviews - 1:
                 for candidate_i in range(self.n_subviews):
                     for candidate_j in range(self.n_segments):
                         if self.similarities[candidate_i, candidate_j] == -torch.inf:
-                            continue
+                            continue  # don't update regularization for already chosen segments to save time
                         self.update_reg(
                             candidate_i,
                             candidate_j,

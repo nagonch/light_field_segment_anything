@@ -10,16 +10,18 @@ from utils import remap_labels
 
 
 class ConsistencyMetrics:
-    def __init__(self, labels, disparity):
-        s_size, t_size, u_size, v_size = labels.shape
+    def __init__(self, predictions, disparity):
+        predictions = torch.tensor(predictions).cuda()
+        disparity = torch.tensor(disparity).cuda()
+        s_size, t_size, u_size, v_size = predictions.shape
         u_space, v_space = torch.meshgrid(
             (torch.arange(u_size).cuda(), torch.arange(v_size).cuda())
         )
-        self.labels_projected = torch.zeros_like(labels).cuda()
+        self.labels_projected = torch.zeros_like(predictions).cuda()
         for s in range(s_size):
             for t in range(t_size):
                 disp = disparity[s, t]
-                l = labels[s, t]
+                l = predictions[s, t]
                 u_st = (u_space - disp[:, :, 0]).reshape(-1)
                 v_st = (v_space + disp[:, :, 1]).reshape(-1)
                 mask = (u_st >= 0) & (u_st < u_size) & (v_st >= 0) & (v_st < v_size)
@@ -43,7 +45,7 @@ class ConsistencyMetrics:
         lengths = []
         for label_set in labels_projected:
             lengths.append(len(set(label_set.tolist())))
-        result = torch.tensor(lengths).cuda().float().mean()
+        result = torch.tensor(lengths).cuda().float().mean().item()
         return result
 
     def self_similarity(self, eps=1e-9):
@@ -80,16 +82,36 @@ class ConsistencyMetrics:
             )
             centroids = torch.stack((centroids_y, centroids_x)).T
             main_centroid = centroids[centroids.shape[0] // 2]
+            centroids = torch.cat(
+                (
+                    centroids[: centroids.shape[0] // 2, :],
+                    centroids[centroids.shape[0] // 2 + 1 :, :],
+                ),
+                dim=0,
+            )
             metric = torch.norm(centroids - main_centroid, p=2, dim=1)
-            metric = metric.sum() / (metric.shape[0] - 1)
-            results.append(metric)
-        return torch.tensor(metric).mean()
+            metric_val = torch.median(metric)
+            results.append(metric_val)
+        return torch.tensor(results).median().item()
+
+    def get_metrics_dict(self):
+        labels_per_pixel = self.labels_per_pixel()
+        self_similarity = self.self_similarity()
+        result = {
+            "labels_per_pixel": labels_per_pixel,
+            "self_similarity": self_similarity,
+        }
+        return result
 
 
 class AccuracyMetrics:
-    def __init__(self, predictions, gt_labels):
-        self.predictions = predictions
-        self.gt_labels = gt_labels
+    def __init__(self, predictions, gt_labels, only_central_subview=False):
+        if only_central_subview:
+            s, t, u, v = predictions.shape
+            predictions = predictions[s // 2, t // 2, :, :][None, None, :, :]
+            gt_labels = gt_labels[None, None, :, :]
+        self.predictions = torch.tensor(predictions).cuda()
+        self.gt_labels = torch.tensor(gt_labels).cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
         self.n_pixels = self.s * self.t * self.u * self.v
         self.boundary_d = 2
@@ -105,7 +127,7 @@ class AccuracyMetrics:
             mask = self.predictions == label
             gt_label = self.gt_labels[mask]
             predictions_modified[self.predictions == label] = torch.mode(
-                gt_label
+                gt_label  # superpixel's GT label is the GT label it intersects with highest area
             ).values.long()
         predictions_modified_reshape = predictions_modified.reshape(-1)
         result = (
@@ -116,7 +138,7 @@ class AccuracyMetrics:
             .float()
             .mean()
             .item()
-        )
+        )  # label 0 is considered "unsegmented region" outside of the coverage for our method
         return result, predictions_modified
 
     def boundary_recall(self):
@@ -149,31 +171,27 @@ class AccuracyMetrics:
         return true_positives / totals, visualization
 
     def coverage(self):
-        return (self.predictions > 0).float().mean().item()
+        return (self.predictions >= 1).float().mean().item()
 
     def size_metrics(self, eps=1e-9):
+        s, t, u, v = self.predictions.shape
         superpixel_sizes = []
         gt_segment_sizes = []
-        for label in torch.unique(self.gt_labels):
-            gt_segment = self.gt_labels[self.s // 2, self.t // 2] == label
-            gt_segment_size = gt_segment.sum()
-            for superpixel_num in torch.unique(
-                self.predictions[self.s // 2, self.t // 2][gt_segment]
-            ):
-                if superpixel_num == 0:
-                    continue
-                superpixel = (
-                    self.predictions[self.s // 2, self.t // 2] == superpixel_num
-                )
-                superpixel_size = superpixel.sum()
-                superpixel_sizes.append(superpixel_size)
-                gt_segment_sizes.append(gt_segment_size)
+        for label in torch.unique(self.predictions)[1:]:
+            mask = self.predictions == label
+            gt_labels = self.gt_labels[mask]
+            gt_label = torch.mode(gt_labels).values.long()
+            gt_mask = self.gt_labels == gt_label
+            mask_size = mask.sum() / (s * t)
+            gt_mask_size = gt_mask.sum() / (s * t)
+            superpixel_sizes.append(mask_size)
+            gt_segment_sizes.append(gt_mask_size)
         superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
         gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
-        mean_superpixel_size = superpixel_sizes.mean()
+        mean_superpixel_size = superpixel_sizes.mean().item()
         superpixel_to_gt_segment_ratio = (
-            superpixel_sizes / (gt_segment_sizes + eps)
-        ).mean()
+            (superpixel_sizes / (gt_segment_sizes + eps)).mean().item()
+        )
         return mean_superpixel_size, superpixel_to_gt_segment_ratio
 
     def compactness(self, eps=1e-9):
@@ -186,13 +204,16 @@ class AccuracyMetrics:
         for label in torch.unique(self.predictions)[1:]:
             mask = self.predictions == label
             s, t, u, v = mask.shape
-            area = mask[s // 2, t // 2].sum()
-            gradient_x, gradient_y = torch.gradient(mask[s // 2, t // 2].float())
-            edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-            perim = edges.sum()
-            Q_s = 4 * torch.pi * area / (perim**2 + eps)
-            result += Q_s * area / (u * v)
-        return result
+            for s_i in range(s):
+                for t_i in range(t):
+                    area = mask[s_i, t_i].sum()
+                    gradient_x, gradient_y = torch.gradient(mask[s_i, t_i].float())
+                    edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
+                    perim = edges.sum()
+                    Q_s = 4 * torch.pi * area / (perim**2 + eps)
+                    result += Q_s * area / (u * v)
+        result = result / (s * t)
+        return result.item()
 
     def undersegmentation_error(self):
         """
@@ -212,14 +233,31 @@ class AccuracyMetrics:
             undersegmentation_errors.append(total_penalty / gt_region.sum())
         return torch.tensor(undersegmentation_errors).cuda().mean().item()
 
+    def get_metrics_dict(self):
+        achievable_accuracy, _ = self.achievable_accuracy()
+        boundary_recall, _ = self.boundary_recall()
+        coverage = self.coverage()
+        mean_superpixel_size, superpixel_to_gt_segment_ratio = self.size_metrics()
+        compactness = self.compactness()
+        undersegmentation_error = self.undersegmentation_error()
+        result = {
+            "achievable_accuracy": achievable_accuracy,
+            "boundary_recall": boundary_recall,
+            "coverage": coverage,
+            "mean_superpixel_size": mean_superpixel_size,
+            "superpixel_to_gt_segment_ratio": superpixel_to_gt_segment_ratio,
+            "compactness": compactness,
+            "undersegmentation_error": undersegmentation_error,
+        }
+        return result
+
 
 if __name__ == "__main__":
-    dataset = UrbanLFDataset("val", return_labels=True)
-    LF, labels = dataset[3]
-    labels = labels[2:-2, 2:-2]
-    predictions = torch.tensor(torch.load("merged.pt")).cuda()
-    acc_metrics = AccuracyMetrics(predictions, labels)
-    print(acc_metrics.size_metrics())
+    dataset = HCIOldDataset()
+    LF, labels, disparity = dataset[3]
+    predictions = torch.tensor(torch.load("0003_result.pth")).cuda()
+    metrics = AccuracyMetrics(predictions, labels)
+    print(metrics.size_metrics())
     # recall, visualization = acc_metrics.boundary_recall()
     # print(recall)
     # print(acc_metrics.undersegmentation_error())

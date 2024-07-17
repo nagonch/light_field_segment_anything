@@ -5,12 +5,11 @@ import os
 from torch.utils.data import Dataset
 import math
 import h5py
-from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
-    def __init__(self, section, return_disparity=False, return_labels=False):
-        self.data_path = f"UrbanLF_Syn/{section}"
+    def __init__(self, data_path, return_disparity=True, return_labels=True):
+        self.data_path = data_path
         self.return_disparity = return_disparity
         self.return_labels = return_labels
         self.frames = sorted(
@@ -49,7 +48,7 @@ class UrbanLFDataset(Dataset):
                 labels.append(
                     torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
                 )
-        LF = torch.stack(imgs).cuda()
+        LF = torch.stack(imgs)
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
         LF = LF.reshape(
@@ -58,24 +57,28 @@ class UrbanLFDataset(Dataset):
             u,
             v,
             c,
-        )
+        ).numpy()
         return_tuple = [
             LF,
         ]
         if self.return_labels and labels:
-            labels = (
-                torch.stack(labels)
-                .reshape(
-                    n_apertures,
-                    n_apertures,
-                    u,
-                    v,
+            if len(labels) == 1:
+                return_tuple.append(labels[0])
+            else:
+                labels = (
+                    torch.stack(labels)
+                    .reshape(
+                        n_apertures,
+                        n_apertures,
+                        u,
+                        v,
+                    )
+                    .numpy()
                 )
-                .cuda()
-            )
-            # labels = remap_labels(labels)
-            labels += 1
-            return_tuple.append(labels)
+                labels += 1
+                return_tuple.append(labels)
+        elif self.return_labels:
+            return_tuple.append(None)
         if self.return_disparity and disparities:
             disparities = (
                 torch.stack(disparities)
@@ -87,19 +90,47 @@ class UrbanLFDataset(Dataset):
                 )
                 .cuda()
             )
-            return_tuple.append(disparities)
+            s_size, t_size, u_size, v_size = disparities.shape
+            disparities_result = torch.zeros(
+                (
+                    n_apertures,
+                    n_apertures,
+                    u,
+                    v,
+                    2,
+                )
+            ).cuda()
+            for s in range(s_size):
+                for t in range(t_size):
+                    baseline = (
+                        torch.tensor([s_size // 2 - s, t_size // 2 + t]).float().cuda()
+                    )
+                    disparities_result[s, t] = disparities[s, t][:, :, None] * baseline
+            return_tuple.append(disparities_result)
+        elif self.return_disparity:
+            return_tuple.append(None)
         return return_tuple
 
 
-class HCIOldDataset:
+def get_urban_syn():
+    return UrbanLFDataset("UrbanLF_Syn/val")
+
+
+def get_urban_real():
+    return UrbanLFDataset("UrbanLF_Real/val")
+
+
+class HCIOldDataset(Dataset):
     def __init__(self, data_path="HCI_dataset_old"):
         self.data_path = data_path
         self.scene_to_path = {}
-        for scene in [
+        self.scenes = [
             "horses",
             "papillon",
             "stillLife",
-        ]:
+            "buddha",
+        ]
+        for scene in self.scenes:
             self.scene_to_path[scene] = f"{data_path}/{scene}"
 
     def get_scene(self, name):
@@ -108,7 +139,9 @@ class HCIOldDataset:
         return LF
 
     def get_labels(self, name):
-        labels = h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        labels = np.array(
+            h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        )
         return labels
 
     def get_depth(self, name):
@@ -135,15 +168,34 @@ class HCIOldDataset:
                 ) - shift * (central_ind - t)
         return disparity
 
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_name = self.scenes[idx]
+        LF = self.get_scene(scene_name)
+        labels = self.get_labels(scene_name)
+        disparity = self.get_disparity(scene_name)
+        return LF, labels, disparity
+
+
+class MMSPG(Dataset):
+    def __init__(self, convert=True):
+        self.path = "MMSPG"
+        self.scenes = os.listdir(self.path)
+        self.convert = convert
+
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_path = f"{self.path}/{self.scenes[idx]}"
+        LF = h5py.File(scene_path, "r")["LF"]
+        LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
+        LF = LF[3:-3, 3:-3]  # drop subviews affected by vignetting
+        LF = (LF // 256).astype(np.uint8)
+        return LF, None, None
+
 
 if __name__ == "__main__":
-    from plenpy.lightfields import LightField
-    import imgviz
-    from utils import visualize_segmentation_mask
-    from matplotlib import pyplot as plt
-    from scipy import ndimage
-    from utils import remap_labels
-
-    dataset = UrbanLFDataset("val", return_labels=True)
-    LF, labels = dataset[3]
-    visualize_segmentation_mask(labels.cpu().numpy(), LF.cpu().numpy())
+    pass

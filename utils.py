@@ -10,6 +10,7 @@ import logging
 from k_means import k_means
 from typing import Tuple
 from scipy import ndimage
+from skimage.segmentation import mark_boundaries
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -19,26 +20,42 @@ with open("sam_config.yaml") as f:
 with open("merger_config.yaml") as f:
     MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
+with open("experiment_config.yaml") as f:
+    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
-def visualize_segmentation_mask(segments, LF, filename=None):
+
+def visualize_segmentation_mask(
+    segments,
+    LF=None,
+    just_return=False,
+    filename=None,
+    only_boundaries=False,
+):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
-    LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
-    vis = np.transpose(
-        imgviz.label2rgb(
-            label=segments,
-            image=LF,
-            colormap=imgviz.label_colormap(segments.max() + 1),
-        ).reshape(s, u, t, v, 3),
-        (0, 2, 1, 3, 4),
-    )
-    if filename:
-        savemat(
-            filename,
-            {"LF": vis},
+    if LF is not None:
+        LF = np.transpose(LF, (0, 2, 1, 3, 4)).reshape(s * u, t * v, 3)
+    if only_boundaries and LF is not None:
+        boundaries = mark_boundaries(LF, segments)
+        vis = np.transpose(boundaries.reshape(s, u, t, v, 3), (0, 2, 1, 3, 4))
+    else:
+        vis = np.transpose(
+            imgviz.label2rgb(
+                label=segments,
+                image=LF,
+                colormap=imgviz.label_colormap(segments.max() + 1),
+            ).reshape(s, u, t, v, 3),
+            (0, 2, 1, 3, 4),
         )
-    segments = LightField(vis)
-    segments.show()
+    if not just_return:
+        if filename:
+            savemat(
+                filename,
+                {"LF": vis},
+            )
+        segments = LightField(vis)
+        segments.show()
+    return vis
 
 
 def visualize_segments(segments, filename):

@@ -4,18 +4,12 @@ from tqdm import tqdm
 from utils import (
     get_subview_indices,
     MERGER_CONFIG,
-    get_process_to_segments_dict,
     resize_LF,
 )
 import os
 import numpy as np
 from PIL import Image
 from optimizer import GreedyOptimizer
-
-# import torch.multiprocessing as mp
-import multiprocessing as mp
-
-mp.set_start_method("spawn", force=True)
 
 
 class LF_segment_merger:
@@ -198,7 +192,12 @@ class LF_segment_merger:
     @torch.no_grad()
     def get_result_masks(self):
         self.merged_segments = []
-        for segment_num in tqdm(self.central_segments):
+        for segment_num in tqdm(
+            self.central_segments,
+            desc="central segment merging",
+            position=1,
+            leave=False,
+        ):
             segment_embedding = self.embeddings.get(segment_num.item(), None)
             if segment_embedding is None:
                 continue
@@ -214,48 +213,6 @@ class LF_segment_merger:
             )
         ] = 0
         return self.segments
-
-
-def parallelize_segments(i, results, segments, proc_to_seg_dict, embeddings):
-    segments_i = (
-        segments.float() * torch.isin(segments, proc_to_seg_dict[i]).float()
-    ).long()
-    merger = LF_segment_merger(segments_i, embeddings)
-    results[i] = merger.get_result_masks().cpu()
-
-
-def get_merged_segments(segments, embeddings):
-    s_central, t_central = segments.shape[0] // 2, segments.shape[1] // 2
-    if (
-        torch.unique(segments[s_central, t_central]).shape[0]
-        >= MERGER_CONFIG["min-central-segments-for-parallel"]
-    ):
-        proc_to_seg_dict = get_process_to_segments_dict(embeddings)
-        result_segments_list = mp.Manager().list(
-            [None] * MERGER_CONFIG["n-parallel-processes"]
-        )
-        processes = []
-        for rank in range(MERGER_CONFIG["n-parallel-processes"]):
-            p = mp.Process(
-                target=parallelize_segments,
-                args=(
-                    rank,
-                    result_segments_list,
-                    segments,
-                    proc_to_seg_dict,
-                    embeddings,
-                ),
-            )
-            p.start()
-            processes.append(p)
-        # Wait for all processes to complete
-        for p in tqdm(processes):
-            p.join()
-        result = torch.stack(list(result_segments_list)).sum(axis=0)
-    else:
-        merger = LF_segment_merger(segments, embeddings)
-        result = merger.get_result_masks()
-    return result
 
 
 if __name__ == "__main__":
