@@ -4,6 +4,7 @@ import torch
 import os
 from PIL import Image
 import numpy as np
+from tqdm import tqdm
 
 name_to_dataset = {
     "HCI": HCIOldDataset(),
@@ -35,22 +36,23 @@ def save_LF(LF, folder):
     s, t, u, v, c = LF.shape
     for i in range(s):
         iterator = range(t) if i % 2 == 0 else range(t - 1, -1, -1)
-        for j in iterator:
+        for j, j_real in zip(iterator, range(t)):
             img = Image.fromarray(LF[i][j])
-            img.save(f"{folder}/{i}_{j}.png")
+            img.save(f"{folder}/{str(i).zfill(4)}_{str(j_real).zfill(4)}.png")
 
 
 exp_dir = f"experiments/{EXP_CONFIG['exp-name']}"
-for i in range(len(dataset)):
+for i in tqdm(range(len(dataset))):
     if not os.path.exists(f"{exp_dir}/{str(i).zfill(4)}_result.pth"):
         continue
     LF, _, _ = dataset[i]
     mask = torch.load(f"{exp_dir}/{str(i).zfill(4)}_result.pth")
     mask = filter_the_mask(mask)
     mask = mask.cpu().numpy()
-    vis_mask = visualize_segmentation_mask(mask, LF)
+    vis_mask = visualize_segmentation_mask(mask, LF, just_return=True)
     vis_boundaries = (
-        visualize_segmentation_mask(mask, LF, only_boundaries=True) * 255
+        visualize_segmentation_mask(mask, LF, only_boundaries=True, just_return=True)
+        * 255
     ).astype(np.uint8)
     os.makedirs(f"{exp_dir}/{str(i).zfill(4)}", exist_ok=True)
     os.makedirs(f"{exp_dir}/{str(i).zfill(4)}_bound", exist_ok=True)
