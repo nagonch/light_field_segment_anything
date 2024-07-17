@@ -3,7 +3,7 @@
 - CUDA 12.0
 - RTX 3070
 - 8GB available memory
-- 
+- Ubuntu 20.04.6 LTS
 
 # Installing
 Download SAM weights:
