@@ -5,11 +5,6 @@ import os
 from torch.utils.data import Dataset
 import math
 import h5py
-from torch.nn.functional import normalize
-from scipy.io import loadmat
-import cv2
-
-# from utils import remap_labels
 
 
 class UrbanLFDataset(Dataset):
@@ -80,7 +75,6 @@ class UrbanLFDataset(Dataset):
                     )
                     .numpy()
                 )
-                # labels = remap_labels(labels)
                 labels += 1
                 return_tuple.append(labels)
         elif self.return_labels:
@@ -190,14 +184,10 @@ class MMSPG(Dataset):
         scene_path = f"{self.path}/{self.scenes[idx]}"
         LF = h5py.File(scene_path, "r")["LF"]
         LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
-        LF = LF[3:-3, 3:-3]
+        LF = LF[3:-3, 3:-3]  # drop subviews affected by vignetting
         LF = (LF // 256).astype(np.uint8)
         return LF, None, None
 
 
 if __name__ == "__main__":
-    from plenpy.lightfields import LightField
-
-    dataset = MMSPG()
-    LF = LightField(dataset[0][0])
-    LF.show()
+    pass
