@@ -27,6 +27,7 @@ with open("experiment_config.yaml") as f:
 def visualize_segmentation_mask(
     segments,
     LF=None,
+    just_return=False,
     filename=None,
     only_boundaries=False,
 ):
@@ -46,13 +47,15 @@ def visualize_segmentation_mask(
             ).reshape(s, u, t, v, 3),
             (0, 2, 1, 3, 4),
         )
-    if filename:
-        savemat(
-            filename,
-            {"LF": vis},
-        )
-    segments = LightField(vis)
-    segments.show()
+    if not just_return:
+        if filename:
+            savemat(
+                filename,
+                {"LF": vis},
+            )
+        segments = LightField(vis)
+        segments.show()
+    return vis
 
 
 def visualize_segments(segments, filename):
