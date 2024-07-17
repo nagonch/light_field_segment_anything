@@ -1,4 +1,4 @@
-from data import HCIOldDataset, UrbanLFDataset, MMSPG
+from data import HCIOldDataset, get_urban_real, get_urban_syn, MMSPG
 import yaml
 import os
 from LF_SAM import get_sam
@@ -36,13 +36,13 @@ def prepare_exp():
 
 def get_datset():
     name_to_dataset = {
-        "HCI": HCIOldDataset(),
-        "URBAN_SYN": UrbanLFDataset("UrbanLF_Syn/val"),
-        "URBAN_REAL": UrbanLFDataset("UrbanLF_Real/val"),
-        "MMSPG": MMSPG(),
+        "HCI": HCIOldDataset,
+        "URBAN_SYN": get_urban_syn,
+        "URBAN_REAL": get_urban_real,
+        "MMSPG": MMSPG,
     }
     datset_name = EXP_CONFIG["dataset-name"]
-    dataset = name_to_dataset.get(datset_name)
+    dataset = name_to_dataset.get(datset_name)()
     if not dataset:
         raise ValueError(f"{EXP_CONFIG['dataset-name']} is not a valid datset name")
     return dataset

@@ -112,6 +112,14 @@ class UrbanLFDataset(Dataset):
         return return_tuple
 
 
+def get_urban_syn():
+    return UrbanLFDataset("UrbanLF_Syn/val")
+
+
+def get_urban_real():
+    return UrbanLFDataset("UrbanLF_Real/val")
+
+
 class HCIOldDataset(Dataset):
     def __init__(self, data_path="HCI_dataset_old"):
         self.data_path = data_path
