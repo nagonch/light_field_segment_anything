@@ -34,7 +34,8 @@ def filter_the_mask(segments, min_mask_area=100, subview_percentage=0.9):
 def save_LF(LF, folder):
     s, t, u, v, c = LF.shape
     for i in range(s):
-        for j in range(t):
+        iterator = range(t) if i % 2 == 0 else range(t - 1, -1, -1)
+        for j in iterator:
             img = Image.fromarray(LF[i][j])
             img.save(f"{folder}/{i}_{j}.png")
 
@@ -55,4 +56,3 @@ for i in range(len(dataset)):
     os.makedirs(f"{exp_dir}/{str(i).zfill(4)}_bound", exist_ok=True)
     save_LF(vis_mask, f"{exp_dir}/{str(i).zfill(4)}")
     save_LF(vis_boundaries, f"{exp_dir}/{str(i).zfill(4)}_bound")
-    raise
