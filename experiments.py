@@ -84,11 +84,7 @@ def get_merged_data(dataset):
         result_filename = (
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
         )
-        if (
-            EXP_CONFIG["continue-progress"]
-            and os.path.exists(result_filename)
-            and not EXP_CONFIG["restart-merging"]
-        ):
+        if EXP_CONFIG["continue-progress"] and os.path.exists(result_filename):
             continue
         LF, _, _ = dataset[idx]
         embeddings = torch.load(emb_filename)

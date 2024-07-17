@@ -1,4 +1,3 @@
-exp-name: HCI_main_scenes
-dataset-name: HCI
-continue-progress: False
-restart-merging: False
+exp-name: Urban_Real # experiment identifier
+dataset-name: URBAN_REAL # dataset to use. options: [HCI, URBAN_REAL, URBAN_SYN, MMSPG]
+continue-progress: False # continue from the file saved in in 'exp-name' folder
