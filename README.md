@@ -19,6 +19,10 @@ pip install -r requirements.txt
 Download **HCI dataset** (346 MB free space):
 ```
 bash download_hci.sh
+
+Download **MMSPG dataset** (optional, 2.1 GB free space):
+```
+bash download_MMSPG.sh
 ```
 # Running
 1. In `experiment_config.yaml`, enter exp-name (to save the data from the run)
