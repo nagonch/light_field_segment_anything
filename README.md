@@ -23,5 +23,12 @@ bash download_hci.sh
 # Running
 1. In `experiment_config.yaml`, enter exp-name (to save the data from the run)
 2. In `dataset-name`, select the dataset. options: `[HCI, URBAN_REAL, URBAN_SYN, MMSPG]`. The chosen dataset must be downloaded
-3. To get segmentation on the current dataset: `python experiments.py` (all scenes)
-4. To visualize the results: `python visualize.py 0`. Replace `0` with the scene index of the scene you wish to visualize from the experiments folder and dataset specified in `experiment_config.yaml`.
+3. To get segmentation on the current dataset(all scenes):
+```
+python experiments.py
+```
+4. To visualize the results:
+```
+python visualize.py 0
+```
+(Replace `0` with the scene index of the scene you wish to visualize from the experiments folder and dataset specified in `experiment_config.yaml`)
