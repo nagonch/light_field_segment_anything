@@ -107,26 +107,31 @@ def get_merged_data(dataset):
     from XMem.inference.interact.interactive_utils import overlay_davis
 
     def XMEM_merge(segments, LF, network):
-        segments = segments[: XMEM_CONFIG["batch_size"]].long()
+        torch.cuda.empty_cache()
+        segments = segments[: XMEM_CONFIG["batch_size"]].float()
         processor = InferenceCore(network, config=XMEM_CONFIG)
-        processor.set_all_labels(range(1, segments.shape[0] + 1))
-        s, t, u, v, c = LF.shape
-        central_subap, _ = image_to_torch(LF[s // 2, t // 2])
-        sequence_up, sequence_down = lawnmower(LF)
-        prediction = processor.step(central_subap, segments)
-        for idx in sequence_down:
-            prediction = processor.step(image_to_torch(LF[idx[0], idx[1]])[0])
+        processor.set_all_labels(range(1, segments.shape[0] + 1))  # consecutive labels
+        _, index_sequence = lawnmower(LF)
+        for ind_ind, ind in enumerate(index_sequence):
+            frame_torch, _ = image_to_torch(LF[ind[0], ind[1]])
+            if ind_ind == 0:
+                prediction = processor.step(frame_torch, segments)
+                del segments
+            else:
+                # propagate only
+                prediction = processor.step(frame_torch)
+            # argmax, convert to numpy
+            print(torch.cuda.mem_get_info()[0] / torch.cuda.mem_get_info()[1])
+            print(prediction.shape)
             prediction = torch_prob_to_numpy_mask(prediction)
-            visualization = overlay_davis(np.zeros_like(LF[idx[0], idx[1]]), prediction)
+            visualization = overlay_davis(np.zeros_like(LF[ind[0], ind[1]]), prediction)
             plt.imshow(visualization)
             plt.show()
             plt.close()
             del prediction
             del visualization
-            # raise
-        # return masks
 
-    network = XMem(XMEM_CONFIG, "XMem/XMem.pth").eval().cuda()
+    network = XMem(XMEM_CONFIG, "XMem/XMem.pth").eval().to("cuda")
     for idx in tqdm(
         range(len(dataset)), desc="segment merging", position=0, leave=True
     ):
