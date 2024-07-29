@@ -2,21 +2,14 @@ from data import HCIOldDataset
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 import torch
 import yaml
-
-# import gitmodules
-# from XMem.model.network import XMem
-# from XMem.inference.inference_core import InferenceCore
-# from XMem.inference.interact.interactive_utils import (
-#     image_to_torch,
-#     torch_prob_to_numpy_mask,
-# )
-
 from data import HCIOldDataset, get_urban_real, get_urban_syn, MMSPG
 import os
 from LF_SAM import get_sam
 from utils import SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG
 import warnings
 from tqdm.auto import tqdm
+import numpy as np
+from matplotlib import pyplot as plt
 
 with open("xmem_config.yaml") as f:
     XMEM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -73,15 +66,15 @@ def get_sam_data(dataset):
         sam_segments_filename = (
             f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
         )
-        print(sam_segments_filename)
         if EXP_CONFIG["continue-progress"] and (
-            os.path.exists("sam_segments_filename")
+            os.path.exists(f"{sam_segments_filename}")
         ):
             continue
         LF, _, _ = dataset[idx]
         s, t, u, v, c = LF.shape
         masks = mask_generator.generate(LF[s // 2, t // 2])
         torch.save(masks, sam_segments_filename)
+    del mask_generator
 
 
 def lawnmower(LF):
@@ -103,19 +96,57 @@ def lawnmower(LF):
     return ind_sequence_up, ind_sequence_down
 
 
-def xmem_LF(LF, XMem_network, processor):
-    s, t, u, v, c = LF.shape
-    central_subap = LF[s // 2, t // 2]
-    sam = get_sam()
-    masks = sam.generator.generate(central_subap)[: XMEM_CONFIG["batch_size"], :, :]
-    sequence_up, sequence_down = lawnmower(LF)
-    central_subap = image_to_torch(central_subap)
-    prediction = processor.step(central_subap, masks)
-    print(prediction.shape)
-    return masks
+def get_merged_data(dataset):
+    import gitmodules
+    from XMem.inference.interact.interactive_utils import (
+        image_to_torch,
+        torch_prob_to_numpy_mask,
+    )
+    from XMem.inference.inference_core import InferenceCore
+    from XMem.model.network import XMem
+    from XMem.inference.interact.interactive_utils import overlay_davis
+
+    def XMEM_merge(segments, LF, network):
+        segments = segments[: XMEM_CONFIG["batch_size"]].long()
+        processor = InferenceCore(network, config=XMEM_CONFIG)
+        processor.set_all_labels(range(1, segments.shape[0] + 1))
+        s, t, u, v, c = LF.shape
+        central_subap, _ = image_to_torch(LF[s // 2, t // 2])
+        sequence_up, sequence_down = lawnmower(LF)
+        prediction = processor.step(central_subap, segments)
+        for idx in sequence_down:
+            prediction = processor.step(image_to_torch(LF[idx[0], idx[1]])[0])
+            prediction = torch_prob_to_numpy_mask(prediction)
+            visualization = overlay_davis(np.zeros_like(LF[idx[0], idx[1]]), prediction)
+            plt.imshow(visualization)
+            plt.show()
+            plt.close()
+            del prediction
+            del visualization
+            # raise
+        # return masks
+
+    network = XMem(XMEM_CONFIG, "XMem/XMem.pth").eval().cuda()
+    for idx in tqdm(
+        range(len(dataset)), desc="segment merging", position=0, leave=True
+    ):
+        idx_padded = str(idx).zfill(4)
+        sam_segments_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
+        )
+        result_filename = (
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
+        )
+        if EXP_CONFIG["continue-progress"] and os.path.exists(result_filename):
+            continue
+
+        LF, _, _ = dataset[idx]
+        segments = torch.load(sam_segments_filename).cuda()
+        segments = XMEM_merge(segments, LF, network)
 
 
 if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     get_sam_data(dataset)
+    get_merged_data(dataset)
