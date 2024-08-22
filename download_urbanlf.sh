@@ -1,4 +1,4 @@
-gdown --id 11935M4Wp7k06ZAojT7W25OiK1-b-GjQx
+gdown --id 1tRlNeXdalqOS8lU1C_lonwt9bq-YM4CX
 mkdir UrbanLF_Syn
 unzip val.zip
 mv val UrbanLF_Syn/val
