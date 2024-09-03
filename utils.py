@@ -197,6 +197,24 @@ def get_process_to_segments_dict(
         result_mapping[cluster_num.item()] = corresponding_segments
     return result_mapping
 
+def LF_lawnmower(LF):
+    result_LF = []
+    rows, cols, u, v, _ = LF.shape
+    for i in range(rows):
+        if i % 2 == 0:
+            for j in range(cols):
+                result_LF.append(LF[i, j])
+        else:
+            for j in range(cols - 1, -1, -1):
+                result_LF.append(LF[i, j])
+    result_LF = np.stack(result_LF)
+    return result_LF
+
+def vis_to_gif(vis, filename):
+    lawnmower = LF_lawnmower(vis)
+    imgs = [Image.fromarray(img) for img in lawnmower]
+    imgs[0].save(filename, save_all=True, append_images=imgs[1:], duration=50, loop=0)
+
 
 if __name__ == "__main__":
     pass
