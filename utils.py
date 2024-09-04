@@ -212,7 +212,10 @@ def LF_lawnmower(LF):
 
 def vis_to_gif(vis, filename):
     lawnmower = LF_lawnmower(vis)
-    imgs = [Image.fromarray(img) for img in lawnmower]
+    # print(lawnmower.shape)
+    # raise
+    imgs = [Image.fromarray(img).convert('RGBA', dither=None, palette='WEB') for img in lawnmower]
+    imgs[0].save(filename.split('.')[0] + '.png')
     imgs[0].save(filename, save_all=True, append_images=imgs[1:], duration=50, loop=0)
 
 
