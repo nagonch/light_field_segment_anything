@@ -49,6 +49,9 @@ def get_subview_embeddings(predictor_model, LF):
     results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
     return results
 
+def matching_segmentation(LF):
+    
+
 
 if __name__ == "__main__":
     mask_predictor = get_auto_mask_predictor()
@@ -56,7 +59,7 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for LF, _, _ in dataset:
         LF = LF[3:-3, 3:-3]
-        embeddings = get_subview_embeddings(image_predictor, LF)
-        print(embeddings.shape)
-        # segmentation = get_subview_segments(mask_predictor, LF).cpu().numpy()
+        # embeddings = get_subview_embeddings(image_predictor, LF)
+        # print(embeddings.shape)
+        segmentation = get_subview_segments(mask_predictor, LF).cpu().numpy()
         # visualize_segmentation_mask(segmentation, LF)
