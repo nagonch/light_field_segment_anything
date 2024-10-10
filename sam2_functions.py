@@ -55,7 +55,7 @@ def generate_image_masks(auto_mask_predictor, image):
     return result
 
 
-# propagating the masks in a batched way through the predictors
+# sequentially propagating the masks and saving results
 def propagate_masks(masks_batchified, video_predictor, input_folder, output_folder):
     for batch_i, batch in enumerate(masks_batchified):
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
