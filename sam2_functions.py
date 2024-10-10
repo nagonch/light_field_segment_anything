@@ -82,3 +82,6 @@ def propagate_masks(masks_batchified, video_predictor, input_folder, output_fold
                     f"{output_folder}/{str(out_frame_idx).zfill(4)}_{str(batch_i).zfill(4)}.pt",
                 )
 
+if __name__ == "__main__":
+    mask_pred = get_auto_mask_predictor()
+    print(mask_pred)
