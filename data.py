@@ -125,7 +125,7 @@ class HCIOldDataset(Dataset):
         self.data_path = data_path
         self.scene_to_path = {}
         self.scenes = [
-            "horses",
+            # "horses",
             "papillon",
             "stillLife",
             "buddha",
