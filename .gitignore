@@ -18,3 +18,5 @@ test2.py
 HCI_dataset_old
 experiments
 .pip_cache
+sam2
+sam2_checkpoints
