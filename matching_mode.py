@@ -3,6 +3,7 @@ from data import HCIOldDataset
 import warnings
 from utils import visualize_segmentation_mask
 import torch
+from torchvision.transforms.functional import resize
 
 warnings.filterwarnings("ignore")
 
@@ -18,7 +19,7 @@ def reduce_masks(masks, offset):
     return masks_result
 
 
-def segment_subviews(mask_predictor, LF):
+def get_subview_segments(mask_predictor, LF):
     s_size, t_size, u_size, v_size = LF.shape[:-1]
     result = torch.zeros((s_size, t_size, u_size, v_size)).long().cuda()
     offset = 0
@@ -36,10 +37,26 @@ def segment_subviews(mask_predictor, LF):
     return result
 
 
+@torch.no_grad()
+def get_subview_embeddings(predictor_model, LF):
+    s_size, t_size, _, _ = LF.shape[:-1]
+    results = []
+    for s in range(s_size):
+        for t in range(t_size):
+            predictor_model.set_image(LF[s, t])
+            embedding = predictor_model.get_image_embedding()
+            results.append(embedding[0].permute(1, 2, 0))
+    results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
+    return results
+
+
 if __name__ == "__main__":
     mask_predictor = get_auto_mask_predictor()
+    image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for LF, _, _ in dataset:
         LF = LF[3:-3, 3:-3]
-        segmentation = segment_subviews(mask_predictor, LF).cpu().numpy()
-        visualize_segmentation_mask(segmentation, LF)
+        embeddings = get_subview_embeddings(image_predictor, LF)
+        print(embeddings.shape)
+        # segmentation = get_subview_segments(mask_predictor, LF).cpu().numpy()
+        # visualize_segmentation_mask(segmentation, LF)
