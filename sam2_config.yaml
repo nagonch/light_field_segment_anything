@@ -1,0 +1,14 @@
+sam-checkpoint: sam2_checkpoints/sam2.1_hiera_tiny.pt
+sam-config: sam2.1_hiera_t.yaml
+batch-size: 15
+tmp-batches-folder: /tmp/segmenting_batches
+tmp-subview-folder: /tmp/LF
+results-folder: results
+use-dino: true # otherwise fallback on auto
+dino-prompts: hat.
+continue-progress: true
+video-mode: true
+vis-display: true
+vis-save: true
+auto-points-per-side: 64
+start-frame: 140

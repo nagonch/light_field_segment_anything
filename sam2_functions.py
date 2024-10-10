@@ -1,13 +1,16 @@
 from sam2.build_sam import build_sam2_video_predictor, build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator, SAM2ImagePredictor
 import torch
-from utils import CONFIG
+import yaml
+
+with open("sam2_config.yaml") as f:
+    SAM2_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def get_sam2_image_model():
     return build_sam2(
-        CONFIG["sam-config"],
-        CONFIG["sam-checkpoint"],
+        SAM2_CONFIG["sam-config"],
+        SAM2_CONFIG["sam-checkpoint"],
         device="cuda",
         apply_postprocessing=False,
     )
@@ -24,14 +27,14 @@ def get_auto_mask_predictor(sam2_img_model=None):
     if not sam2_img_model:
         sam2_img_model = get_sam2_image_model()
     predictor = SAM2AutomaticMaskGenerator(
-        sam2_img_model, points_per_side=CONFIG["auto-points-per-side"]
+        sam2_img_model, points_per_side=SAM2_CONFIG["auto-points-per-side"]
     )
     return predictor
 
 
 def get_video_predictor():
     predictor = build_sam2_video_predictor(
-        CONFIG["sam-config"], CONFIG["sam-checkpoint"]
+        SAM2_CONFIG["sam-config"], SAM2_CONFIG["sam-checkpoint"]
     )
     return predictor
 
