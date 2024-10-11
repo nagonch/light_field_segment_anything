@@ -128,6 +128,10 @@ def matching_segmentation(mask_predictor, LF, filename):
         f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
     adj_matrix = get_adjacency_matrix(subview_segments, segment_embeddings).to_dense()
+    torch.save(
+        adj_matrix,
+        f"{MATCHING_CONFIG['files-folder']}/{filename}_adj_matrix.pt",
+    )
     plt.imshow(adj_matrix.cpu().numpy(), cmap="gray")
     plt.show()
     plt.close()
