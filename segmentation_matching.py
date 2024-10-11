@@ -145,29 +145,31 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
     return adjacency_matrix
 
 
+def compute_or_load_tensor(filename, function, args):
+    try:
+        tesnor = torch.load(filename)
+    except FileNotFoundError:
+        tesnor = function(*args)
+        torch.save(tesnor, filename)
+    return tesnor
+
+
 def matching_segmentation(mask_predictor, LF, filename):
-    subview_segments = get_subview_segments(mask_predictor, LF)
+    subview_segments_filename = (
+        f"{MATCHING_CONFIG['files-folder']}/{filename}_unmatched_segments.pt"
+    )
+    subview_segments = compute_or_load_tensor(
+        subview_segments_filename, get_subview_segments, (mask_predictor, LF)
+    )
+
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
-    torch.save(
-        subview_segments, f"{MATCHING_CONFIG['files-folder']}/{filename}_segments.pt"
-    )
-    torch.save(
-        segment_embeddings,
-        f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
-    )
     segment_centroids = get_segment_centroids(subview_segments)
-    torch.save(
-        segment_centroids,
-        f"{MATCHING_CONFIG['files-folder']}/{filename}_centroids.pt",
-    )
     sim_adjacency_matrix = get_sim_adjacency_matrix(
         subview_segments, segment_embeddings
-    ).to_dense()
-    torch.save(
-        sim_adjacency_matrix,
-        f"{MATCHING_CONFIG['files-folder']}/{filename}_sim_adjacency_matrix.pt",
     )
+    print(sim_adjacency_matrix)
+    print(segment_centroids)
 
 
 if __name__ == "__main__":
