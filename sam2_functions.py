@@ -30,7 +30,6 @@ def get_auto_mask_predictor(sam2_img_model=None):
         sam2_img_model,
         points_per_side=SAM2_CONFIG["auto-points-per-side"],
         box_nms_thresh=SAM2_CONFIG["box-nms-thresh"],
-        crop_nms_thresh=SAM2_CONFIG["crop-nms-thresh"],
     )
     return predictor
 
