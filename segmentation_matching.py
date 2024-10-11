@@ -7,6 +7,7 @@ from torchvision.transforms.functional import resize
 import numpy as np
 import yaml
 import os
+import torch.nn.functional as F
 
 warnings.filterwarnings("ignore")
 
@@ -14,6 +15,7 @@ with open("matching_config.yaml") as f:
     MATCHING_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
+# Convert [N, U, V] masks to [U, V] masks
 # move to utils later
 def reduce_masks(masks, offset):
     areas = masks.sum(dim=(1, 2))
@@ -25,6 +27,7 @@ def reduce_masks(masks, offset):
     return masks_result
 
 
+# Get automatic semgents for each LF subview
 def get_subview_segments(mask_predictor, LF):
     s_size, t_size, u_size, v_size = LF.shape[:-1]
     result = torch.zeros((s_size, t_size, u_size, v_size)).long().cuda()
@@ -43,6 +46,7 @@ def get_subview_segments(mask_predictor, LF):
     return result
 
 
+# Get image embeddings for each LF subview
 @torch.no_grad()
 def get_subview_embeddings(predictor_model, LF):
     s_size, t_size, _, _ = LF.shape[:-1]
@@ -56,6 +60,7 @@ def get_subview_embeddings(predictor_model, LF):
     return results
 
 
+# Get embeddings for each segment
 @torch.no_grad()
 def get_segment_embeddings(subview_segments, subview_embeddings):
     s_size, t_size, u_size, v_size = subview_segments.shape
@@ -72,24 +77,48 @@ def get_segment_embeddings(subview_segments, subview_embeddings):
     return segment_embeddings
 
 
-# @torch.no_grad()
-# def get_adjacency_matrix(subview_segments, segment_embeddings):
-#     s, t = subview_segments.shape[:2]
-#     s_reference, t_reference = s // 2, t // 2
-#     n_masks = len(segment_embeddings)
-#     adjacency_matrix = torch.sparse_coo_tensor(size=(n_masks, n_masks))
-#     ref_subview_segment_nums = torch.unique(subview_segments[s_reference, t_reference])
+# Construct segment similarity matrix
+@torch.no_grad()
+def get_adjacency_matrix(subview_segments, segment_embeddings):
+    s, t = subview_segments.shape[:2]
+    s_reference, t_reference = s // 2, t // 2
+    adjacency_inds = []
+    adjacency_vals = []
+    subview_segment_nums = torch.unique(subview_segments)[
+        1:
+    ]  # [1:] to exclude 0 (no segment)
+    ref_subview_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
+        1:
+    ]
+    n_segments = subview_segment_nums.shape[0]
+    for segment_num_i in ref_subview_segment_nums:
+        segment_num_i = segment_num_i.item()
+        embedding_i = segment_embeddings[segment_num_i]
+        for segment_num_j in subview_segment_nums:
+            if segment_num_j in ref_subview_segment_nums:
+                continue
+            segment_num_j = segment_num_j.item()
+            embedding_j = segment_embeddings[segment_num_j]
+            adjacency_inds.append(torch.tensor([segment_num_i, segment_num_j]).cuda())
+            adjacency_vals.append(
+                F.cosine_similarity(embedding_i[None], embedding_j[None])[0]
+            )
+    adjacency_inds = torch.stack(adjacency_inds).T
+    adjacency_vals = torch.stack(adjacency_vals).to(torch.float32)
+    adjacency_matrix = torch.sparse_coo_tensor(
+        adjacency_inds, adjacency_vals, size=(n_segments, n_segments)
+    )
+    return adjacency_matrix
 
 
 def matching_segmentation(mask_predictor, LF, filename):
-    subview_segments = get_subview_segments(mask_predictor, LF)
-    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    # subview_segments = get_subview_segments(mask_predictor, LF)
+    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     # torch.save(subview_embeddings, "subview_embeddings.pt")
     # torch.save(subview_segments, "subview_segments.pt")
-    # subview_embeddings = torch.load("subview_embeddings.pt")
-    # subview_segments = torch.load("subview_segments.pt")
+    subview_embeddings = torch.load("subview_embeddings.pt")
+    subview_segments = torch.load("subview_segments.pt")
     segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
-    print(segment_embeddings)
     torch.save(
         subview_segments, f"{MATCHING_CONFIG['files-folder']}/{filename}_segments.pt"
     )
@@ -97,6 +126,7 @@ def matching_segmentation(mask_predictor, LF, filename):
         segment_embeddings,
         f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
+    adj_matrix = get_adjacency_matrix(subview_segments, segment_embeddings)
 
 
 if __name__ == "__main__":
@@ -111,3 +141,4 @@ if __name__ == "__main__":
             LF,
             filename=str(i).zfill(4),
         )
+        raise
