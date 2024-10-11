@@ -80,7 +80,7 @@ def get_segment_embeddings(subview_segments, subview_embeddings):
 
 # Construct segment similarity matrix
 @torch.no_grad()
-def get_adjacency_matrix(subview_segments, segment_embeddings):
+def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
     s, t = subview_segments.shape[:2]
     s_reference, t_reference = s // 2, t // 2
     adjacency_inds = []
@@ -127,12 +127,14 @@ def matching_segmentation(mask_predictor, LF, filename):
         segment_embeddings,
         f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
-    adj_matrix = get_adjacency_matrix(subview_segments, segment_embeddings).to_dense()
+    sim_adjacency_matrix = get_sim_adjacency_matrix(
+        subview_segments, segment_embeddings
+    ).to_dense()
     torch.save(
-        adj_matrix,
-        f"{MATCHING_CONFIG['files-folder']}/{filename}_adj_matrix.pt",
+        sim_adjacency_matrix,
+        f"{MATCHING_CONFIG['files-folder']}/{filename}_sim_adjacency_matrix.pt",
     )
-    plt.imshow(adj_matrix.cpu().numpy(), cmap="gray")
+    plt.imshow(sim_adjacency_matrix.cpu().numpy(), cmap="gray")
     plt.show()
     plt.close()
 
