@@ -21,7 +21,7 @@ with open("matching_config.yaml") as f:
 # TODO: move to utils later
 def reduce_masks(masks, offset):
     areas = masks.sum(dim=(1, 2))
-    masks_result = torch.zeros_like(masks[0]).long()
+    masks_result = torch.zeros_like(masks[0]).long().cuda()
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
         masks_result[masks[mask_i]] = i
     masks_result[masks_result != 0] += offset
@@ -36,7 +36,7 @@ def get_subview_segments(mask_predictor, LF):
     for s in range(s_size):
         for t in range(t_size):
             subview = LF[s, t]
-            masks = generate_image_masks(mask_predictor, subview).bool()
+            masks = generate_image_masks(mask_predictor, subview).bool().cuda()
             masks = reduce_masks(
                 masks,
                 offset,
@@ -76,6 +76,25 @@ def get_segment_embeddings(subview_segments, subview_embeddings):
                 mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
                 segment_embeddings[mask_ind.item()] = mask_embedding
     return segment_embeddings
+
+
+# get an [s, t, u, v] centroid of each segment for EPI-based regularization
+@torch.no_grad()
+def get_segment_centroids(subview_segments):
+    s_size, t_size, u_size, v_size = subview_segments.shape
+    segment_centroids = {}
+    for s in range(s_size):
+        for t in range(t_size):
+            unique_segments = torch.unique(subview_segments[s, t])[
+                1:
+            ]  # exclude 0 (no segment)
+            for segment_i in unique_segments:
+                mask = subview_segments[s, t] == segment_i
+                uv_centroid = torch.nonzero(mask, as_tuple=False).float().mean(dim=0)
+                st_centroid = torch.tensor([s, t]).float().cuda()
+                centroid = torch.cat((st_centroid, uv_centroid))
+                segment_centroids[segment_i.item()] = centroid
+    return segment_centroids
 
 
 # Construct segment similarity matrix
@@ -127,6 +146,11 @@ def matching_segmentation(mask_predictor, LF, filename):
         segment_embeddings,
         f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
+    segment_centroids = get_segment_centroids(subview_segments)
+    torch.save(
+        segment_centroids,
+        f"{MATCHING_CONFIG['files-folder']}/{filename}_centroids.pt",
+    )
     sim_adjacency_matrix = get_sim_adjacency_matrix(
         subview_segments, segment_embeddings
     ).to_dense()
@@ -134,9 +158,6 @@ def matching_segmentation(mask_predictor, LF, filename):
         sim_adjacency_matrix,
         f"{MATCHING_CONFIG['files-folder']}/{filename}_sim_adjacency_matrix.pt",
     )
-    plt.imshow(sim_adjacency_matrix.cpu().numpy(), cmap="gray")
-    plt.show()
-    plt.close()
 
 
 if __name__ == "__main__":
