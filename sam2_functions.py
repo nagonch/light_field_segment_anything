@@ -27,7 +27,10 @@ def get_auto_mask_predictor(sam2_img_model=None):
     if not sam2_img_model:
         sam2_img_model = get_sam2_image_model()
     predictor = SAM2AutomaticMaskGenerator(
-        sam2_img_model, points_per_side=SAM2_CONFIG["auto-points-per-side"]
+        sam2_img_model,
+        points_per_side=SAM2_CONFIG["auto-points-per-side"],
+        box_nms_thresh=SAM2_CONFIG["box-nms-thresh"],
+        crop_nms_thresh=SAM2_CONFIG["crop-nms-thresh"],
     )
     return predictor
 
@@ -81,6 +84,7 @@ def propagate_masks(masks_batchified, video_predictor, input_folder, output_fold
                     masks_result,
                     f"{output_folder}/{str(out_frame_idx).zfill(4)}_{str(batch_i).zfill(4)}.pt",
                 )
+
 
 if __name__ == "__main__":
     mask_pred = get_auto_mask_predictor()
