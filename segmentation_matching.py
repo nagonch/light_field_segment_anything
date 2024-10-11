@@ -16,10 +16,12 @@ with open("matching_config.yaml") as f:
     MATCHING_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-# Convert [N, U, V] masks to [U, V] segments
-# The bigger the segment, the smaller the ID
-# TODO: move to utils later
 def reduce_masks(masks, offset):
+    """
+    Convert [N, U, V] masks to [U, V] segments
+    The bigger the segment, the smaller the ID
+    TODO: move to utils later
+    """
     areas = masks.sum(dim=(1, 2))
     masks_result = torch.zeros_like(masks[0]).long().cuda()
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
@@ -28,8 +30,8 @@ def reduce_masks(masks, offset):
     return masks_result
 
 
-# Get automatic semgents for each LF subview
 def get_subview_segments(mask_predictor, LF):
+    "Get automatic semgents for each LF subview"
     s_size, t_size, u_size, v_size = LF.shape[:-1]
     result = torch.zeros((s_size, t_size, u_size, v_size)).long().cuda()
     offset = 0
@@ -49,9 +51,9 @@ def get_subview_segments(mask_predictor, LF):
     return result
 
 
-# Get image embeddings for each LF subview
 @torch.no_grad()
 def get_subview_embeddings(predictor_model, LF):
+    "Get image embeddings for each LF subview"
     print("getting subview embeddings...", end="")
     s_size, t_size, _, _ = LF.shape[:-1]
     results = []
@@ -65,9 +67,9 @@ def get_subview_embeddings(predictor_model, LF):
     return results
 
 
-# Get embeddings for each segment
 @torch.no_grad()
 def get_segment_embeddings(subview_segments, subview_embeddings):
+    "Get embeddings for each segment"
     print("getting segment embeddings...", end="")
     s_size, t_size, u_size, v_size = subview_segments.shape
     segment_embeddings = {}
@@ -84,9 +86,9 @@ def get_segment_embeddings(subview_segments, subview_embeddings):
     return segment_embeddings
 
 
-# get an [s, t, u, v] centroid of each segment for EPI-based regularization
 @torch.no_grad()
 def get_segment_centroids(subview_segments):
+    "Get an [s, t, u, v] centroid of each segment for EPI-based regularization"
     print("getting segment centroids...", end="")
     s_size, t_size, u_size, v_size = subview_segments.shape
     segment_centroids = {}
@@ -105,9 +107,9 @@ def get_segment_centroids(subview_segments):
     return segment_centroids
 
 
-# Construct segment similarity matrix
 @torch.no_grad()
 def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
+    "Construct segment similarity matrix"
     print("getting adjacency matrix...", end="")
     s, t = subview_segments.shape[:2]
     s_reference, t_reference = s // 2, t // 2
@@ -146,6 +148,7 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
 
 
 def compute_or_load_tensor(filename, function, args):
+    "Either load tensor from filename, or compute it using function(args)"
     try:
         tesnor = torch.load(filename)
     except FileNotFoundError:
@@ -155,6 +158,7 @@ def compute_or_load_tensor(filename, function, args):
 
 
 def segmentation_matching(mask_predictor, LF, filename):
+    "LF segmentation using greedy matching"
     subview_segments_filename = (
         f"{MATCHING_CONFIG['files-folder']}/{filename}_unmatched_segments.pt"
     )
