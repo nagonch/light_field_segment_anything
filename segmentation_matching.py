@@ -20,7 +20,7 @@ def reduce_masks(masks, offset):
     """
     Convert [N, U, V] masks to [U, V] segments
     The bigger the segment, the smaller the ID
-    TODO: move to utils later
+    TODO: move to utils
     """
     areas = masks.sum(dim=(1, 2))
     masks_result = torch.zeros_like(masks[0]).long().cuda()
@@ -28,6 +28,19 @@ def reduce_masks(masks, offset):
         masks_result[masks[mask_i]] = i
     masks_result[masks_result != 0] += offset
     return masks_result
+
+
+def compute_or_load_tensor(filename, function, args):
+    """
+    Either load tensor from filename, or compute it using function(args)
+    TODO: move to utils
+    """
+    try:
+        tesnor = torch.load(filename)
+    except FileNotFoundError:
+        tesnor = function(*args)
+        torch.save(tesnor, filename)
+    return tesnor
 
 
 def get_subview_segments(mask_predictor, LF):
@@ -147,14 +160,18 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
     return adjacency_matrix
 
 
-def compute_or_load_tensor(filename, function, args):
-    "Either load tensor from filename, or compute it using function(args)"
-    try:
-        tesnor = torch.load(filename)
-    except FileNotFoundError:
-        tesnor = function(*args)
-        torch.save(tesnor, filename)
-    return tesnor
+def greedy_matching(subview_segments, sim_adjacency_matrix):
+    s_size, t_size, u_size, v_size = subview_segments.shape
+    s_reference, t_reference = s_size // 2, t_size // 2
+    segment_nums = torch.unique(subview_segments)[1:]  # exclude 0 (no segment)
+    ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
+        1:
+    ]  # exclude 0 (no segment)
+    sub_segment_nums = segment_nums[~torch.isin(segment_nums, ref_segment_nums)]
+    print(segment_nums)
+    print(ref_segment_nums)
+    print(sub_segment_nums)
+    # for seg_num
 
 
 def segmentation_matching(mask_predictor, LF, filename):
@@ -168,10 +185,13 @@ def segmentation_matching(mask_predictor, LF, filename):
 
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
+    del subview_embeddings
     segment_centroids = get_segment_centroids(subview_segments)
     sim_adjacency_matrix = get_sim_adjacency_matrix(
         subview_segments, segment_embeddings
     ).to_dense()
+    del segment_embeddings
+    greedy_matching(subview_segments, sim_adjacency_matrix)
 
 
 if __name__ == "__main__":
