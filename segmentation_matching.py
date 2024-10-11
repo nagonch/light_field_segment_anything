@@ -4,8 +4,14 @@ import warnings
 from utils import visualize_segmentation_mask
 import torch
 from torchvision.transforms.functional import resize
+import numpy as np
+import yaml
+import os
 
 warnings.filterwarnings("ignore")
+
+with open("matching_config.yaml") as f:
+    MATCHING_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 # move to utils later
@@ -49,17 +55,48 @@ def get_subview_embeddings(predictor_model, LF):
     results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
     return results
 
-def matching_segmentation(LF):
-    
+
+@torch.no_grad()
+def get_mask_embeddings(subview_segments, subview_embeddings):
+    s_size, t_size, u_size, v_size = subview_segments.shape
+    mask_embeddings = {}
+    for s in range(s_size):
+        for t in range(t_size):
+            mask = subview_segments[s, t]
+            embedding = subview_embeddings[s, t]
+            embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
+            for mask_ind in torch.unique(mask)[1:]:
+                mask_x, mask_y = torch.where(mask == mask_ind)
+                mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
+                mask_embeddings[mask_ind.item()] = mask_embedding
+    return mask_embeddings
+
+
+def matching_segmentation(mask_predictor, LF, filename):
+    subview_segments = get_subview_segments(mask_predictor, LF)
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    # torch.save(subview_embeddings, "subview_embeddings.pt")
+    # torch.save(subview_segments, "subview_segments.pt")
+    # subview_embeddings = torch.load("subview_embeddings.pt")
+    # subview_segments = torch.load("subview_segments.pt")
+    mask_embeddings = get_mask_embeddings(subview_segments, subview_embeddings)
+    torch.save(
+        subview_segments, f"{MATCHING_CONFIG['files-folder']}/{filename}_segments.pt"
+    )
+    torch.save(
+        mask_embeddings, f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt"
+    )
 
 
 if __name__ == "__main__":
+    os.makedirs(MATCHING_CONFIG["files-folder"], exist_ok=True)
     mask_predictor = get_auto_mask_predictor()
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
-    for LF, _, _ in dataset:
+    for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
-        # embeddings = get_subview_embeddings(image_predictor, LF)
-        # print(embeddings.shape)
-        segmentation = get_subview_segments(mask_predictor, LF).cpu().numpy()
-        # visualize_segmentation_mask(segmentation, LF)
+        matching_segmentation(
+            mask_predictor,
+            LF,
+            filename=str(i).zfill(4),
+        )

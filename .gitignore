@@ -20,3 +20,4 @@ experiments
 .pip_cache
 sam2
 sam2_checkpoints
+matching
