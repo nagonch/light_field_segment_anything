@@ -154,7 +154,7 @@ def compute_or_load_tensor(filename, function, args):
     return tesnor
 
 
-def matching_segmentation(mask_predictor, LF, filename):
+def segmentation_matching(mask_predictor, LF, filename):
     subview_segments_filename = (
         f"{MATCHING_CONFIG['files-folder']}/{filename}_unmatched_segments.pt"
     )
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
-        matching_segmentation(
+        segmentation_matching(
             mask_predictor,
             LF,
             filename=str(i).zfill(4),
