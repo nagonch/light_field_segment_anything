@@ -35,6 +35,7 @@ def get_subview_segments(mask_predictor, LF):
     offset = 0
     for s in range(s_size):
         for t in range(t_size):
+            print(f"getting segments for subview {s, t}...", end="")
             subview = LF[s, t]
             masks = generate_image_masks(mask_predictor, subview).bool().cuda()
             masks = reduce_masks(
@@ -44,12 +45,14 @@ def get_subview_segments(mask_predictor, LF):
             offset = masks.max()
             result[s][t] = masks
             del masks
+            print("done")
     return result
 
 
 # Get image embeddings for each LF subview
 @torch.no_grad()
 def get_subview_embeddings(predictor_model, LF):
+    print("getting subview embeddings...", end="")
     s_size, t_size, _, _ = LF.shape[:-1]
     results = []
     for s in range(s_size):
@@ -58,12 +61,14 @@ def get_subview_embeddings(predictor_model, LF):
             embedding = predictor_model.get_image_embedding()
             results.append(embedding[0].permute(1, 2, 0))
     results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
+    print("done")
     return results
 
 
 # Get embeddings for each segment
 @torch.no_grad()
 def get_segment_embeddings(subview_segments, subview_embeddings):
+    print("getting segment embeddings...", end="")
     s_size, t_size, u_size, v_size = subview_segments.shape
     segment_embeddings = {}
     for s in range(s_size):
@@ -75,12 +80,14 @@ def get_segment_embeddings(subview_segments, subview_embeddings):
                 mask_x, mask_y = torch.where(mask == mask_ind)
                 mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
                 segment_embeddings[mask_ind.item()] = mask_embedding
+    print("done")
     return segment_embeddings
 
 
 # get an [s, t, u, v] centroid of each segment for EPI-based regularization
 @torch.no_grad()
 def get_segment_centroids(subview_segments):
+    print("getting segment centroids...", end="")
     s_size, t_size, u_size, v_size = subview_segments.shape
     segment_centroids = {}
     for s in range(s_size):
@@ -94,12 +101,14 @@ def get_segment_centroids(subview_segments):
                 st_centroid = torch.tensor([s, t]).float().cuda()
                 centroid = torch.cat((st_centroid, uv_centroid))
                 segment_centroids[segment_i.item()] = centroid
+    print("done")
     return segment_centroids
 
 
 # Construct segment similarity matrix
 @torch.no_grad()
 def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
+    print("getting adjacency matrix...", end="")
     s, t = subview_segments.shape[:2]
     s_reference, t_reference = s // 2, t // 2
     adjacency_inds = []
@@ -132,6 +141,7 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
     adjacency_matrix = torch.sparse_coo_tensor(
         adjacency_inds, adjacency_vals, size=(n_segments, n_segments)
     )
+    print("done")
     return adjacency_matrix
 
 
