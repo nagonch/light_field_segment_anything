@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 import os
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
 
@@ -94,17 +95,21 @@ def get_adjacency_matrix(subview_segments, segment_embeddings):
     for segment_num_i in ref_subview_segment_nums:
         segment_num_i = segment_num_i.item()
         embedding_i = segment_embeddings[segment_num_i]
+        embeddings_j = []
         for segment_num_j in subview_segment_nums:
             if segment_num_j in ref_subview_segment_nums:
                 continue
             segment_num_j = segment_num_j.item()
-            embedding_j = segment_embeddings[segment_num_j]
+            embeddings_j.append(segment_embeddings[segment_num_j])
             adjacency_inds.append(torch.tensor([segment_num_i, segment_num_j]).cuda())
-            adjacency_vals.append(
-                F.cosine_similarity(embedding_i[None], embedding_j[None])[0]
-            )
+        embeddings_j = torch.stack(embeddings_j)
+        embeddings_i = torch.repeat_interleave(
+            embedding_i[None], embeddings_j.shape[0], dim=0
+        )
+        similarities = F.cosine_similarity(embeddings_i, embeddings_j)
+        adjacency_vals.append(similarities)
     adjacency_inds = torch.stack(adjacency_inds).T
-    adjacency_vals = torch.stack(adjacency_vals).to(torch.float32)
+    adjacency_vals = torch.cat(adjacency_vals, dim=0).to(torch.float32)
     adjacency_matrix = torch.sparse_coo_tensor(
         adjacency_inds, adjacency_vals, size=(n_segments, n_segments)
     )
@@ -126,7 +131,10 @@ def matching_segmentation(mask_predictor, LF, filename):
         segment_embeddings,
         f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
-    adj_matrix = get_adjacency_matrix(subview_segments, segment_embeddings)
+    adj_matrix = get_adjacency_matrix(subview_segments, segment_embeddings).to_dense()
+    plt.imshow(adj_matrix.cpu().numpy(), cmap="gray")
+    plt.show()
+    plt.close()
 
 
 if __name__ == "__main__":
