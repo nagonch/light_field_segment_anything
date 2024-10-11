@@ -167,9 +167,7 @@ def matching_segmentation(mask_predictor, LF, filename):
     segment_centroids = get_segment_centroids(subview_segments)
     sim_adjacency_matrix = get_sim_adjacency_matrix(
         subview_segments, segment_embeddings
-    )
-    print(sim_adjacency_matrix)
-    print(segment_centroids)
+    ).to_dense()
 
 
 if __name__ == "__main__":
