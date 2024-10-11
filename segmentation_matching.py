@@ -22,9 +22,8 @@ with open("matching_config.yaml") as f:
 def reduce_masks(masks, offset):
     areas = masks.sum(dim=(1, 2))
     masks_result = torch.zeros_like(masks[0]).long()
-    for i, _ in enumerate(torch.argsort(areas, descending=True)):
-        masks_result[masks[i]] += i
-        masks_result = torch.clip(masks_result, 0, i).long()
+    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
+        masks_result[masks[mask_i]] = i
     masks_result[masks_result != 0] += offset
     return masks_result
 
@@ -118,12 +117,8 @@ def get_adjacency_matrix(subview_segments, segment_embeddings):
 
 
 def matching_segmentation(mask_predictor, LF, filename):
-    # subview_segments = get_subview_segments(mask_predictor, LF)
-    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    # torch.save(subview_embeddings, "subview_embeddings.pt")
-    # torch.save(subview_segments, "subview_segments.pt")
-    subview_embeddings = torch.load("subview_embeddings.pt")
-    subview_segments = torch.load("subview_segments.pt")
+    subview_segments = get_subview_segments(mask_predictor, LF)
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
     torch.save(
         subview_segments, f"{MATCHING_CONFIG['files-folder']}/{filename}_segments.pt"
