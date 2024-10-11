@@ -4,6 +4,7 @@ import warnings
 from utils import visualize_segmentation_mask
 import torch
 from torchvision.transforms.functional import resize
+import numpy as np
 
 warnings.filterwarnings("ignore")
 
@@ -50,10 +51,31 @@ def get_subview_embeddings(predictor_model, LF):
     return results
 
 
+@torch.no_grad()
+def get_mask_embeddings(subview_segments, subview_embeddings):
+    s_size, t_size, u_size, v_size = subview_segments.shape
+    result_embeddings = {}
+    for s in range(s_size):
+        for t in range(t_size):
+            mask = subview_segments[s, t]
+            embedding = subview_embeddings[s, t]
+            embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
+            for mask_ind in torch.unique(mask)[1:]:
+                mask_x, mask_y = torch.where(mask == mask_ind)
+                mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
+                result_embeddings[mask_ind.item()] = mask_embedding
+    print(result_embeddings)
+    return result_embeddings
+
+
 def matching_segmentation(mask_predictor, LF):
     subview_segments = get_subview_segments(mask_predictor, LF)
-    embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    print(embeddings.shape, subview_segments.shape)
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    # torch.save(subview_embeddings, "subview_embeddings.pt")
+    # torch.save(subview_segments, "subview_segments.pt")
+    # subview_embeddings = torch.load("subview_embeddings.pt")
+    # subview_segments = torch.load("subview_segments.pt")
+    result_embeddings = get_mask_embeddings(subview_segments, subview_embeddings)
 
 
 if __name__ == "__main__":
