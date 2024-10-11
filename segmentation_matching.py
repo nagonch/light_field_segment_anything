@@ -16,8 +16,9 @@ with open("matching_config.yaml") as f:
     MATCHING_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-# Convert [N, U, V] masks to [U, V] masks
-# move to utils later
+# Convert [N, U, V] masks to [U, V] segments
+# The bigger the segment, the smaller the ID
+# TODO: move to utils later
 def reduce_masks(masks, offset):
     areas = masks.sum(dim=(1, 2))
     masks_result = torch.zeros_like(masks[0]).long()
