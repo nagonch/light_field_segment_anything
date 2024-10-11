@@ -57,9 +57,9 @@ def get_subview_embeddings(predictor_model, LF):
 
 
 @torch.no_grad()
-def get_mask_embeddings(subview_segments, subview_embeddings):
+def get_segment_embeddings(subview_segments, subview_embeddings):
     s_size, t_size, u_size, v_size = subview_segments.shape
-    mask_embeddings = {}
+    segment_embeddings = {}
     for s in range(s_size):
         for t in range(t_size):
             mask = subview_segments[s, t]
@@ -68,8 +68,17 @@ def get_mask_embeddings(subview_segments, subview_embeddings):
             for mask_ind in torch.unique(mask)[1:]:
                 mask_x, mask_y = torch.where(mask == mask_ind)
                 mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
-                mask_embeddings[mask_ind.item()] = mask_embedding
-    return mask_embeddings
+                segment_embeddings[mask_ind.item()] = mask_embedding
+    return segment_embeddings
+
+
+# @torch.no_grad()
+# def get_adjacency_matrix(subview_segments, segment_embeddings):
+#     s, t = subview_segments.shape[:2]
+#     s_reference, t_reference = s // 2, t // 2
+#     n_masks = len(segment_embeddings)
+#     adjacency_matrix = torch.sparse_coo_tensor(size=(n_masks, n_masks))
+#     ref_subview_segment_nums = torch.unique(subview_segments[s_reference, t_reference])
 
 
 def matching_segmentation(mask_predictor, LF, filename):
@@ -79,12 +88,14 @@ def matching_segmentation(mask_predictor, LF, filename):
     # torch.save(subview_segments, "subview_segments.pt")
     # subview_embeddings = torch.load("subview_embeddings.pt")
     # subview_segments = torch.load("subview_segments.pt")
-    mask_embeddings = get_mask_embeddings(subview_segments, subview_embeddings)
+    segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
+    print(segment_embeddings)
     torch.save(
         subview_segments, f"{MATCHING_CONFIG['files-folder']}/{filename}_segments.pt"
     )
     torch.save(
-        mask_embeddings, f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt"
+        segment_embeddings,
+        f"{MATCHING_CONFIG['files-folder']}/{filename}_embeddings.pt",
     )
 
 
