@@ -27,10 +27,10 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
+        print(LF.shape)
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
             filename=str(i).zfill(4),
         )
-        visualize_segmentation_mask(segments.cpu().numpy(), LF)
         raise
