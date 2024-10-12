@@ -25,7 +25,7 @@ def reduce_masks(masks, offset):
     areas = masks.sum(dim=(1, 2))
     masks_result = torch.zeros_like(masks[0]).long().cuda()
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
-        masks_result[masks[mask_i]] = i
+        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
     masks_result[masks_result != 0] += offset
     return masks_result
 
@@ -166,7 +166,6 @@ def greedy_matching(subview_segments, sim_adjacency_matrix):
     ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
         1:
     ]  # exclude 0 (no segment)
-    match_dict = {}
     for segment_i in ref_segment_nums:
         for s in range(s_size):
             for t in range(t_size):
@@ -177,9 +176,8 @@ def greedy_matching(subview_segments, sim_adjacency_matrix):
                     continue  # nothing left to match with in this subview
                 similarities = sim_adjacency_matrix[segment_i, st_unique_segments]
                 match_segment_id = st_unique_segments[torch.argmax(similarities)]
-                match_dict[segment_i.item()] = match_segment_id.item()
-                subview_segments[subview_segments == match_segment_id] = 0
-    return match_dict
+                subview_segments[subview_segments == match_segment_id] = segment_i
+    return subview_segments
 
 
 def segmentation_matching(mask_predictor, LF, filename):
@@ -199,8 +197,8 @@ def segmentation_matching(mask_predictor, LF, filename):
         subview_segments, segment_embeddings
     )
     del segment_embeddings
-    match_dict = greedy_matching(subview_segments, sim_adjacency_matrix)
-    print(match_dict)
+    matched_segments = greedy_matching(subview_segments, sim_adjacency_matrix)
+    return matched_segments
 
 
 if __name__ == "__main__":
@@ -210,9 +208,10 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
-        segmentation_matching(
+        segments = segmentation_matching(
             mask_predictor,
             LF,
             filename=str(i).zfill(4),
         )
+        visualize_segmentation_mask(segments.cpu().numpy(), LF)
         raise
