@@ -9,11 +9,18 @@ import yaml
 import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
 
 with open("LF_sam_image_seg.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
+
+def get_LF_disparity(LF):
+    LF = LightField(LF)
+    disp, _ = LF.get_disparity()
+    return disp
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
@@ -27,10 +34,4 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
-        print(LF.shape)
-        segments = LF_image_sam_seg(
-            mask_predictor,
-            LF,
-            filename=str(i).zfill(4),
-        )
-        raise
+        disp = get_LF_disparity(LF)
