@@ -180,11 +180,9 @@ def greedy_matching(subview_segments, sim_adjacency_matrix):
     return subview_segments
 
 
-def segmentation_matching(mask_predictor, LF, filename):
+def segmentation_matching(mask_predictor, LF, frame_id):
     "LF segmentation using greedy matching"
-    subview_segments_filename = (
-        f"{MATCHING_CONFIG['files-folder']}/{filename}_unmatched_segments.pt"
-    )
+    subview_segments_filename = f"{MATCHING_CONFIG['files-folder']}/{str(frame_id).zfill(4)}_unmatched_segments.pt"
     subview_segments = compute_or_load_tensor(
         subview_segments_filename, get_subview_segments, (mask_predictor, LF)
     )
