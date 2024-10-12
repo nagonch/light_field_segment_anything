@@ -156,6 +156,7 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
     adjacency_matrix = torch.sparse_coo_tensor(
         adjacency_inds, adjacency_vals, size=(n_segments + 1, n_segments + 1)
     ).to_dense()
+    print("done")
     return adjacency_matrix
 
 
