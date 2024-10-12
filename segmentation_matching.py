@@ -160,21 +160,25 @@ def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
 
 
 def greedy_matching(subview_segments, sim_adjacency_matrix):
-    s_size, t_size, u_size, v_size = subview_segments.shape
+    s_size, t_size = subview_segments.shape[:2]
     s_reference, t_reference = s_size // 2, t_size // 2
     ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
         1:
     ]  # exclude 0 (no segment)
+    match_dict = {}
     for segment_i in ref_segment_nums:
-        print(f"for segment {segment_i}")
         for s in range(s_size):
             for t in range(t_size):
                 if s == s_reference and t == t_reference:
                     continue
                 st_unique_segments = torch.unique(subview_segments[s, t])[1:]
+                if len(st_unique_segments) == 0:
+                    continue  # nothing left to match with in this subview
                 similarities = sim_adjacency_matrix[segment_i, st_unique_segments]
                 match_segment_id = st_unique_segments[torch.argmax(similarities)]
-                print(f"match in subview{s, t} : {match_segment_id}")
+                match_dict[segment_i.item()] = match_segment_id.item()
+                subview_segments[subview_segments == match_segment_id] = 0
+    return match_dict
 
 
 def segmentation_matching(mask_predictor, LF, filename):
@@ -194,7 +198,8 @@ def segmentation_matching(mask_predictor, LF, filename):
         subview_segments, segment_embeddings
     )
     del segment_embeddings
-    greedy_matching(subview_segments.cpu(), sim_adjacency_matrix.cpu())
+    match_dict = greedy_matching(subview_segments, sim_adjacency_matrix)
+    print(match_dict)
 
 
 if __name__ == "__main__":
