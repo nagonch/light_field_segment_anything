@@ -23,38 +23,30 @@ def get_LF_disparities(LF):
     return np.nan_to_num(disp)
 
 
-def reduce_masks(masks):
-    """
-    Convert [N, U, V] masks to [U, V] segments
-    The bigger the segment, the smaller the ID
-    TODO: move to utils
-    """
-    areas = masks.sum(dim=(1, 2))
-    masks_result = torch.zeros_like(masks[0]).long().cuda()
-    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
-        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
-    return masks_result
+def get_segment_disparities(masks_central, disparities):
+    mask_disparities = torch.zeros((masks_central.shape[0],)).cuda()
+    for i, mask_i in enumerate(masks_central):
+        mask_disparities[i] = disparities[mask_i].mean().item()
+    return mask_disparities
 
 
-def get_segment_disparities(segments_central, disparities):
-    segment_disparities = {}
-    for segment_i in torch.unique(segments_central)[1:]:  # exclude 0 (no segment)
-        segment_disparities[segment_i.item()] = (
-            disparities[segments_central == segment_i].mean().item()
-        )
-    return segment_disparities
+# def get_mask_position_predictions(LF, segments_central, segment_disparities):
+#     s, t, u, v = LF.shape[:4]
+#     segment_predictions =
+#     for segment_i in torch.unique(segments_central)[1:]:
+#         disparity = segment_disparities[segment_i.item()]
+#         print(disparity)
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    segments_central = reduce_masks(masks_central)
-    disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    torch.save(segments_central, "segments.pt")
-    torch.save(disparities, "disparity.pt")
-    # segments_central = torch.load("segments.pt")
-    # disparities = torch.load("disparity.pt")
-    print(get_segment_disparities(segments_central, disparities))
+    mask_disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    # torch.save(masks_central, "masks_central.pt")
+    # torch.save(mask_disparities, "mask_disparities.pt")
+    # masks_central = torch.load("masks_central.pt")
+    # mask_disparities = torch.load("mask_disparities.pt")
+    print(get_segment_disparities(masks_central, mask_disparities))
     raise
     return
 
