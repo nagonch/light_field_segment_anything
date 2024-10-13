@@ -30,15 +30,19 @@ def get_segment_disparities(masks_central, disparities):
     return mask_disparities
 
 
-def get_mask_position_predictions(LF, masks_central, mask_disparities):
+def get_segment_prompt_masks(LF, masks_central, mask_disparities):
     s_size, t_size, u_size, v_size = LF.shape[:4]
     result = (
         torch.zeros((masks_central.shape[0], s_size, t_size, u_size, v_size))
         .cuda()
-        .long()
+        .bool()
     )
     for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
-        print(i, mask, disparity)
+        for s in range(s_size):
+            for t in range(t_size):
+                result[i][s][t] = mask
+        # print(i, mask, disparity)
+    return result
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
@@ -50,7 +54,8 @@ def LF_image_sam_seg(mask_predictor, LF, filename):
     masks_central = torch.load("masks_central.pt")
     disparities = torch.load("disparities.pt")
     mask_disparities = get_segment_disparities(masks_central, disparities)
-    get_mask_position_predictions(LF, masks_central, mask_disparities)
+    segment_prompts = get_segment_prompt_masks(LF, masks_central, mask_disparities)
+    print(segment_prompts, segment_prompts.sum())
     raise
     return
 
