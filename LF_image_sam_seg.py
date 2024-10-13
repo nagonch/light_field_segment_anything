@@ -30,6 +30,10 @@ def get_segment_disparities(masks_central, disparities):
     return mask_disparities
 
 
+def get_mask_prompt_from_disparity(mask, disparity, s, t):
+    return mask
+
+
 def get_segment_prompt_masks(LF, masks_central, mask_disparities):
     s_size, t_size, u_size, v_size = LF.shape[:4]
     result = (
@@ -40,7 +44,7 @@ def get_segment_prompt_masks(LF, masks_central, mask_disparities):
     for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
         for s in range(s_size):
             for t in range(t_size):
-                result[i][s][t] = mask
+                result[i][s][t] = get_mask_prompt_from_disparity(mask, disparity, s, t)
         # print(i, mask, disparity)
     return result
 
