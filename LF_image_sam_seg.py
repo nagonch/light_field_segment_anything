@@ -20,14 +20,35 @@ with open("LF_sam_image_seg.yaml") as f:
 def get_LF_disparity(LF):
     LF = LightField(LF)
     disp, _ = LF.get_disparity()
-    return disp
+    return np.nan_to_num(disp)
+
+
+def reduce_masks(masks):
+    """
+    Convert [N, U, V] masks to [U, V] segments
+    The bigger the segment, the smaller the ID
+    TODO: move to utils
+    """
+    areas = masks.sum(dim=(1, 2))
+    masks_result = torch.zeros_like(masks[0]).long().cuda()
+    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
+        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
+    return masks_result
+
+
+def get_segment_disparities(segments_central, disparity):
+    return
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
     # disp = get_LF_disparity(LF)
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
-    segments_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    print(segments_central.shape)
+    masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    segments_central = reduce_masks(masks_central)
+    disparity = torch.tensor(get_LF_disparity(LF)).cuda()
+    torch.save(segments_central, "segments.pt")
+    torch.save(disparity, "disparity.pt")
+    raise
     return
 
 
