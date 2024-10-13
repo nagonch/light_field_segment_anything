@@ -41,12 +41,12 @@ def get_segment_disparities(masks_central, disparities):
 def LF_image_sam_seg(mask_predictor, LF, filename):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    mask_disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    # torch.save(masks_central, "masks_central.pt")
-    # torch.save(mask_disparities, "mask_disparities.pt")
-    # masks_central = torch.load("masks_central.pt")
-    # mask_disparities = torch.load("mask_disparities.pt")
-    print(get_segment_disparities(masks_central, mask_disparities))
+    disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    torch.save(masks_central, "masks_central.pt")
+    torch.save(disparities, "disparities.pt")
+    masks_central = torch.load("masks_central.pt")
+    disparities = torch.load("disparities.pt")
+    mask_disparities = get_segment_disparities(masks_central, disparities)
     raise
     return
 
