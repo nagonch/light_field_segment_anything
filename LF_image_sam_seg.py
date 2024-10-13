@@ -24,6 +24,10 @@ def get_LF_disparity(LF):
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
+    # disp = get_LF_disparity(LF)
+    s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+    segments_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    print(segments_central.shape)
     return
 
 
@@ -34,4 +38,8 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF[3:-3, 3:-3]
-        disp = get_LF_disparity(LF)
+        LF_image_sam_seg(
+            mask_predictor,
+            LF,
+            filename=str(i).zfill(4),
+        )
