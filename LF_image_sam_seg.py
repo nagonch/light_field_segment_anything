@@ -30,23 +30,27 @@ def get_segment_disparities(masks_central, disparities):
     return mask_disparities
 
 
-# def get_mask_position_predictions(LF, segments_central, segment_disparities):
-#     s, t, u, v = LF.shape[:4]
-#     segment_predictions =
-#     for segment_i in torch.unique(segments_central)[1:]:
-#         disparity = segment_disparities[segment_i.item()]
-#         print(disparity)
+def get_mask_position_predictions(LF, masks_central, mask_disparities):
+    s_size, t_size, u_size, v_size = LF.shape[:4]
+    result = (
+        torch.zeros((masks_central.shape[0], s_size, t_size, u_size, v_size))
+        .cuda()
+        .long()
+    )
+    for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
+        print(i, mask, disparity)
 
 
 def LF_image_sam_seg(mask_predictor, LF, filename):
-    s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
-    masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    torch.save(masks_central, "masks_central.pt")
-    torch.save(disparities, "disparities.pt")
+    # s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+    # masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    # disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    # torch.save(masks_central, "masks_central.pt")
+    # torch.save(disparities, "disparities.pt")
     masks_central = torch.load("masks_central.pt")
     disparities = torch.load("disparities.pt")
     mask_disparities = get_segment_disparities(masks_central, disparities)
+    get_mask_position_predictions(LF, masks_central, mask_disparities)
     raise
     return
 
