@@ -30,11 +30,19 @@ def get_segment_disparities(masks_central, disparities):
     return mask_disparities
 
 
-def get_mask_prompt_from_disparity(mask, disparity, s, t):
-    return mask
+def predict_mask_subview_position(mask, disparity, s, t):
+    st = F.normalize(torch.tensor([s, t]).cuda()[None].float())[0]
+    uv_0 = torch.nonzero(mask)
+    uv = (uv_0 + disparity * st).long()
+    u = uv[:, 0]
+    v = uv[:, 1]
+    uv = uv[(u >= 0) & (v >= 0) & (u <= mask.shape[0]) & (v <= mask.shape[1])]
+    mask_result = torch.zeros_like(mask)
+    mask_result[uv] = 1
+    return mask_result
 
 
-def get_segment_prompt_masks(LF, masks_central, mask_disparities):
+def get_prompt_mask_positions(LF, masks_central, mask_disparities):
     s_size, t_size, u_size, v_size = LF.shape[:4]
     result = (
         torch.zeros((masks_central.shape[0], s_size, t_size, u_size, v_size))
@@ -44,7 +52,9 @@ def get_segment_prompt_masks(LF, masks_central, mask_disparities):
     for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
         for s in range(s_size):
             for t in range(t_size):
-                result[i][s][t] = get_mask_prompt_from_disparity(mask, disparity, s, t)
+                result[i][s][t] = predict_mask_subview_position(
+                    mask, disparity, s - s_size // 2, t - t_size // 2
+                )
         # print(i, mask, disparity)
     return result
 
@@ -58,8 +68,10 @@ def LF_image_sam_seg(mask_predictor, LF, filename):
     masks_central = torch.load("masks_central.pt")
     disparities = torch.load("disparities.pt")
     mask_disparities = get_segment_disparities(masks_central, disparities)
-    segment_prompts = get_segment_prompt_masks(LF, masks_central, mask_disparities)
-    print(segment_prompts, segment_prompts.sum())
+    prompt_mask_positions = get_prompt_mask_positions(
+        LF, masks_central, mask_disparities
+    )
+    print(prompt_mask_positions)
     raise
     return
 
