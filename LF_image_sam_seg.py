@@ -17,6 +17,20 @@ with open("LF_sam_image_seg.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
+def masks_to_segments(masks):
+    """
+    Convert [N, S, T, U, V] masks to [S, T, U, V] segments
+    The bigger the segment, the smaller the ID
+    TODO: move to utils
+    """
+    areas = masks.cpu().sum(dim=(3, 4)).float().mean(dim=(1, 2)).cuda()
+    s, t, u, v = masks.shape[1:]
+    masks_result = torch.zeros((s, t, u, v)).long().cuda()
+    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
+        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
+    return masks_result
+
+
 def get_LF_disparities(LF):
     """
     Get disparities for subview [s//2, t//2]
@@ -118,7 +132,7 @@ def get_fine_segments(LF, image_predictor, coarse_segments):
     return fine_segments
 
 
-def LF_image_sam_seg(mask_predictor, LF, filename):
+def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
@@ -130,9 +144,10 @@ def LF_image_sam_seg(mask_predictor, LF, filename):
     coarse_segments = get_coarse_segmentation(LF, masks_central, mask_disparities)
     image_predictor = mask_predictor.predictor
     fine_segments = get_fine_segments(LF, image_predictor, coarse_segments)
-    for mask in fine_segments:
-        visualize_segmentation_mask(mask.long().cpu().numpy(), LF)
-    return
+    # fine_segments = torch.load("fine_segments.pt")
+    segments = masks_to_segments(fine_segments)
+    visualize_segmentation_mask(segments.cpu().numpy(), LF)
+    return segments
 
 
 if __name__ == "__main__":
@@ -142,8 +157,7 @@ if __name__ == "__main__":
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
         LF = LF  # [3:-3, 3:-3]
-        LF_image_sam_seg(
+        segments = LF_image_sam_seg(
             mask_predictor,
             LF,
-            filename=str(i).zfill(4),
         )
