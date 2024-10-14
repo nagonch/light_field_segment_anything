@@ -18,12 +18,23 @@ with open("LF_sam_image_seg.yaml") as f:
 
 
 def get_LF_disparities(LF):
+    """
+    Get disparities for subview [s//2, t//2]
+    LF: np.array [s, t, u, v, 3] (np.uint8)
+    returns: np.array [u, v] (np.float32)
+    """
     LF = LightField(LF)
     disp, _ = LF.get_disparity()
     return np.nan_to_num(disp)
 
 
 def get_segment_disparities(masks_central, disparities):
+    """
+    Get mean disparity of each mask
+    masks_central: torch.tensor [n, u, v] (torch.bool)
+    disparities: np.array [u, v] (np.float32)
+    returns: torch.tensor [n] (torch.float32)
+    """
     mask_disparities = torch.zeros((masks_central.shape[0],)).cuda()
     for i, mask_i in enumerate(masks_central):
         mask_disparities[i] = disparities[mask_i].mean().item()
@@ -31,6 +42,13 @@ def get_segment_disparities(masks_central, disparities):
 
 
 def predict_mask_subview_position(mask, disparity, s, t):
+    """
+    Use mask's disparity to predict its position in (s, t)
+    mask: torch.tensor [u, v] (torch.bool)
+    disparity: float
+    s, t: float
+    returns: torch.tensor [u, v] (torch.bool)
+    """
     st = F.normalize(torch.tensor([s, t]).cuda()[None].float())[0]
     uv_0 = torch.nonzero(mask)
     uv = (uv_0 + disparity * st).long()
@@ -42,7 +60,14 @@ def predict_mask_subview_position(mask, disparity, s, t):
     return mask_result
 
 
-def get_prompt_mask_positions(LF, masks_central, mask_disparities):
+def get_coarse_segmentation(LF, masks_central, mask_disparities):
+    """
+    Predict subview masks using disparities
+    LF: np.array [s, t, u, v, 3] (np.uint8)
+    masks_central: torch.tensor [u, v] (torch.bool)
+    mask_disparities: torch.tensor [n] (torch.float32)
+    returns: torch.tensor [s, t, u, v] (torch.bool)
+    """
     s_size, t_size, u_size, v_size = LF.shape[:4]
     result = (
         torch.zeros((masks_central.shape[0], s_size, t_size, u_size, v_size))
@@ -67,11 +92,8 @@ def LF_image_sam_seg(mask_predictor, LF, filename):
     # masks_central = torch.load("masks_central.pt")
     # disparities = torch.load("disparities.pt")
     mask_disparities = get_segment_disparities(masks_central, disparities)
-    prompt_mask_positions = get_prompt_mask_positions(
-        LF, masks_central, mask_disparities
-    )
-    s, t, u, v = LF.shape[:4]
-    for mask in prompt_mask_positions:
+    coarse_segments = get_coarse_segmentation(LF, masks_central, mask_disparities)
+    for mask in coarse_segments:
         visualize_segmentation_mask(mask.long().cpu().numpy(), LF)
     return
 
@@ -82,7 +104,7 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
-        LF = LF[3:-3, 3:-3]
+        LF = LF  # [3:-3, 3:-3]
         LF_image_sam_seg(
             mask_predictor,
             LF,
