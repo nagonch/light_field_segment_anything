@@ -66,7 +66,7 @@ def get_coarse_segmentation(LF, masks_central, mask_disparities):
     LF: np.array [s, t, u, v, 3] (np.uint8)
     masks_central: torch.tensor [u, v] (torch.bool)
     mask_disparities: torch.tensor [n] (torch.float32)
-    returns: torch.tensor [s, t, u, v] (torch.bool)
+    returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
     s_size, t_size, u_size, v_size = LF.shape[:4]
     result = (
@@ -84,15 +84,37 @@ def get_coarse_segmentation(LF, masks_central, mask_disparities):
 
 
 def get_fine_segments(LF, image_predictor, coarse_segments):
+    """
+    Predict subview masks using disparities
+    LF: np.array [s, t, u, v, 3] (np.uint8)
+    image_predictor: SAM2ImagePredictor
+    coarse_segments: torch.tensor [n, s, t, u, v] (torch.bool)
+    returns: torch.tensor [n, s, t, u, v] (torch.bool)
+    """
     fine_segments = torch.zeros_like(coarse_segments)
-    s_size, t_size, u_size, v_size = LF.shape[:4]
+    s_size, t_size = LF.shape[:2]
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
-                fine_segments[s, t] = coarse_segments[s, t]
+                fine_segments[:, s, t] = coarse_segments[:, s, t]
                 continue
-            coarse_segment = coarse_segment[s, t]
-            fine_segments[s, t] = coarse_segment
+            coarse_segments_st = coarse_segments[:, s, t]
+            image_predictor.set_image(LF[s, t])
+            fine_segments_st = []
+            for segment in coarse_segments_st:
+                points = (
+                    torch.nonzero(segment).float().mean(dim=0).flip(0)[None]
+                )  # TODO: consider more points
+                labels = np.ones((points.shape[0]))
+                fine_segment_result, iou_preds, _ = image_predictor.predict(
+                    point_coords=points,
+                    point_labels=labels,
+                    multimask_output=True,
+                )
+                fine_segment_result = torch.tensor(fine_segment_result).cuda()
+                result_segment = fine_segment_result[np.argmax(iou_preds)]
+                fine_segments_st.append(result_segment)
+            fine_segments[:, s, t] = torch.stack(fine_segments_st, dim=0)
     return fine_segments
 
 
