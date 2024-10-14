@@ -136,6 +136,7 @@ class HCIOldDataset(Dataset):
     def get_scene(self, name):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
         LF = np.array(scene["LF"])
+        LF = np.flip(LF, axis=0)
         return LF
 
     def get_labels(self, name):
