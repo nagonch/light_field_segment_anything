@@ -125,7 +125,7 @@ class HCIOldDataset(Dataset):
         self.data_path = data_path
         self.scene_to_path = {}
         self.scenes = [
-            # "horses",
+            "horses",
             "papillon",
             "stillLife",
             "buddha",
@@ -174,6 +174,7 @@ class HCIOldDataset(Dataset):
 
     def __getitem__(self, idx):
         scene_name = self.scenes[idx]
+        print(scene_name)
         LF = self.get_scene(scene_name)
         labels = self.get_labels(scene_name)
         disparity = self.get_disparity(scene_name)
