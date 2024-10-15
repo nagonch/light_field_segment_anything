@@ -135,18 +135,28 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
 
 def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+    print("generate_image_masks", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    print("done")
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    print("get_mask_disparities", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
+    print("done")
     del disparities
+    print("get_coarse_matching", end="")
     coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
+    print("done")
     del mask_disparities
     del masks_central
     image_predictor = mask_predictor.predictor
+    print("get_fine_matching", end="")
     fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
+    print("done")
     del coarse_matched_masks
     del image_predictor
+    print("masks_to_segments", end="")
     result_segments = masks_to_segments(fine_matched_masks)
+    print("done")
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
     return result_segments
 
@@ -157,8 +167,11 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
-        if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
+        if i == 0:
             continue
+        # if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
+        #     continue
+        print(f"starting LF {i}")
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
