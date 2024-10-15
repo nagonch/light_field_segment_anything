@@ -1,5 +1,5 @@
 from sam2_functions import get_auto_mask_predictor, generate_image_masks
-from data import HCIOldDataset
+from data import HCIOldDataset, UrbanLFDataset
 import warnings
 from utils import visualize_segmentation_mask
 import torch
@@ -117,10 +117,9 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
             coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
             for segment_i, segment in enumerate(coarse_segments_st):
-                points = (
-                    torch.nonzero(segment).float().mean(dim=0).flip(0)[None]
-                )  # TODO: consider more points
-                labels = np.ones((points.shape[0]))
+                points = torch.nonzero(segment).flip(1)
+                points = points[points.shape[0] // 2, :][None]
+                labels = torch.ones(points.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=points,
                     point_labels=labels,
@@ -138,7 +137,6 @@ def LF_image_sam_seg(mask_predictor, LF):
     print("generate_image_masks...", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
     print(f"done, shape: {masks_central.shape}")
-
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
     print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
@@ -157,26 +155,27 @@ def LF_image_sam_seg(mask_predictor, LF):
     print(f"done, shape: {fine_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
-
-    print("masks_to_segments...", end="")
-    result_segments = masks_to_segments(fine_matched_masks)
-    print(f"done, segment_nums: {torch.unique(result_segments)}")
-
-    visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
-    return result_segments
+    for mask in fine_matched_masks:
+        visualize_segmentation_mask(mask.cpu().numpy(), LF)
+    return fine_matched_masks
 
 
 if __name__ == "__main__":
     os.makedirs(CONFIG["files-folder"], exist_ok=True)
     mask_predictor = get_auto_mask_predictor()
     image_predictor = mask_predictor.predictor
-    dataset = HCIOldDataset()
+    dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
     for i, (LF, _, _) in enumerate(dataset):
-        if i == 0:
-            continue
-        if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
-            continue
+        # if not i == 2:
+        #     continue
+        # if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
+        #     continue
         print(f"starting LF {i}")
+        LF_image_sam_seg(
+            mask_predictor,
+            LF,
+        )
+        continue
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
