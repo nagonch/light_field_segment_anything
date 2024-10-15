@@ -107,17 +107,16 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
     coarse_masks: torch.tensor [n, s, t, u, v] (torch.bool)
     returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
-    fine_masks = torch.zeros_like(coarse_masks)
+    # fine_masks = torch.zeros_like(coarse_masks)
     s_size, t_size = LF.shape[:2]
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
-                fine_masks[:, s, t] = coarse_masks[:, s, t]
                 continue
-            coarse_segments_st = coarse_masks[:, s, t]
+            coarse_segments_st = torch.clone(coarse_masks[:, s, t])
+            coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
-            fine_segments_st = []
-            for segment in coarse_segments_st:
+            for segment_i, segment in enumerate(coarse_segments_st):
                 points = (
                     torch.nonzero(segment).float().mean(dim=0).flip(0)[None]
                 )  # TODO: consider more points
@@ -128,10 +127,10 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
                     multimask_output=True,
                 )
                 fine_segment_result = torch.tensor(fine_segment_result).cuda()
-                result_segment = fine_segment_result[np.argmax(iou_preds)]
-                fine_segments_st.append(result_segment)
-            fine_masks[:, s, t] = torch.stack(fine_segments_st, dim=0)
-    return fine_masks
+                coarse_masks[segment_i, s, t] = fine_segment_result[
+                    np.argmax(iou_preds)
+                ]  # replacing coarse masks with fine ones
+    return coarse_masks
 
 
 def LF_image_sam_seg(mask_predictor, LF):
@@ -158,10 +157,8 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
-        if i == 0:
+        if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
             continue
-        # if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
-        #     continue
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
