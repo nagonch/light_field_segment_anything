@@ -42,7 +42,7 @@ def get_LF_disparities(LF):
     return np.nan_to_num(disp)
 
 
-def get_segment_disparities(masks_central, disparities):
+def get_mask_disparities(masks_central, disparities):
     """
     Get mean disparity of each mask
     masks_central: torch.tensor [n, u, v] (torch.bool)
@@ -74,7 +74,7 @@ def predict_mask_subview_position(mask, disparity, s, t):
     return mask_result
 
 
-def get_coarse_segmentation(LF, masks_central, mask_disparities):
+def get_coarse_matching(LF, masks_central, mask_disparities):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
@@ -97,7 +97,7 @@ def get_coarse_segmentation(LF, masks_central, mask_disparities):
     return result
 
 
-def get_fine_segments(LF, image_predictor, coarse_segments):
+def get_fine_matching(LF, image_predictor, coarse_segments):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
@@ -105,12 +105,12 @@ def get_fine_segments(LF, image_predictor, coarse_segments):
     coarse_segments: torch.tensor [n, s, t, u, v] (torch.bool)
     returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
-    fine_segments = torch.zeros_like(coarse_segments)
+    fine_masks = torch.zeros_like(coarse_segments)
     s_size, t_size = LF.shape[:2]
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
-                fine_segments[:, s, t] = coarse_segments[:, s, t]
+                fine_masks[:, s, t] = coarse_segments[:, s, t]
                 continue
             coarse_segments_st = coarse_segments[:, s, t]
             image_predictor.set_image(LF[s, t])
@@ -128,26 +128,21 @@ def get_fine_segments(LF, image_predictor, coarse_segments):
                 fine_segment_result = torch.tensor(fine_segment_result).cuda()
                 result_segment = fine_segment_result[np.argmax(iou_preds)]
                 fine_segments_st.append(result_segment)
-            fine_segments[:, s, t] = torch.stack(fine_segments_st, dim=0)
-    return fine_segments
+            fine_masks[:, s, t] = torch.stack(fine_segments_st, dim=0)
+    return fine_masks
 
 
 def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    # torch.save(masks_central, "masks_central.pt")
-    # torch.save(disparities, "disparities.pt")
-    # masks_central = torch.load("masks_central.pt")
-    # disparities = torch.load("disparities.pt")
-    mask_disparities = get_segment_disparities(masks_central, disparities)
-    coarse_segments = get_coarse_segmentation(LF, masks_central, mask_disparities)
+    mask_disparities = get_mask_disparities(masks_central, disparities)
+    coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
     image_predictor = mask_predictor.predictor
-    fine_segments = get_fine_segments(LF, image_predictor, coarse_segments)
-    # fine_segments = torch.load("fine_segments.pt")
-    segments = masks_to_segments(fine_segments)
-    visualize_segmentation_mask(segments.cpu().numpy(), LF)
-    return segments
+    fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
+    result_segments = masks_to_segments(fine_matched_masks)
+    visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
+    return result_segments
 
 
 if __name__ == "__main__":
@@ -156,8 +151,9 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
-        LF = LF  # [3:-3, 3:-3]
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
         )
+        torch.save(segments, f"segments/{str(i).zfill(4)}.pt")
+        del segments
