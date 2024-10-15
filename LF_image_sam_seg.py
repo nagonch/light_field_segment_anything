@@ -118,11 +118,20 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
             image_predictor.set_image(LF[s, t])
             for segment_i, segment in enumerate(coarse_segments_st):
                 points = torch.nonzero(segment).flip(1)
+                box = torch.tensor(
+                    [
+                        points[:, 0].min(),
+                        points[:, 1].min(),
+                        points[:, 0].max(),
+                        points[:, 1].max(),
+                    ]
+                ).cuda()
                 points = points[points.shape[0] // 2, :][None]
                 labels = torch.ones(points.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=points,
                     point_labels=labels,
+                    box=box,
                     multimask_output=True,
                 )
                 fine_segment_result = torch.tensor(fine_segment_result).cuda()
@@ -150,6 +159,8 @@ def LF_image_sam_seg(mask_predictor, LF):
     del masks_central
 
     image_predictor = mask_predictor.predictor
+    # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
+    # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
     print("get_fine_matching...", end="")
     fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
     print(f"done, shape: {fine_matched_masks.shape}")
