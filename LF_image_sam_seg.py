@@ -25,7 +25,7 @@ def masks_to_segments(masks):
     """
     areas = masks.cpu().sum(dim=(3, 4)).float().mean(dim=(1, 2)).cuda()
     s, t, u, v = masks.shape[1:]
-    masks_result = torch.zeros((s, t, u, v)).long().cuda()
+    masks_result = torch.zeros((s, t, u, v), dtype=torch.long).cuda()
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
         masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
     return masks_result
@@ -83,12 +83,9 @@ def get_coarse_matching(LF, masks_central, mask_disparities):
     returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
     s_size, t_size, u_size, v_size = LF.shape[:4]
-    print(masks_central.shape[0], s_size, t_size, u_size, v_size)
-    result = (
-        torch.zeros((masks_central.shape[0], s_size, t_size, u_size, v_size))
-        .cuda()
-        .bool()
-    )
+    result = torch.zeros(
+        (masks_central.shape[0], s_size, t_size, u_size, v_size), dtype=torch.bool
+    ).cuda()
     for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
         for s in range(s_size):
             for t in range(t_size):
