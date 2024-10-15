@@ -11,5 +11,6 @@ video-mode: true
 vis-display: true
 vis-save: true
 auto-points-per-side: 64
+min_mask_size: 100
 start-frame: 140
-box-nms-thresh: 0.3
+box-nms-thresh: 0.5
