@@ -63,12 +63,14 @@ def predict_mask_subview_position(mask, disparity, s, t):
     s, t: float
     returns: torch.tensor [u, v] (torch.bool)
     """
-    st = F.normalize(torch.tensor([s, t]).cuda()[None].float())[0]
+    # mask = mask.cpu()
+    # disparity = disparity.cpu()
+    st = F.normalize(torch.tensor([s, t])[None].float())[0].cuda()
     uv_0 = torch.nonzero(mask)
     uv = (uv_0 - disparity * st).long()
     u = uv[:, 0]
     v = uv[:, 1]
-    uv = uv[(u >= 0) & (v >= 0) & (u <= mask.shape[0]) & (v <= mask.shape[1])]
+    uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
     mask_result = torch.zeros_like(mask)
     mask_result[uv[:, 0], uv[:, 1]] = 1
     return mask_result
@@ -154,6 +156,8 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
+        if i == 0:
+            continue
         if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
             continue
         segments = LF_image_sam_seg(
