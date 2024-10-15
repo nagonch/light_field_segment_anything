@@ -174,7 +174,6 @@ class HCIOldDataset(Dataset):
 
     def __getitem__(self, idx):
         scene_name = self.scenes[idx]
-        print(scene_name)
         LF = self.get_scene(scene_name)
         labels = self.get_labels(scene_name)
         disparity = self.get_disparity(scene_name)

@@ -25,8 +25,8 @@ def masks_to_segments(masks):
     masks: torch.tensor [n, s, t, u, v] (torch.bool)
     returns: torch.tensor [s, t, u, v] (torch.long)
     """
-    areas = masks.cpu().sum(dim=(3, 4)).float().mean(dim=(1, 2)).cuda()
     s, t, u, v = masks.shape[1:]
+    areas = masks[:, s // 2, t // 2].cpu().sum(dim=(1, 2))
     masks_result = torch.zeros((s, t, u, v), dtype=torch.long).cuda()
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
         masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
@@ -135,28 +135,33 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
 
 def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
-    print("generate_image_masks", end="")
+    print("generate_image_masks...", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    print("done")
+    print(f"done, shape: {masks_central.shape}")
+
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    print("get_mask_disparities", end="")
+    print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
-    print("done")
+    print(f"done, shape: {mask_disparities.shape}")
     del disparities
-    print("get_coarse_matching", end="")
+
+    print("get_coarse_matching...", end="")
     coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
-    print("done")
+    print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
+
     image_predictor = mask_predictor.predictor
-    print("get_fine_matching", end="")
+    print("get_fine_matching...", end="")
     fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
-    print("done")
+    print(f"done, shape: {fine_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
-    print("masks_to_segments", end="")
+
+    print("masks_to_segments...", end="")
     result_segments = masks_to_segments(fine_matched_masks)
-    print("done")
+    print(f"done, segment_nums: {torch.unique(result_segments)}")
+
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
     return result_segments
 
@@ -169,8 +174,8 @@ if __name__ == "__main__":
     for i, (LF, _, _) in enumerate(dataset):
         if i == 0:
             continue
-        # if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
-        #     continue
+        if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
+            continue
         print(f"starting LF {i}")
         segments = LF_image_sam_seg(
             mask_predictor,
