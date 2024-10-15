@@ -19,9 +19,11 @@ with open("LF_sam_image_seg.yaml") as f:
 
 def masks_to_segments(masks):
     """
-    Convert [N, S, T, U, V] masks to [S, T, U, V] segments
+    Convert [n, s, t, u, v] masks to [s, t, u v] segments
     The bigger the segment, the smaller the ID
     TODO: move to utils
+    masks: torch.tensor [n, s, t, u, v] (torch.bool)
+    returns: torch.tensor [s, t, u, v] (torch.long)
     """
     areas = masks.cpu().sum(dim=(3, 4)).float().mean(dim=(1, 2)).cuda()
     s, t, u, v = masks.shape[1:]
@@ -97,22 +99,22 @@ def get_coarse_matching(LF, masks_central, mask_disparities):
     return result
 
 
-def get_fine_matching(LF, image_predictor, coarse_segments):
+def get_fine_matching(LF, image_predictor, coarse_masks):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
     image_predictor: SAM2ImagePredictor
-    coarse_segments: torch.tensor [n, s, t, u, v] (torch.bool)
+    coarse_masks: torch.tensor [n, s, t, u, v] (torch.bool)
     returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
-    fine_masks = torch.zeros_like(coarse_segments)
+    fine_masks = torch.zeros_like(coarse_masks)
     s_size, t_size = LF.shape[:2]
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
-                fine_masks[:, s, t] = coarse_segments[:, s, t]
+                fine_masks[:, s, t] = coarse_masks[:, s, t]
                 continue
-            coarse_segments_st = coarse_segments[:, s, t]
+            coarse_segments_st = coarse_masks[:, s, t]
             image_predictor.set_image(LF[s, t])
             fine_segments_st = []
             for segment in coarse_segments_st:
@@ -158,8 +160,8 @@ if __name__ == "__main__":
     for i, (LF, _, _) in enumerate(dataset):
         if i == 0:
             continue
-        if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
-            continue
+        # if os.path.exists(f"segments/{str(i).zfill(4)}.pt"):
+        #     continue
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
