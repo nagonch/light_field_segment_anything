@@ -113,7 +113,7 @@ def get_prompts_for_masks(coarse_masks):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
                 continue
-            for mask_i, mask in enumerate(coarse_masks[s, t]):
+            for mask_i, mask in enumerate(coarse_masks[:, s, t]):
                 point_prompts_i = torch.nonzero(mask).flip(1)
                 box_pormpts_i = torch.tensor(
                     [
@@ -129,7 +129,7 @@ def get_prompts_for_masks(coarse_masks):
     return point_prompts, box_prompts
 
 
-def get_fine_matching(LF, image_predictor, coarse_masks):
+def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prompts):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
@@ -143,25 +143,17 @@ def get_fine_matching(LF, image_predictor, coarse_masks):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
                 continue
-            coarse_segments_st = torch.clone(coarse_masks[:, s, t])
             coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
-            for segment_i, segment in enumerate(coarse_segments_st):
-                points = torch.nonzero(segment).flip(1)
-                box = torch.tensor(
-                    [
-                        points[:, 0].min(),
-                        points[:, 1].min(),
-                        points[:, 0].max(),
-                        points[:, 1].max(),
-                    ]
-                ).cuda()
-                points = points[points.shape[0] // 2, :][None]
-                labels = torch.ones(points.shape[0])
+            for segment_i, (point_prompts_i, box_prompts_i) in enumerate(
+                zip(point_prompts[:, s, t], box_prompts[:, s, t])
+            ):
+                point_prompts_i = point_prompts_i[None]
+                labels = torch.ones(point_prompts_i.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
-                    point_coords=points,
+                    point_coords=point_prompts_i,
                     point_labels=labels,
-                    box=box,
+                    box=box_prompts_i,
                     multimask_output=True,
                 )
                 fine_segment_result = torch.tensor(fine_segment_result).cuda()
@@ -193,7 +185,9 @@ def LF_image_sam_seg(mask_predictor, LF):
     # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
-    fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
+    fine_matched_masks = get_fine_matching(
+        LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
+    )
     print(f"done, shape: {fine_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
