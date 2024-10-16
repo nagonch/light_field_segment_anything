@@ -173,10 +173,12 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                     # box=box_prompts_i,
                     multimask_output=True,
                 )
-                fine_segment_result = torch.tensor(fine_segment_result).cuda()
-                coarse_masks[segment_i, s, t] = fine_segment_result[
-                    np.argmax(iou_preds)
-                ]  # replacing coarse masks with fine ones
+                max_iou = iou_preds.max().item()
+                if max_iou >= 0.8:
+                    fine_segment_result = torch.tensor(fine_segment_result).cuda()
+                    coarse_masks[segment_i, s, t] = fine_segment_result[
+                        np.argmax(iou_preds)
+                    ]  # replacing coarse masks with fine ones
     return coarse_masks
 
 
