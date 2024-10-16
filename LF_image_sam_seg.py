@@ -159,16 +159,18 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                 #     ),
                 #     dim=0,
                 # )
+                # dists = torch.norm(point_prompts_i[0] - negative_prompts_i, dim=1)
+                # negative_prompts_i = negative_prompts_i[torch.argsort(dists)][:5]
                 # labels_negative = torch.zeros(negative_prompts_i.shape[0])
                 # labels = torch.cat((labels, labels_negative), dim=0)
                 # point_prompts_i = torch.cat(
                 #     (point_prompts_i, negative_prompts_i), dim=0
                 # )
-                labels = torch.ones(point_prompts_i.shape[0])
+                # labels = torch.ones(point_prompts_i.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=point_prompts_i,
                     point_labels=labels,
-                    box=box_prompts_i,
+                    # box=box_prompts_i,
                     multimask_output=True,
                 )
                 fine_segment_result = torch.tensor(fine_segment_result).cuda()
