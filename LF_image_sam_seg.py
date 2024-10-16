@@ -99,6 +99,36 @@ def get_coarse_matching(LF, masks_central, mask_disparities):
     return result
 
 
+def get_prompts_for_masks(coarse_masks):
+    """
+    Calculate prompts from coarse masks
+    coarse_masks: torch.tensor [n, s, t, u, v] (torch.bool)
+    returns: torch.tensor [n, s, t, 2] (torch.float),
+             torch.tensor [n, s, t, 4] (torch.float)
+    """
+    n, s_size, t_size = coarse_masks.shape[:3]
+    point_prompts = torch.zeros((n, s_size, t_size, 2), dtype=torch.float).cuda()
+    box_prompts = torch.zeros((n, s_size, t_size, 4), dtype=torch.float).cuda()
+    for s in range(s_size):
+        for t in range(t_size):
+            if s == s_size // 2 and t == t_size // 2:
+                continue
+            for mask_i, mask in enumerate(coarse_masks[s, t]):
+                point_prompts_i = torch.nonzero(mask).flip(1)
+                box_pormpts_i = torch.tensor(
+                    [
+                        point_prompts_i[:, 0].min(),
+                        point_prompts_i[:, 1].min(),
+                        point_prompts_i[:, 0].max(),
+                        point_prompts_i[:, 1].max(),
+                    ]
+                ).cuda()
+                point_prompts_i = point_prompts_i[point_prompts_i.shape[0] // 2, :]
+                point_prompts[mask_i, s, t] = point_prompts_i
+                box_prompts[mask_i, s, t] = box_pormpts_i
+    return point_prompts, box_prompts
+
+
 def get_fine_matching(LF, image_predictor, coarse_masks):
     """
     Predict subview masks using disparities
@@ -161,6 +191,7 @@ def LF_image_sam_seg(mask_predictor, LF):
     image_predictor = mask_predictor.predictor
     # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
     # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
     fine_matched_masks = get_fine_matching(LF, image_predictor, coarse_matched_masks)
     print(f"done, shape: {fine_matched_masks.shape}")
