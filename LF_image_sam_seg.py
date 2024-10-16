@@ -53,7 +53,7 @@ def get_mask_disparities(masks_central, disparities):
     """
     mask_disparities = torch.zeros((masks_central.shape[0],)).cuda()
     for i, mask_i in enumerate(masks_central):
-        mask_disparities[i] = disparities[mask_i].mean().item()
+        mask_disparities[i] = torch.median(disparities[mask_i]).item()
     return mask_disparities
 
 
@@ -67,9 +67,10 @@ def predict_mask_subview_position(mask, disparity, s, t):
     """
     # mask = mask.cpu()
     # disparity = disparity.cpu()
-    st = F.normalize(torch.tensor([s, t])[None].float())[0].cuda()
+    st = torch.tensor([s, t]).float().cuda()
+    st_normalized = F.normalize(st[None])[0]
     uv_0 = torch.nonzero(mask)
-    uv = (uv_0 - disparity * st).long()
+    uv = (uv_0 + disparity * st_normalized).long()
     u = uv[:, 0]
     v = uv[:, 1]
     uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
@@ -129,6 +130,14 @@ def get_prompts_for_masks(coarse_masks):
     return point_prompts, box_prompts
 
 
+def masks_iou(predicted_masks, target_mask):
+    target_mask = target_mask[None]
+    intersection = (predicted_masks & target_mask).sum(dim=(1, 2))
+    union = (predicted_masks | target_mask).sum(dim=(1, 2))
+    ious = intersection / (union + 1e-9)
+    return ious
+
+
 def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prompts):
     """
     Predict subview masks using disparities
@@ -143,6 +152,7 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
                 continue
+            coarse_masks_st = torch.clone(coarse_masks[:, s, t, :, :])
             coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
             point_prompts_st = point_prompts[:, s, t]
@@ -158,12 +168,17 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                     # box=box_prompts_i,
                     multimask_output=True,
                 )
-                max_iou = iou_preds.max().item()
-                if max_iou >= 0.8:
-                    fine_segment_result = torch.tensor(fine_segment_result).cuda()
+                fine_segment_result = torch.tensor(
+                    fine_segment_result, dtype=torch.bool
+                ).cuda()
+                ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
+                max_iou = ious.max().item()
+                if max_iou >= 0.6:
                     coarse_masks[segment_i, s, t] = fine_segment_result[
                         np.argmax(iou_preds)
                     ]  # replacing coarse masks with fine ones
+                else:
+                    coarse_masks[segment_i, s, t] = coarse_masks_st[segment_i]
     return coarse_masks
 
 
@@ -186,7 +201,10 @@ def LF_image_sam_seg(mask_predictor, LF):
 
     image_predictor = mask_predictor.predictor
     # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
-    # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    for mask in coarse_matched_masks:
+        visualize_segmentation_mask(mask.cpu().numpy())
+    raise
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
     fine_matched_masks = get_fine_matching(
