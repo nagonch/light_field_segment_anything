@@ -145,10 +145,25 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                 continue
             coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
+            point_prompts_st = point_prompts[:, s, t]
+            box_prompts_st = box_prompts[:, s, t]
             for segment_i, (point_prompts_i, box_prompts_i) in enumerate(
-                zip(point_prompts[:, s, t], box_prompts[:, s, t])
+                zip(point_prompts_st, box_prompts_st)
             ):
                 point_prompts_i = point_prompts_i[None]
+                labels = torch.ones(point_prompts_i.shape[0])
+                # negative_prompts_i = torch.cat(
+                #     (
+                #         point_prompts_st[:segment_i],
+                #         point_prompts_st[segment_i + 1 :],
+                #     ),
+                #     dim=0,
+                # )
+                # labels_negative = torch.zeros(negative_prompts_i.shape[0])
+                # labels = torch.cat((labels, labels_negative), dim=0)
+                # point_prompts_i = torch.cat(
+                #     (point_prompts_i, negative_prompts_i), dim=0
+                # )
                 labels = torch.ones(point_prompts_i.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=point_prompts_i,
