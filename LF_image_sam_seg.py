@@ -176,7 +176,7 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                 ).cuda()
                 ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
                 max_iou = ious.max().item()
-                if max_iou >= 0.6:
+                if max_iou >= 0.8:
                     coarse_masks[segment_i, s, t] = fine_segment_result[
                         torch.argmax(ious)
                     ]  # replacing coarse masks with fine ones
