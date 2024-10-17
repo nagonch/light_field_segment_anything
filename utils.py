@@ -11,15 +11,6 @@ from skimage.segmentation import mark_boundaries
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
-with open("sam_config.yaml") as f:
-    SAM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-with open("merger_config.yaml") as f:
-    MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-with open("experiment_config.yaml") as f:
-    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
 
 def masks_iou(predicted_masks, target_mask):
     target_mask = target_mask[None]
