@@ -90,12 +90,16 @@ def get_coarse_matching(LF, masks_central, mask_disparities):
     result = torch.zeros(
         (masks_central.shape[0], s_size, t_size, u_size, v_size), dtype=torch.bool
     ).cuda()
-    for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
-        for s in range(s_size):
-            for t in range(t_size):
+    for s in range(s_size):
+        for t in range(t_size):
+            for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
                 result[i][s][t] = predict_mask_subview_position(
                     mask, disparity, s - s_size // 2, t - t_size // 2
                 )
+            result_st = torch.cumsum(result[:, s, t], dim=0)
+            result[:, s, t] = torch.where(
+                result_st == 1, result[:, s, t], torch.zeros_like(result[:, s, t])
+            )  # deal with occlusion
     return result
 
 
@@ -195,6 +199,7 @@ def LF_image_sam_seg(mask_predictor, LF):
     mask_depth_order = torch.argsort(mask_disparities)
     masks_central = masks_central[mask_depth_order]
     mask_disparities = mask_disparities[mask_depth_order]
+    del mask_depth_order
     print(f"done, shape: {mask_disparities.shape}")
     del disparities
 
@@ -205,8 +210,6 @@ def LF_image_sam_seg(mask_predictor, LF):
     del masks_central
 
     image_predictor = mask_predictor.predictor
-    coarse_segments = masks_to_segments(coarse_matched_masks)
-    visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
     refined_matched_masks, mask_ious = get_refined_matching(
@@ -227,14 +230,11 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
     for i, (LF, _, _) in enumerate(dataset):
-        if i < 2:
-            continue
         print(f"starting LF {i}")
         LF_image_sam_seg(
             mask_predictor,
             LF,
         )
-        continue
         segments = LF_image_sam_seg(
             mask_predictor,
             LF,
