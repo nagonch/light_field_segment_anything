@@ -41,7 +41,7 @@ def get_LF_disparities(LF):
     """
     LF = LightField(LF)
     disp, _ = LF.get_disparity()
-    return np.nan_to_num(disp)
+    return disp
 
 
 def get_mask_disparities(masks_central, disparities):
@@ -53,6 +53,8 @@ def get_mask_disparities(masks_central, disparities):
     """
     mask_disparities = torch.zeros((masks_central.shape[0],)).cuda()
     for i, mask_i in enumerate(masks_central):
+        disparities_i = disparities[mask_i]
+        disparities_i = disparities_i[~torch.any(disparities_i.isnan())]
         mask_disparities[i] = torch.median(disparities[mask_i]).item()
     return mask_disparities
 
@@ -65,12 +67,9 @@ def predict_mask_subview_position(mask, disparity, s, t):
     s, t: float
     returns: torch.tensor [u, v] (torch.bool)
     """
-    # mask = mask.cpu()
-    # disparity = disparity.cpu()
     st = torch.tensor([s, t]).float().cuda()
-    st_normalized = F.normalize(st[None])[0]
     uv_0 = torch.nonzero(mask)
-    uv = (uv_0 + disparity * st_normalized).long()
+    uv = (uv_0 - disparity * st).long()
     u = uv[:, 0]
     v = uv[:, 1]
     uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
@@ -203,6 +202,7 @@ def LF_image_sam_seg(mask_predictor, LF):
     # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
     coarse_matched_masks = torch.load("coarse_matched_masks.pt")
     for mask in coarse_matched_masks:
+        visualize_segmentation_mask(mask.cpu().numpy(), LF)
         visualize_segmentation_mask(mask.cpu().numpy())
     raise
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
