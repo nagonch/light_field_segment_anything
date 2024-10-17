@@ -1,8 +1,0 @@
-min-mask-area: 100
-model-path: "SAM_model/sam_vit_h.pth"
-points-per-side: 45
-points-per-batch: 64
-pred-iou-thresh: 0.88
-stability-score-offset: 1.0
-stability-score-thresh: 0.95
-box-nms-thresh: 0.7
