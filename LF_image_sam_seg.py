@@ -1,13 +1,10 @@
 from sam2_functions import get_auto_mask_predictor, generate_image_masks
 from data import HCIOldDataset, UrbanLFDataset
 import warnings
-from utils import visualize_segmentation_mask
+from utils import visualize_segmentation_mask, masks_iou
 import torch
-from torchvision.transforms.functional import resize
-import numpy as np
 import yaml
 import os
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from plenpy.lightfields import LightField
 
@@ -133,14 +130,6 @@ def get_prompts_for_masks(coarse_masks):
                 point_prompts[mask_i, s, t] = point_prompts_i
                 box_prompts[mask_i, s, t] = box_pormpts_i
     return point_prompts, box_prompts
-
-
-def masks_iou(predicted_masks, target_mask):
-    target_mask = target_mask[None]
-    intersection = (predicted_masks & target_mask).sum(dim=(1, 2))
-    union = (predicted_masks | target_mask).sum(dim=(1, 2))
-    ious = intersection / (union + 1e-9)
-    return ious
 
 
 def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_prompts):
