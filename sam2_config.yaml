@@ -1,5 +1,3 @@
 sam-checkpoint: sam2_checkpoints/sam2.1_hiera_tiny.pt
 sam-config: sam2.1_hiera_t.yaml
-batch-size: 15
 points-per-side: 64
-min_mask_size: 100

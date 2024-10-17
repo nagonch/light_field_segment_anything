@@ -28,9 +28,7 @@ def get_auto_mask_predictor(sam2_img_model=None):
         sam2_img_model = get_sam2_image_model()
     predictor = SAM2AutomaticMaskGenerator(
         sam2_img_model,
-        # min_mask_region_area=SAM2_CONFIG["min_mask_size"],
-        # points_per_side=SAM2_CONFIG["auto-points-per-side"],
-        # box_nms_thresh=SAM2_CONFIG["box-nms-thresh"],
+        points_per_side=SAM2_CONFIG["points-per-side"],
     )
     return predictor
 

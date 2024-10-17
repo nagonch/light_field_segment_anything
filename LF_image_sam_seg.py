@@ -10,9 +10,6 @@ from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
 
-with open("LF_sam_image_seg.yaml") as f:
-    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
 
 def masks_to_segments(masks):
     """
@@ -199,6 +196,9 @@ def LF_image_sam_seg(mask_predictor, LF):
 
     print("get_coarse_matching...", end="")
     coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
+    coarse_matched_segments = masks_to_segments(coarse_matched_masks)
+    visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
+    return coarse_matched_masks
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
@@ -222,11 +222,12 @@ def LF_image_sam_seg(mask_predictor, LF):
 
 
 if __name__ == "__main__":
-    os.makedirs(CONFIG["files-folder"], exist_ok=True)
     mask_predictor = get_auto_mask_predictor()
     image_predictor = mask_predictor.predictor
     dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
     for i, (LF, _, _) in enumerate(dataset):
+        if i < 20:
+            continue
         print(f"starting LF {i}")
         LF_image_sam_seg(
             mask_predictor,
