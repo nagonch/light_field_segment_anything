@@ -233,8 +233,6 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
     for i, (LF, _, _) in enumerate(dataset):
-        if i < 20:
-            continue
         print(f"starting LF {i}")
         LF_image_sam_seg(
             mask_predictor,
