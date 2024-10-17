@@ -174,7 +174,18 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
     return coarse_masks, mask_ious
 
 
-def LF_image_sam_seg(mask_predictor, LF):
+def refine_image_sam(LF, image_predictor, coarse_matched_masks):
+    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
+    print(f"done, shapes: {point_prompts.shape}, {box_prompts.shape}")
+
+    print("get_fine_matching...", end="")
+    refined_matched_masks, mask_ious = get_refined_matching(
+        LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
+    )
+    return refined_matched_masks, mask_ious
+
+
+def LF_image_sam_seg(mask_predictor, LF, mode="image"):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
     print("generate_image_masks...", end="")
@@ -198,26 +209,22 @@ def LF_image_sam_seg(mask_predictor, LF):
     coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
     coarse_matched_segments = masks_to_segments(coarse_matched_masks)
     visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
-    return coarse_matched_masks
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
 
-    image_predictor = mask_predictor.predictor
-    print("get_prompts_for_masks...", end="")
-    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
-    print(f"done, shapes: {point_prompts.shape}, {box_prompts.shape}")
-
-    print("get_fine_matching...", end="")
-    refined_matched_masks, mask_ious = get_refined_matching(
-        LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
-    )
-    del coarse_matched_masks
-    del image_predictor
-    print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
-    print("visualizing masks...")
-    refined_segments = masks_to_segments(refined_matched_masks)
-    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
+    if mode == "image":
+        refined_matched_masks, mask_ious = refine_image_sam(
+            LF, mask_predictor.predictor, coarse_matched_masks
+        )
+        del mask_predictor
+        del coarse_matched_masks
+        print(
+            f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}"
+        )
+        print("visualizing masks...")
+        refined_segments = masks_to_segments(refined_matched_masks)
+        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
 
 
