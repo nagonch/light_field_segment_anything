@@ -1,7 +1,16 @@
-from sam2_functions import get_auto_mask_predictor, generate_image_masks
+from sam2_functions import (
+    get_auto_mask_predictor,
+    generate_image_masks,
+    get_video_predictor,
+)
 from data import HCIOldDataset, UrbanLFDataset
 import warnings
-from utils import visualize_segmentation_mask, masks_iou
+from utils import (
+    visualize_segmentation_mask,
+    masks_iou,
+    save_LF_lawnmower,
+    lawnmower_indices,
+)
 import torch
 import yaml
 import os
@@ -9,6 +18,9 @@ import matplotlib.pyplot as plt
 from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
+
+with open("LF_sam_image_seg.yaml") as f:
+    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def masks_to_segments(masks):
@@ -185,34 +197,60 @@ def refine_image_sam(LF, image_predictor, coarse_matched_masks):
     return refined_matched_masks, mask_ious
 
 
+def refine_video_sam(LF, coarse_masks, video_predictor):
+    order_indices = lawnmower_indices(LF.shape[0], LF.shape[1])
+    results = torch.zeros_like(coarse_masks)
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        state = video_predictor.init_state(CONFIG["lf-subviews-folder"])
+        for frame_idx, (s, t) in enumerate(order_indices):
+            masks = coarse_masks[:, s, t]
+            for obj_id, mask in enumerate(masks):
+                video_predictor.add_new_mask(
+                    state,
+                    frame_idx=frame_idx,
+                    obj_id=obj_id,
+                    mask=mask,
+                )
+        for (
+            frame_idx,
+            out_obj_ids,
+            out_mask_logits,
+        ) in video_predictor.propagate_in_video(state):
+            masks_result = out_mask_logits[:, 0, :, :] > 0.0
+            results[:, order_indices[frame_idx][0], order_indices[frame_idx][1]] = (
+                masks_result
+            )
+    return results
+
+
 def LF_image_sam_seg(mask_predictor, LF, mode="image"):
-    s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+    # s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
-    print("generate_image_masks...", end="")
-    masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    print(f"done, shape: {masks_central.shape}")
+    # print("generate_image_masks...", end="")
+    # masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    # print(f"done, shape: {masks_central.shape}")
 
-    print("get_LF_disparities...", end="")
-    disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    print(f"done, shape: {disparities.shape}")
+    # print("get_LF_disparities...", end="")
+    # disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    # print(f"done, shape: {disparities.shape}")
 
-    print("get_mask_disparities...", end="")
-    mask_disparities = get_mask_disparities(masks_central, disparities)
-    del disparities
-    mask_depth_order = torch.argsort(mask_disparities)
-    masks_central = masks_central[mask_depth_order]
-    mask_disparities = mask_disparities[mask_depth_order]
-    del mask_depth_order
-    print(f"done, shape: {mask_disparities.shape}")
+    # print("get_mask_disparities...", end="")
+    # mask_disparities = get_mask_disparities(masks_central, disparities)
+    # del disparities
+    # mask_depth_order = torch.argsort(mask_disparities)
+    # masks_central = masks_central[mask_depth_order]
+    # mask_disparities = mask_disparities[mask_depth_order]
+    # del mask_depth_order
+    # print(f"done, shape: {mask_disparities.shape}")
 
-    print("get_coarse_matching...", end="")
-    coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
-    coarse_matched_segments = masks_to_segments(coarse_matched_masks)
-    visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
-    print(f"done, shape: {coarse_matched_masks.shape}")
-    del mask_disparities
-    del masks_central
-
+    # print("get_coarse_matching...", end="")
+    # coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
+    # coarse_matched_segments = masks_to_segments(coarse_matched_masks)
+    # visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
+    # print(f"done, shape: {coarse_matched_masks.shape}")
+    # del mask_disparities
+    # del masks_central
+    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
     if mode == "image":
         refined_matched_masks, mask_ious = refine_image_sam(
             LF, mask_predictor.predictor, coarse_matched_masks
@@ -223,6 +261,17 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
             f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}"
         )
         print("visualizing masks...")
+        refined_segments = masks_to_segments(refined_matched_masks)
+        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
+    elif mode == "video":
+        coarse_matched_masks = coarse_matched_masks[
+            torch.randperm(coarse_matched_masks.shape[0])
+        ][: CONFIG["n-segmens-video"]]
+        video_predictor = get_video_predictor()
+        save_LF_lawnmower(LF, CONFIG["lf-subviews-folder"])
+        refined_matched_masks = refine_video_sam(
+            LF, coarse_matched_masks, video_predictor
+        )
         refined_segments = masks_to_segments(refined_matched_masks)
         visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
@@ -237,4 +286,5 @@ if __name__ == "__main__":
         LF_image_sam_seg(
             mask_predictor,
             LF,
+            mode="video",
         )

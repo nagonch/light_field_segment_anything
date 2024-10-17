@@ -8,6 +8,7 @@ from plenpy.lightfields import LightField
 import logging
 from scipy import ndimage
 from skimage.segmentation import mark_boundaries
+import os
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -93,6 +94,36 @@ def LF_lawnmower(LF):
                 result_LF.append(LF[i, j])
     result_LF = np.stack(result_LF)
     return result_LF
+
+
+def lawnmower_indices(s, t, reverse=False):
+    indices = []
+    for i in range(s):
+        if i % 2 == 0:
+            for j in range(t):
+                indices.append([i, j])
+        else:
+            for j in range(t - 1, -1, -1):
+                indices.append([i, j])
+    if reverse:
+        indices = list(reversed(indices))
+    return indices
+
+
+def save_LF_lawnmower(LF, folder, prev_frame_last_subview=None, reverse=False):
+    os.makedirs(folder, exist_ok=True)
+    shape = LF.shape
+    s, t = shape[:2]
+    indices = lawnmower_indices(s, t, reverse)
+    frame_n = 0
+    if prev_frame_last_subview is not None:
+        Image.fromarray(prev_frame_last_subview).save(
+            f"{folder}/{str(frame_n).zfill(4)}.jpeg"
+        )
+        frame_n += 1
+    for i, j in indices:
+        Image.fromarray(LF[i, j]).save(f"{folder}/{str(frame_n).zfill(4)}.jpeg")
+        frame_n += 1
 
 
 if __name__ == "__main__":

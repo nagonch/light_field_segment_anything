@@ -1,1 +1,3 @@
 files-folder: LF_sam_image_seg
+lf-subviews-folder: /tmp/LF
+n-segmens-video: 7
