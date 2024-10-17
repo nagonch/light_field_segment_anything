@@ -204,21 +204,19 @@ def LF_image_sam_seg(mask_predictor, LF):
 
     image_predictor = mask_predictor.predictor
     # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
-    # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
-    # for mask in coarse_matched_masks:
-    #     visualize_segmentation_mask(mask.cpu().numpy(), LF)
-    #     visualize_segmentation_mask(mask.cpu().numpy())
-    # raise
+    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    coarse_segments = masks_to_segments(coarse_matched_masks)
+    visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
     refined_matched_masks = get_refined_matching(
         LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
     )
+    refined_segments = masks_to_segments(refined_matched_masks)
+    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     print(f"done, shape: {refined_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
-    for mask in refined_matched_masks:
-        visualize_segmentation_mask(mask.cpu().numpy(), LF)
     return refined_matched_masks
 
 
