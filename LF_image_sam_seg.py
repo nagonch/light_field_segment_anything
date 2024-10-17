@@ -224,33 +224,32 @@ def refine_video_sam(LF, coarse_masks, video_predictor):
 
 
 def LF_image_sam_seg(mask_predictor, LF, mode="image"):
-    # s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+    s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
-    # print("generate_image_masks...", end="")
-    # masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    # print(f"done, shape: {masks_central.shape}")
+    print("generate_image_masks...", end="")
+    masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    print(f"done, shape: {masks_central.shape}")
 
-    # print("get_LF_disparities...", end="")
-    # disparities = torch.tensor(get_LF_disparities(LF)).cuda()
-    # print(f"done, shape: {disparities.shape}")
+    print("get_LF_disparities...", end="")
+    disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    print(f"done, shape: {disparities.shape}")
 
-    # print("get_mask_disparities...", end="")
-    # mask_disparities = get_mask_disparities(masks_central, disparities)
-    # del disparities
-    # mask_depth_order = torch.argsort(mask_disparities)
-    # masks_central = masks_central[mask_depth_order]
-    # mask_disparities = mask_disparities[mask_depth_order]
-    # del mask_depth_order
-    # print(f"done, shape: {mask_disparities.shape}")
+    print("get_mask_disparities...", end="")
+    mask_disparities = get_mask_disparities(masks_central, disparities)
+    del disparities
+    mask_depth_order = torch.argsort(mask_disparities)
+    masks_central = masks_central[mask_depth_order]
+    mask_disparities = mask_disparities[mask_depth_order]
+    del mask_depth_order
+    print(f"done, shape: {mask_disparities.shape}")
 
-    # print("get_coarse_matching...", end="")
-    # coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
-    # coarse_matched_segments = masks_to_segments(coarse_matched_masks)
-    # visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
-    # print(f"done, shape: {coarse_matched_masks.shape}")
-    # del mask_disparities
-    # del masks_central
-    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    print("get_coarse_matching...", end="")
+    coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
+    coarse_matched_segments = masks_to_segments(coarse_matched_masks)
+    visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
+    print(f"done, shape: {coarse_matched_masks.shape}")
+    del mask_disparities
+    del masks_central
     if mode == "image":
         refined_matched_masks, mask_ious = refine_image_sam(
             LF, mask_predictor.predictor, coarse_matched_masks
