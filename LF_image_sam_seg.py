@@ -139,7 +139,7 @@ def masks_iou(predicted_masks, target_mask):
     return ious
 
 
-def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prompts):
+def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_prompts):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
@@ -211,15 +211,15 @@ def LF_image_sam_seg(mask_predictor, LF):
     # raise
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
-    fine_matched_masks = get_fine_matching(
+    refined_matched_masks = get_refined_matching(
         LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
     )
-    print(f"done, shape: {fine_matched_masks.shape}")
+    print(f"done, shape: {refined_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
-    for mask in fine_matched_masks:
+    for mask in refined_matched_masks:
         visualize_segmentation_mask(mask.cpu().numpy(), LF)
-    return fine_matched_masks
+    return refined_matched_masks
 
 
 if __name__ == "__main__":
