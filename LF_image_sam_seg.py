@@ -147,8 +147,9 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
     coarse_masks: torch.tensor [n, s, t, u, v] (torch.bool)
     returns: torch.tensor [n, s, t, u, v] (torch.bool)
     """
-    # fine_masks = torch.zeros_like(coarse_masks)
     s_size, t_size = LF.shape[:2]
+    n = coarse_masks.shape[0]
+    mask_ious = torch.zeros((n, s_size, t_size), dtype=torch.float)
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
@@ -165,7 +166,7 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                 if point_prompts_i.sum() <= 1e-6:
                     continue
                 labels = torch.ones(point_prompts_i.shape[0])
-                fine_segment_result, iou_preds, _ = image_predictor.predict(
+                fine_segment_result, _, _ = image_predictor.predict(
                     point_coords=point_prompts_i,
                     point_labels=labels,
                     box=box_prompts_i,
@@ -175,10 +176,12 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                     fine_segment_result, dtype=torch.bool
                 ).cuda()
                 ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
+                match_idx = torch.argmax(ious)
+                mask_ious[segment_i, s, t] = ious[match_idx]
                 coarse_masks[segment_i, s, t] = fine_segment_result[
-                    torch.argmax(ious)
+                    match_idx
                 ]  # replacing coarse masks with fine ones
-    return coarse_masks
+    return coarse_masks, mask_ious
 
 
 def LF_image_sam_seg(mask_predictor, LF):
@@ -203,9 +206,10 @@ def LF_image_sam_seg(mask_predictor, LF):
     visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
-    refined_matched_masks = get_refined_matching(
+    refined_matched_masks, mask_ious = get_refined_matching(
         LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
     )
+    print(mask_ious)
     refined_segments = masks_to_segments(refined_matched_masks)
     visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     print(f"done, shape: {refined_matched_masks.shape}")
