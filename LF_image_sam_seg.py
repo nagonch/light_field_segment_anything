@@ -192,6 +192,9 @@ def LF_image_sam_seg(mask_predictor, LF):
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
     print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
+    mask_depth_order = torch.argsort(mask_disparities)
+    masks_central = masks_central[mask_depth_order]
+    mask_disparities = mask_disparities[mask_depth_order]
     print(f"done, shape: {mask_disparities.shape}")
     del disparities
 
@@ -224,6 +227,8 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
     for i, (LF, _, _) in enumerate(dataset):
+        if i < 2:
+            continue
         print(f"starting LF {i}")
         LF_image_sam_seg(
             mask_predictor,
