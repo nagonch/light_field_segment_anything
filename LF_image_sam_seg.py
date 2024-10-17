@@ -190,18 +190,23 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
 
 def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
+
     print("generate_image_masks...", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
     print(f"done, shape: {masks_central.shape}")
+
+    print("get_LF_disparities...", end="")
     disparities = torch.tensor(get_LF_disparities(LF)).cuda()
+    print(f"done, shape: {disparities.shape}")
+
     print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
+    del disparities
     mask_depth_order = torch.argsort(mask_disparities)
     masks_central = masks_central[mask_depth_order]
     mask_disparities = mask_disparities[mask_depth_order]
     del mask_depth_order
     print(f"done, shape: {mask_disparities.shape}")
-    del disparities
 
     print("get_coarse_matching...", end="")
     coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
@@ -210,17 +215,20 @@ def LF_image_sam_seg(mask_predictor, LF):
     del masks_central
 
     image_predictor = mask_predictor.predictor
+    print("get_prompts_for_masks...", end="")
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
+    print(f"done, shapes: {point_prompts.shape}, {box_prompts.shape}")
+
     print("get_fine_matching...", end="")
     refined_matched_masks, mask_ious = get_refined_matching(
         LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
     )
-    print(mask_ious)
-    refined_segments = masks_to_segments(refined_matched_masks)
-    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
-    print(f"done, shape: {refined_matched_masks.shape}")
     del coarse_matched_masks
     del image_predictor
+    print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
+    print("visualizing masks...")
+    refined_segments = masks_to_segments(refined_matched_masks)
+    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
 
 
@@ -235,9 +243,3 @@ if __name__ == "__main__":
             mask_predictor,
             LF,
         )
-        segments = LF_image_sam_seg(
-            mask_predictor,
-            LF,
-        )
-        torch.save(segments, f"segments/{str(i).zfill(4)}.pt")
-        del segments
