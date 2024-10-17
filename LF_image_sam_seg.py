@@ -115,6 +115,8 @@ def get_prompts_for_masks(coarse_masks):
                 continue
             for mask_i, mask in enumerate(coarse_masks[:, s, t]):
                 point_prompts_i = torch.nonzero(mask).flip(1)
+                if point_prompts_i.shape[0] == 0:
+                    continue
                 box_pormpts_i = torch.tensor(
                     [
                         point_prompts_i[:, 0].min(),
@@ -160,6 +162,8 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                 zip(point_prompts_st, box_prompts_st)
             ):
                 point_prompts_i = point_prompts_i[None]
+                if point_prompts_i.sum() <= 1e-6:
+                    continue
                 labels = torch.ones(point_prompts_i.shape[0])
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=point_prompts_i,
@@ -174,7 +178,7 @@ def get_fine_matching(LF, image_predictor, coarse_masks, point_prompts, box_prom
                 max_iou = ious.max().item()
                 if max_iou >= 0.6:
                     coarse_masks[segment_i, s, t] = fine_segment_result[
-                        np.argmax(iou_preds)
+                        torch.argmax(ious)
                     ]  # replacing coarse masks with fine ones
                 else:
                     coarse_masks[segment_i, s, t] = coarse_masks_st[segment_i]
@@ -200,11 +204,11 @@ def LF_image_sam_seg(mask_predictor, LF):
 
     image_predictor = mask_predictor.predictor
     # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
-    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
-    for mask in coarse_matched_masks:
-        visualize_segmentation_mask(mask.cpu().numpy(), LF)
-        visualize_segmentation_mask(mask.cpu().numpy())
-    raise
+    # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
+    # for mask in coarse_matched_masks:
+    #     visualize_segmentation_mask(mask.cpu().numpy(), LF)
+    #     visualize_segmentation_mask(mask.cpu().numpy())
+    # raise
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     print("get_fine_matching...", end="")
     fine_matched_masks = get_fine_matching(
