@@ -168,20 +168,16 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                 fine_segment_result, iou_preds, _ = image_predictor.predict(
                     point_coords=point_prompts_i,
                     point_labels=labels,
-                    # box=box_prompts_i,
+                    box=box_prompts_i,
                     multimask_output=True,
                 )
                 fine_segment_result = torch.tensor(
                     fine_segment_result, dtype=torch.bool
                 ).cuda()
                 ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
-                max_iou = ious.max().item()
-                if max_iou >= 0.8:
-                    coarse_masks[segment_i, s, t] = fine_segment_result[
-                        torch.argmax(ious)
-                    ]  # replacing coarse masks with fine ones
-                else:
-                    coarse_masks[segment_i, s, t] = coarse_masks_st[segment_i]
+                coarse_masks[segment_i, s, t] = fine_segment_result[
+                    torch.argmax(ious)
+                ]  # replacing coarse masks with fine ones
     return coarse_masks
 
 
@@ -203,8 +199,6 @@ def LF_image_sam_seg(mask_predictor, LF):
     del masks_central
 
     image_predictor = mask_predictor.predictor
-    # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
-    coarse_matched_masks = torch.load("coarse_matched_masks.pt")
     coarse_segments = masks_to_segments(coarse_matched_masks)
     visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
