@@ -199,28 +199,36 @@ def refine_image_sam(LF, image_predictor, coarse_matched_masks):
 
 def refine_video_sam(LF, coarse_masks, video_predictor):
     order_indices = lawnmower_indices(LF.shape[0], LF.shape[1])
-    results = torch.zeros_like(coarse_masks)
-    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-        state = video_predictor.init_state(CONFIG["lf-subviews-folder"])
-        for frame_idx, (s, t) in enumerate(order_indices):
-            masks = coarse_masks[:, s, t]
-            for obj_id, mask in enumerate(masks):
-                video_predictor.add_new_mask(
-                    state,
-                    frame_idx=frame_idx,
-                    obj_id=obj_id,
-                    mask=mask,
-                )
-        for (
-            frame_idx,
-            out_obj_ids,
-            out_mask_logits,
-        ) in video_predictor.propagate_in_video(state):
-            masks_result = out_mask_logits[:, 0, :, :] > 0.0
-            results[:, order_indices[frame_idx][0], order_indices[frame_idx][1]] = (
-                masks_result
-            )
-    return results
+    n_masks = coarse_masks.shape[0]
+    batch_size = CONFIG["tracking-batch-size"]
+    for mask_start_idx in range(0, n_masks, batch_size):
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            state = video_predictor.init_state(CONFIG["lf-subviews-folder"])
+            for frame_idx, (s, t) in enumerate(order_indices):
+                # if (s, t) != (s_size // 2, t_size // 2):
+                #     continue
+                for obj_id, mask in enumerate(
+                    coarse_masks[mask_start_idx : mask_start_idx + batch_size, s, t]
+                ):
+                    video_predictor.add_new_mask(
+                        state,
+                        frame_idx=frame_idx,
+                        obj_id=obj_id,
+                        mask=mask,
+                    )
+            for (
+                frame_idx,
+                _,
+                out_mask_logits,
+            ) in video_predictor.propagate_in_video(state):
+                masks_result = out_mask_logits[:, 0, :, :] > 0.0
+                coarse_masks[
+                    mask_start_idx : mask_start_idx + batch_size,
+                    order_indices[frame_idx][0],
+                    order_indices[frame_idx][1],
+                ] = masks_result
+            video_predictor.reset_state(state)
+    return coarse_masks
 
 
 def LF_image_sam_seg(mask_predictor, LF, mode="image"):
@@ -263,9 +271,9 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
         refined_segments = masks_to_segments(refined_matched_masks)
         visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     elif mode == "video":
-        coarse_matched_masks = coarse_matched_masks[
-            torch.randperm(coarse_matched_masks.shape[0])
-        ][: CONFIG["n-segmens-video"]]
+        del mask_predictor
+        del coarse_matched_segments
+        coarse_matched_masks = torch.load("coarse_matched_masks.pt")
         video_predictor = get_video_predictor()
         save_LF_lawnmower(LF, CONFIG["lf-subviews-folder"])
         refined_matched_masks = refine_video_sam(
