@@ -203,7 +203,7 @@ def refine_video_sam(LF, coarse_masks, video_predictor):
     n_masks = coarse_masks.shape[0]
     # results = torch.zeros_like((coarse_masks))
     batch_size = CONFIG["tracking-batch-size"]
-    keyframes = [(0, 0), (s_size // 2, t_size // 2), (s_size - 1, t_size - 1)]
+    keyframes = [(0, 0), (s_size // 2, t_size // 2)]
     for mask_start_idx in range(0, n_masks, batch_size):
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
             state = video_predictor.init_state(CONFIG["lf-subviews-folder"])
