@@ -15,6 +15,7 @@ import torch
 import yaml
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
@@ -157,7 +158,6 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
             if s == s_size // 2 and t == t_size // 2:
                 continue
             coarse_masks_st = torch.clone(coarse_masks[:, s, t, :, :])
-            coarse_masks[:, s, t, :, :] = False
             image_predictor.set_image(LF[s, t])
             point_prompts_st = point_prompts[:, s, t]
             box_prompts_st = box_prompts[:, s, t]
@@ -178,11 +178,12 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                     fine_segment_result, dtype=torch.bool
                 ).cuda()
                 ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
-                match_idx = torch.argmax(ious)
-                mask_ious[segment_i, s, t] = ious[match_idx]
-                coarse_masks[segment_i, s, t] = fine_segment_result[
-                    match_idx
-                ]  # replacing coarse masks with fine ones
+                if ious.max() > 0.5:
+                    match_idx = torch.argmax(ious)
+                    mask_ious[segment_i, s, t] = ious[match_idx]
+                    coarse_masks[segment_i, s, t] = fine_segment_result[
+                        match_idx
+                    ]  # replacing coarse masks with fine ones
     return coarse_masks, mask_ious
 
 
@@ -262,6 +263,8 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
     del mask_disparities
     del masks_central
     if mode == "image":
+        # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
+        # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
         refined_matched_masks, mask_ious = refine_image_sam(
             LF, mask_predictor.predictor, coarse_matched_masks
         )
@@ -276,7 +279,6 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
     elif mode == "video":
         del mask_predictor
         del coarse_matched_segments
-        # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
         video_predictor = get_video_predictor()
         save_LF_lawnmower(LF, CONFIG["lf-subviews-folder"])
         refined_matched_masks = refine_video_sam(
@@ -296,5 +298,5 @@ if __name__ == "__main__":
         LF_image_sam_seg(
             mask_predictor,
             LF,
-            mode="video",
+            mode="image",
         )
