@@ -192,10 +192,9 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
     return coarse_masks, mask_ious
 
 
-def refine_image_sam(LF, image_predictor, coarse_matched_masks):
-    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
-    print(f"done, shapes: {point_prompts.shape}, {box_prompts.shape}")
-
+def refine_image_sam(
+    LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
+):
     print("get_fine_matching...", end="")
     refined_matched_masks, mask_ious = get_refined_matching(
         LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
@@ -203,7 +202,7 @@ def refine_image_sam(LF, image_predictor, coarse_matched_masks):
     return refined_matched_masks, mask_ious
 
 
-def refine_video_sam(LF, coarse_masks, video_predictor):
+def refine_video_sam(LF, coarse_masks, video_predictor, point_prompts, box_prompts):
     order_indices = lawnmower_indices(LF.shape[0], LF.shape[1])
     s_size, t_size = LF.shape[0], LF.shape[1]
     n_masks = coarse_masks.shape[0]
@@ -269,11 +268,14 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
+    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
     if mode == "image":
-        # torch.save(coarse_matched_masks, "coarse_matched_masks.pt")
-        # coarse_matched_masks = torch.load("coarse_matched_masks.pt")
         refined_matched_masks, mask_ious = refine_image_sam(
-            LF, mask_predictor.predictor, coarse_matched_masks
+            LF,
+            mask_predictor.predictor,
+            coarse_matched_masks,
+            point_prompts,
+            box_prompts,
         )
         del mask_predictor
         del coarse_matched_masks
@@ -289,7 +291,11 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
         video_predictor = get_video_predictor()
         save_LF_lawnmower(LF, CONFIG["lf-subviews-folder"])
         refined_matched_masks = refine_video_sam(
-            LF, coarse_matched_masks, video_predictor
+            LF,
+            coarse_matched_masks,
+            video_predictor,
+            point_prompts,
+            box_prompts,
         )
         refined_segments = masks_to_segments(refined_matched_masks)
         visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
