@@ -66,7 +66,7 @@ def get_mask_disparities(masks_central, disparities):
     return mask_disparities
 
 
-def predict_mask_subview_position(mask, disparity, s, t):
+def predict_mask_subview_position(mask, disparities, s, t):
     """
     Use mask's disparity to predict its position in (s, t)
     mask: torch.tensor [u, v] (torch.bool)
@@ -76,7 +76,8 @@ def predict_mask_subview_position(mask, disparity, s, t):
     """
     st = torch.tensor([s, t]).float().cuda()
     uv_0 = torch.nonzero(mask)
-    uv = (uv_0 - disparity * st).long()
+    disparities_uv = disparities[mask].reshape(-1)
+    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
     u = uv[:, 0]
     v = uv[:, 1]
     uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
@@ -85,7 +86,7 @@ def predict_mask_subview_position(mask, disparity, s, t):
     return mask_result
 
 
-def get_coarse_matching(LF, masks_central, mask_disparities):
+def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
     """
     Predict subview masks using disparities
     LF: np.array [s, t, u, v, 3] (np.uint8)
@@ -101,7 +102,7 @@ def get_coarse_matching(LF, masks_central, mask_disparities):
         for t in range(t_size):
             for i, (mask, disparity) in enumerate(zip(masks_central, mask_disparities)):
                 result[i][s][t] = predict_mask_subview_position(
-                    mask, disparity, s - s_size // 2, t - t_size // 2
+                    mask, disparities, s - s_size // 2, t - t_size // 2
                 )
             result_st = torch.cumsum(result[:, s, t], dim=0)
             result[:, s, t] = torch.where(
@@ -136,7 +137,11 @@ def get_prompts_for_masks(coarse_masks):
                         point_prompts_i[:, 1].max(),
                     ]
                 ).cuda()
-                point_prompts_i = point_prompts_i[point_prompts_i.shape[0] // 2, :]
+                point_prompts_i_centroid = point_prompts_i.float().mean(axis=0)
+                distances = torch.norm(
+                    point_prompts_i - point_prompts_i_centroid, dim=1
+                )
+                point_prompts_i = point_prompts_i[torch.argmin(distances), :][None]
                 point_prompts[mask_i, s, t] = point_prompts_i
                 box_prompts[mask_i, s, t] = box_pormpts_i
     return point_prompts, box_prompts
@@ -248,15 +253,17 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
 
     print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
-    del disparities
+
     mask_depth_order = torch.argsort(mask_disparities)
     masks_central = masks_central[mask_depth_order]
     mask_disparities = mask_disparities[mask_depth_order]
     del mask_depth_order
     print(f"done, shape: {mask_disparities.shape}")
-
     print("get_coarse_matching...", end="")
-    coarse_matched_masks = get_coarse_matching(LF, masks_central, mask_disparities)
+    coarse_matched_masks = get_coarse_matching(
+        LF, masks_central, mask_disparities, disparities
+    )
+    del disparities
     coarse_matched_segments = masks_to_segments(coarse_matched_masks)
     visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
