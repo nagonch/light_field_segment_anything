@@ -164,20 +164,24 @@ class UrbanLFRealDataset:
         return LF, label
 
 
+class MMSPG:
+    def __init__(self, convert=True):
+        self.path = "MMSPG"
+        self.scenes = os.listdir(self.path)
+        self.convert = convert
+
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_path = f"{self.path}/{self.scenes[idx]}"
+        LF = h5py.File(scene_path, "r")["LF"]
+        LF = np.transpose(LF, (4, 3, 2, 1, 0))[:, :, :, :, :3]
+        LF = LF[3:-3, 3:-3]  # drop subviews affected by vignetting
+        LF = (LF // 256).astype(np.uint8)
+        LF = np.flip(LF, axis=(0, 1))
+        return LF, None, None
+
+
 if __name__ == "__main__":
-    dataset = HCIOldDataset()
-    for LF, labels, disparity in dataset:
-        LightField(LF).show()
-        visualize_segmentation_mask(labels)
-        disparity -= disparity.min()
-        disparity /= disparity.max()
-        disparity *= 255
-        disparity = disparity.astype(np.uint8)
-        disparity = np.stack(
-            [
-                disparity,
-            ]
-            * 3,
-            axis=-1,
-        )
-        LightField(disparity).show()
+    pass
