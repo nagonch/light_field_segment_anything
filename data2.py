@@ -7,6 +7,43 @@ from plenpy.lightfields import LightField
 from utils import visualize_segmentation_mask
 
 
+class HCIOldDataset:
+    def __init__(self, data_path="HCI_dataset_old"):
+        self.data_path = data_path
+        self.scene_to_path = {}
+        self.scenes = [
+            "horses",
+            "papillon",
+            "stillLife",
+            "buddha",
+        ]
+        for scene in self.scenes:
+            self.scene_to_path[scene] = f"{data_path}/{scene}"
+
+    def get_scene(self, name):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        LF = np.array(scene["LF"])
+        LF = np.flip(LF, axis=0)
+        return LF
+
+    def get_labels(self, name):
+        labels = np.array(
+            h5py.File(f"{self.scene_to_path[name]}/labels.h5", "r")["GT_LABELS"]
+        )
+        labels = np.flip(labels, axis=0)
+        return labels
+
+    def __len__(self):
+        return len(self.scenes)
+
+    def __getitem__(self, idx):
+        scene_name = self.scenes[idx]
+        LF = self.get_scene(scene_name)
+        labels = self.get_labels(scene_name)
+        # disparity = self.get_disparity(scene_name)
+        return LF, labels  # , disparity
+
+
 class UrbanLFSynDataset:
     def __init__(self, data_path):
         self.data_path = data_path
@@ -115,21 +152,19 @@ class UrbanLFRealDataset:
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
-    for LF, labels, disparity in dataset:
+    dataset = HCIOldDataset()
+    for LF, labels in dataset:
         LightField(LF).show()
         visualize_segmentation_mask(labels)
-        disparity -= disparity.min()
-        disparity /= disparity.max()
-        disparity *= 255
-        disparity = disparity.astype(np.uint8)
-        disparity = np.stack(
-            [
-                disparity,
-            ]
-            * 3,
-            axis=-1,
-        )
-        LightField(disparity).show()
+        # disparity -= disparity.min()
+        # disparity /= disparity.max()
+        # disparity *= 255
+        # disparity = disparity.astype(np.uint8)
+        # disparity = np.stack(
+        #     [
+        #         disparity,
+        #     ]
+        #     * 3,
+        #     axis=-1,
+        # )
+        # LightField(disparity).show()
