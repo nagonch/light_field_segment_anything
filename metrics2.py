@@ -1,4 +1,4 @@
-from data2 import UrbanLFSynDataset
+from data2 import UrbanLFSynDataset, HCIOldDataset
 from utils import visualize_segmentation_mask
 from plenpy.lightfields import LightField
 import numpy as np
@@ -62,10 +62,13 @@ class ConsistencyMetrics:
                 for t in range(t_size):
                     if s == s_size // 2 and t == t_size // 2 or mask[s, t].sum() == 0:
                         continue
-                    centroid = torch.nonzero(mask[s, t]).float().mean(axis=0)
+                    coords = torch.nonzero(mask[s, t])
+                    centroid = coords.float().mean(axis=0)
                     values_i.append(torch.norm(centroid - centroid_orig))
             values_i = torch.stack(values_i)
-            values.append(values_i.mean())
+            values_i = values_i[~torch.isnan(values_i)]
+            if values_i.shape[0] > 0:
+                values.append(values_i.mean())
         values = torch.stack(values)
         return values.mean().item()
 
@@ -80,9 +83,10 @@ class ConsistencyMetrics:
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
+    # dataset = UrbanLFSynDataset(
+    #     "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    # )
+    dataset = HCIOldDataset()
     for LF, labels, disparity in dataset:
         # visualize_segmentation_mask(labels)
         labels = np.stack([labels == i for i in np.unique(labels)])
