@@ -24,7 +24,7 @@ with open("sam2_baseline_LF_segmentation.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
-def track_masks(start_masks, video_predictor):
+def track_masks(LF, start_masks, video_predictor):
     s, t, u, v = LF.shape[:4]
     order_indices = lawnmower_indices(s, t)
     n_masks = start_masks.shape[0]
@@ -59,21 +59,27 @@ def track_masks(start_masks, video_predictor):
 
 
 def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
-    start_masks = generate_image_masks(mask_predictor, LF[0, 0])
+    start_masks = generate_image_masks(mask_predictor, LF[0, 0])[:2]
     save_LF_lawnmower(LF, CONFIG["lf-subview-folder"])
-    result = track_masks(start_masks, video_predictor)
+    result = track_masks(LF, start_masks, video_predictor)
     return result
 
 
-if __name__ == "__main__":
+def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
     mask_predictor = get_auto_mask_predictor()
     video_predictor = get_video_predictor()
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
     for i, (LF, _, _) in enumerate(dataset):
         result_masks = sam2_baseline_LF_segmentation(
             LF, mask_predictor, video_predictor
         )
         result_segments = masks_to_segments(result_masks)
-        visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
+        torch.save(result_masks, f"{save_folder}/{str(i).zfill(4)}_masks.pt")
+        torch.save(result_segments, f"{save_folder}/{str(i).zfill(4)}_segments.pt")
+
+
+if __name__ == "__main__":
+    pass
+    # dataset = UrbanLFSynDataset(
+    #     "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    # )
+    # sam2_baseline_LF_segmentation_dataset(dataset, "results_test")
