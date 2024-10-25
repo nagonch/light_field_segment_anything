@@ -5,6 +5,7 @@ import os
 import math
 import h5py
 from plenpy.lightfields import LightField
+from utils import visualize_segmentation_mask
 
 
 class UrbanLFSynDataset:
@@ -57,12 +58,20 @@ class UrbanLFSynDataset:
             c,
         )
         LF = np.flip(LF, axis=(0, 1))
-        return LF
+        labels = np.stack(labels).reshape(
+            n_apertures,
+            n_apertures,
+            u,
+            v,
+        )
+        labels = np.flip(labels, axis=(0, 1))
+        labels += 1
+        return LF, labels
 
 
 if __name__ == "__main__":
     dataset = UrbanLFSynDataset(
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
-    for LF in dataset:
-        LightField(LF).show()
+    for LF, labels in dataset:
+        visualize_segmentation_mask(labels)
