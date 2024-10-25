@@ -36,7 +36,14 @@ class HCIOldDataset:
     def get_disparity(self, name, eps=1e-9):
         scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
         gt_depth = np.array(scene["GT_DEPTH"])
-        return gt_depth
+        s_size, t_size = gt_depth.shape[:2]
+        gt_disparity = np.zeros_like(gt_depth)
+        dH = scene.attrs["dH"][0]
+        f = scene.attrs["focalLength"][0]
+        for s in range(s_size):
+            for t in range(t_size):
+                gt_disparity[s, t, :, :] = dH * f / (gt_depth[s, t] + eps)
+        return gt_disparity
 
     def __len__(self):
         return len(self.scenes)
