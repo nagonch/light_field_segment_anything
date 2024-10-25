@@ -20,10 +20,47 @@ from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
 
+LF_SUBVIEWS_FOLDER = "/tmp/LF"
+TRACKING_BATCH_SIZE = 5
+
+
+def track_masks(start_masks, video_predictor):
+    s, t, u, v = LF.shape[:4]
+    order_indices = lawnmower_indices(s, t)
+    n_masks = start_masks.shape[0]
+    result = torch.zeros((n_masks, s, t, u, v), dtype=torch.bool).cuda()
+    for mask_start_idx in range(0, n_masks, TRACKING_BATCH_SIZE):
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            state = video_predictor.init_state(LF_SUBVIEWS_FOLDER)
+            for obj_id, mask in enumerate(
+                start_masks[mask_start_idx : mask_start_idx + TRACKING_BATCH_SIZE]
+            ):
+                video_predictor.add_new_mask(
+                    state,
+                    frame_idx=0,
+                    obj_id=obj_id,
+                    mask=mask,
+                )
+            for (
+                frame_idx,
+                _,
+                out_mask_logits,
+            ) in video_predictor.propagate_in_video(state):
+                masks_result = out_mask_logits[:, 0, :, :] > 0.0
+                result[
+                    mask_start_idx : mask_start_idx + TRACKING_BATCH_SIZE,
+                    order_indices[frame_idx][0],
+                    order_indices[frame_idx][1],
+                ] = masks_result
+            video_predictor.reset_state(state)
+    return result
+
 
 def sam2_video_LF_segmentation(LF, mask_predictor, video_predictor):
     start_masks = generate_image_masks(mask_predictor, LF[0, 0])
-    print(start_masks.shape)
+    save_LF_lawnmower(LF, LF_SUBVIEWS_FOLDER)
+    result = track_masks(start_masks, video_predictor)
+    print(result.shape)
     raise
 
 
