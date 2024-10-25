@@ -60,8 +60,7 @@ def sam2_video_LF_segmentation(LF, mask_predictor, video_predictor):
     start_masks = generate_image_masks(mask_predictor, LF[0, 0])
     save_LF_lawnmower(LF, LF_SUBVIEWS_FOLDER)
     result = track_masks(start_masks, video_predictor)
-    print(result.shape)
-    raise
+    return result
 
 
 if __name__ == "__main__":
