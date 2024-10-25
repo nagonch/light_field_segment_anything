@@ -72,48 +72,54 @@ class UrbanLFSynDataset:
         return LF, labels, disparities
 
 
-# class UrbanLFSynDataset:
-#     def __init__(self, data_path):
-#         self.data_path = data_path
-#         self.frames = sorted(
-#             [
-#                 item
-#                 for item in os.listdir(self.data_path)
-#                 if os.path.isdir(f"{self.data_path}/{item}")
-#             ]
-#         )
-#         self.size = len(self.frames)
+class UrbanLFRealDataset:
+    def __init__(self, data_path):
+        self.data_path = data_path
+        self.frames = sorted(
+            [
+                item
+                for item in os.listdir(self.data_path)
+                if os.path.isdir(f"{self.data_path}/{item}")
+            ]
+        )
+        self.size = len(self.frames)
 
-#     def __len__(self):
-#         return self.size
+    def __len__(self):
+        return self.size
 
-#     def __getitem__(self, idx):
-#         frame = self.frames[idx]
-#         imgs = []
-#         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
-#             if filename == "label.png":
-#                 continue
-#             elif filename == "label.npy":
-#                 label = np.load("label.npy")
-#             else:
+    def __getitem__(self, idx):
+        frame = self.frames[idx]
+        imgs = []
+        for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
+            if filename == "label.png":
+                continue
+            elif filename == "label.npy":
+                label = np.load(f"{self.data_path}/{frame}/label.npy")
+            else:
+                img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))[
+                    :, :, :3
+                ]
+                imgs.append(img)
+        LF = np.stack(imgs)
+        n_apertures = int(math.sqrt(LF.shape[0]))
+        u, v, c = LF.shape[-3:]
+        LF = LF.reshape(
+            n_apertures,
+            n_apertures,
+            u,
+            v,
+            c,
+        )
+        LF = np.flip(LF, axis=(0, 1))
+        return LF, label
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
-    for LF, labels, disparity in dataset:
+    import matplotlib.pyplot as plt
+
+    dataset = UrbanLFRealDataset("UrbanLF_Real/val")
+    for LF, labels in dataset:
         LightField(LF).show()
-        visualize_segmentation_mask(labels)
-        disparity -= disparity.min()
-        disparity /= disparity.max()
-        disparity *= 255
-        disparity = disparity.astype(np.uint8)
-        disparity = np.stack(
-            [
-                disparity,
-            ]
-            * 3,
-            axis=-1,
-        )
-        LightField(disparity).show()
+        plt.imshow(labels)
+        plt.show()
+        plt.close()
