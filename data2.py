@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 from PIL import Image
 import os
@@ -36,17 +35,14 @@ class UrbanLFSynDataset:
             ):
                 continue
             if filename.endswith(".png"):
-                img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))
-                img = (torch.tensor(img))[:, :, :3]
+                img = np.array(Image.open(f"{self.data_path}/{frame}/{filename}"))[
+                    :, :, :3
+                ]
                 imgs.append(img)
             elif filename.endswith("disparity.npy"):
-                disparities.append(
-                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
-                )
+                disparities.append(np.load(f"{self.data_path}/{frame}/{filename}"))
             elif filename.endswith("label.npy"):
-                labels.append(
-                    torch.tensor(np.load(f"{self.data_path}/{frame}/{filename}"))
-                )
+                labels.append(np.load(f"{self.data_path}/{frame}/{filename}"))
         LF = np.stack(imgs)
         n_apertures = int(math.sqrt(LF.shape[0]))
         u, v, c = LF.shape[-3:]
@@ -74,6 +70,32 @@ class UrbanLFSynDataset:
         )
         disparities = np.flip(disparities, axis=(0, 1))
         return LF, labels, disparities
+
+
+# class UrbanLFSynDataset:
+#     def __init__(self, data_path):
+#         self.data_path = data_path
+#         self.frames = sorted(
+#             [
+#                 item
+#                 for item in os.listdir(self.data_path)
+#                 if os.path.isdir(f"{self.data_path}/{item}")
+#             ]
+#         )
+#         self.size = len(self.frames)
+
+#     def __len__(self):
+#         return self.size
+
+#     def __getitem__(self, idx):
+#         frame = self.frames[idx]
+#         imgs = []
+#         for filename in sorted(os.listdir(f"{self.data_path}/{frame}")):
+#             if filename == "label.png":
+#                 continue
+#             elif filename == "label.npy":
+#                 label = np.load("label.npy")
+#             else:
 
 
 if __name__ == "__main__":
