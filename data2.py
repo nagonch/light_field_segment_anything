@@ -115,11 +115,21 @@ class UrbanLFRealDataset:
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    dataset = UrbanLFRealDataset("UrbanLF_Real/val")
-    for LF, labels in dataset:
+    dataset = UrbanLFSynDataset(
+        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    )
+    for LF, labels, disparity in dataset:
         LightField(LF).show()
-        plt.imshow(labels)
-        plt.show()
-        plt.close()
+        visualize_segmentation_mask(labels)
+        disparity -= disparity.min()
+        disparity /= disparity.max()
+        disparity *= 255
+        disparity = disparity.astype(np.uint8)
+        disparity = np.stack(
+            [
+                disparity,
+            ]
+            * 3,
+            axis=-1,
+        )
+        LightField(disparity).show()
