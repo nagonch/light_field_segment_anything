@@ -57,10 +57,43 @@ def get_method():
     return method
 
 
+def calculate_metrics(dataset):
+    metrics_dataframe = []
+    for idx in tqdm(
+        range(len(dataset)), desc="metrics calculation", position=0, leave=True
+    ):
+        idx_padded = str(idx).zfill(4)
+        _, labels, disparity = dataset[idx]
+        mask_predictions = torch.load(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_masks.pt"
+        )
+        segment_predictions = torch.load(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_segments.pt"
+        )
+        metrics_dict = {}
+        is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
+        if not is_real:
+            consistensy_metrics = ConsistencyMetrics(mask_predictions, disparity)
+            metrics_dict.update(consistensy_metrics.get_metrics_dict())
+        accuracy_metrics = AccuracyMetrics(
+            segment_predictions, labels, only_central_subview=is_real
+        )
+        metrics_dict.update(accuracy_metrics.get_metrics_dict())
+        metrics_dataframe.append(metrics_dict)
+    metrics_dataframe = pd.DataFrame(metrics_dataframe)
+    if hasattr(dataset, "scenes"):
+        metrics_dataframe.index = dataset.scenes
+    median_values = pd.DataFrame(metrics_dataframe.mean()).T
+    median_values.index = ["mean"]
+    metrics_dataframe = pd.concat([metrics_dataframe, median_values])
+    metrics_dataframe.to_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
+    print(metrics_dataframe)
+
+
 if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     method = get_method()
     method(dataset, f"experiments/{EXP_CONFIG['exp-name']}")
-    # if not EXP_CONFIG["dataset-name"] == "MMSPG":
-    #     calculate_metrics(dataset)
+    if not EXP_CONFIG["dataset-name"] == "MMSPG":
+        calculate_metrics(dataset)

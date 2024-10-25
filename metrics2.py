@@ -11,7 +11,7 @@ import torch.nn.functional as F
 class ConsistencyMetrics:
     def __init__(self, predicted_masks, gt_disparity):
         s_size, t_size = gt_disparity.shape[:2]
-        predictions = torch.tensor(predicted_masks).cuda()  # [n, s, t, u, v]
+        predictions = predicted_masks  # [n, s, t, u, v]
         disparity = torch.tensor(gt_disparity.copy()).cuda()
         self.masks_projected = torch.zeros_like(predictions).cuda()
         for i, prediction in enumerate(predictions):
@@ -91,7 +91,7 @@ class AccuracyMetrics:
                 None, None, :, :
             ]
             gt_segments = gt_segments[None, None, :, :]
-        self.predictions = torch.tensor(predicted_segments.copy()).cuda()
+        self.predictions = predicted_segments
         self.gt_labels = torch.tensor(gt_segments.copy()).cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
         self.n_pixels = self.s * self.t * self.u * self.v
