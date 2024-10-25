@@ -43,7 +43,40 @@ class ConsistencyMetrics:
         n_labels_at_pixel = n_labels_at_pixel[
             n_labels_at_pixel > 0
         ]  # remove unsegmetned pixels
-        return n_labels_at_pixel.mean()
+        return n_labels_at_pixel.mean().item()
+
+    def self_similarity(self):
+        """
+        Zhu, Hao, Qi Zhang, and Qing Wang.
+        "4D light field superpixel and segmentation."
+        Proceedings of the IEEE conference on computer vision and pattern recognition. 2017.
+        """
+        values = []
+        s_size, t_size = self.masks_projected.shape[1:3]
+        for i, mask in enumerate(self.masks_projected):
+            centroid_orig = (
+                torch.nonzero(mask[s_size // 2, t_size // 2]).float().mean(axis=0)
+            )
+            values_i = []
+            for s in range(s_size):
+                for t in range(t_size):
+                    if s == s_size // 2 and t == t_size // 2 or mask[s, t].sum() == 0:
+                        continue
+                    centroid = torch.nonzero(mask[s, t]).float().mean(axis=0)
+                    values_i.append(torch.norm(centroid - centroid_orig))
+            values_i = torch.stack(values_i)
+            values.append(values_i.mean())
+        values = torch.stack(values)
+        return values.mean().item()
+
+    def get_metrics_dict(self):
+        labels_per_pixel = self.labels_per_pixel()
+        self_similarity = self.self_similarity()
+        result = {
+            "labels_per_pixel": labels_per_pixel,
+            "self_similarity": self_similarity,
+        }
+        return result
 
 
 if __name__ == "__main__":
@@ -54,9 +87,7 @@ if __name__ == "__main__":
         # visualize_segmentation_mask(labels)
         labels = np.stack([labels == i for i in np.unique(labels)])
         metrics = ConsistencyMetrics(labels, disparity)
-        result = metrics.masks_projected.sum(axis=0).float()
-        print(result[result > 0].mean())
-        print(metrics.labels_per_pixel())
+        print(metrics.get_metrics_dict())
         # labels_projected = masks_to_segments(metrics.masks_projected)
         # print(metrics.labels_per_pixel())
         # visualize_segmentation_mask(labels_projected.cpu().numpy())
