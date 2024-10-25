@@ -3,15 +3,35 @@ from utils import visualize_segmentation_mask
 from plenpy.lightfields import LightField
 import numpy as np
 import torch
+from LF_image_sam_seg import masks_to_segments
+import matplotlib.pyplot as plt
 
 
 class ConsistencyMetrics:
-    def __init__(self, predicted_labels, gt_disparity):
-        predictions = torch.tensor(predicted_labels).cuda()  # [n, s, t, u, v]
+    def __init__(self, predicted_masks, gt_disparity):
+        s_size, t_size = gt_disparity.shape[:2]
+        predictions = torch.tensor(predicted_masks).cuda()  # [n, s, t, u, v]
         disparity = torch.tensor(gt_disparity.copy()).cuda()
-        self.labels_projected = torch.zeros_like(predictions).cuda()
+        self.masks_projected = torch.zeros_like(predictions).cuda()
         for i, prediction in enumerate(predictions):
-            print(prediction.shape)
+            for s in range(s_size):
+                for t in range(t_size):
+                    prediction_st = prediction[s, t]
+                    st = torch.tensor([s - s_size // 2, t - t_size // 2]).float().cuda()
+                    uv_0 = torch.nonzero(prediction_st)
+                    disparities_uv = disparity[s, t][prediction_st].reshape(-1)
+                    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
+                    u = uv[:, 0]
+                    v = uv[:, 1]
+                    uv = uv[
+                        (u >= 0)
+                        & (v >= 0)
+                        & (u < prediction_st.shape[0])
+                        & (v < prediction_st.shape[1])
+                    ]
+                    mask_projected = torch.zeros_like(prediction_st)
+                    mask_projected[uv[:, 0], uv[:, 1]] = 1
+                    self.masks_projected[i, s, t] = mask_projected
 
 
 if __name__ == "__main__":
@@ -19,6 +39,8 @@ if __name__ == "__main__":
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
     for LF, labels, disparity in dataset:
+        # visualize_segmentation_mask(labels)
         labels = np.stack([labels == i for i in np.unique(labels)])
         metrics = ConsistencyMetrics(labels, disparity)
-        # visualize_segmentation_mask(labels)
+        labels_projected = masks_to_segments(metrics.masks_projected)
+        visualize_segmentation_mask(labels_projected.cpu().numpy())
