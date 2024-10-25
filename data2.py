@@ -33,6 +33,11 @@ class HCIOldDataset:
         labels = np.flip(labels, axis=0)
         return labels
 
+    def get_disparity(self, name, eps=1e-9):
+        scene = h5py.File(f"{self.scene_to_path[name]}/lf.h5", "r")
+        gt_depth = np.array(scene["GT_DEPTH"])
+        return gt_depth
+
     def __len__(self):
         return len(self.scenes)
 
@@ -40,8 +45,8 @@ class HCIOldDataset:
         scene_name = self.scenes[idx]
         LF = self.get_scene(scene_name)
         labels = self.get_labels(scene_name)
-        # disparity = self.get_disparity(scene_name)
-        return LF, labels  # , disparity
+        disparity = self.get_disparity(scene_name)
+        return LF, labels, disparity
 
 
 class UrbanLFSynDataset:
@@ -153,18 +158,18 @@ class UrbanLFRealDataset:
 
 if __name__ == "__main__":
     dataset = HCIOldDataset()
-    for LF, labels in dataset:
+    for LF, labels, disparity in dataset:
         LightField(LF).show()
         visualize_segmentation_mask(labels)
-        # disparity -= disparity.min()
-        # disparity /= disparity.max()
-        # disparity *= 255
-        # disparity = disparity.astype(np.uint8)
-        # disparity = np.stack(
-        #     [
-        #         disparity,
-        #     ]
-        #     * 3,
-        #     axis=-1,
-        # )
-        # LightField(disparity).show()
+        disparity -= disparity.min()
+        disparity /= disparity.max()
+        disparity *= 255
+        disparity = disparity.astype(np.uint8)
+        disparity = np.stack(
+            [
+                disparity,
+            ]
+            * 3,
+            axis=-1,
+        )
+        LightField(disparity).show()
