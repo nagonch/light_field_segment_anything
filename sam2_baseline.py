@@ -18,16 +18,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from plenpy.lightfields import LightField
 
+warnings.filterwarnings("ignore")
 
-def sam2_video_LF_segmentation(LF):
-    pass
+
+def sam2_video_LF_segmentation(LF, mask_predictor, video_predictor):
+    start_masks = generate_image_masks(mask_predictor, LF[0, 0])
+    print(start_masks.shape)
+    raise
 
 
 if __name__ == "__main__":
     mask_predictor = get_auto_mask_predictor()
-    image_predictor = mask_predictor.predictor
+    video_predictor = get_video_predictor()
     dataset = UrbanLFSynDataset(
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
     for i, (LF, _, _) in enumerate(dataset):
-        LightField(LF).show()
+        sam2_video_LF_segmentation(LF, mask_predictor, video_predictor)
