@@ -7,7 +7,7 @@ import pandas as pd
 import warnings
 from tqdm.auto import tqdm
 from sam2_functions import SAM2_CONFIG
-from sam2_baseline import sam2_baseline_LF_segmentation
+from sam2_baseline import sam2_baseline_LF_segmentation_dataset
 
 warnings.filterwarnings("ignore")
 with open("experiment_config.yaml") as f:
@@ -49,10 +49,18 @@ def get_datset():
     return dataset
 
 
+def get_method():
+    name_to_method = {"baseline": sam2_baseline_LF_segmentation_dataset}
+    method = name_to_method.get(EXP_CONFIG["method-name"])
+    if not method:
+        raise ValueError(f"{EXP_CONFIG['method-name']} is not a valid method name")
+    return method
+
+
 if __name__ == "__main__":
     prepare_exp()
-    # dataset = get_datset()
-    # get_sam_data(dataset)
-    # get_merged_data(dataset)
+    dataset = get_datset()
+    method = get_method()
+    method(dataset, f"experiments/{EXP_CONFIG['exp-name']}")
     # if not EXP_CONFIG["dataset-name"] == "MMSPG":
     #     calculate_metrics(dataset)

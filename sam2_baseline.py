@@ -59,7 +59,7 @@ def track_masks(LF, start_masks, video_predictor):
 
 
 def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
-    start_masks = generate_image_masks(mask_predictor, LF[0, 0])[:2]
+    start_masks = generate_image_masks(mask_predictor, LF[0, 0])
     save_LF_lawnmower(LF, CONFIG["lf-subview-folder"])
     result = track_masks(LF, start_masks, video_predictor)
     return result
