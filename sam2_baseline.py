@@ -17,11 +17,12 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from plenpy.lightfields import LightField
+from LF_image_sam_seg import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
 LF_SUBVIEWS_FOLDER = "/tmp/LF"
-TRACKING_BATCH_SIZE = 5
+TRACKING_BATCH_SIZE = 10
 
 
 def track_masks(start_masks, video_predictor):
@@ -56,7 +57,7 @@ def track_masks(start_masks, video_predictor):
     return result
 
 
-def sam2_video_LF_segmentation(LF, mask_predictor, video_predictor):
+def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
     start_masks = generate_image_masks(mask_predictor, LF[0, 0])
     save_LF_lawnmower(LF, LF_SUBVIEWS_FOLDER)
     result = track_masks(start_masks, video_predictor)
@@ -70,4 +71,8 @@ if __name__ == "__main__":
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
     for i, (LF, _, _) in enumerate(dataset):
-        sam2_video_LF_segmentation(LF, mask_predictor, video_predictor)
+        result_masks = sam2_baseline_LF_segmentation(
+            LF, mask_predictor, video_predictor
+        )
+        result_segments = masks_to_segments(result_masks)
+        visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
