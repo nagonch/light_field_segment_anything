@@ -40,9 +40,10 @@ class HCIOldDataset:
         gt_disparity = np.zeros_like(gt_depth)
         dH = scene.attrs["dH"][0]
         f = scene.attrs["focalLength"][0]
+        shift = scene.attrs["shift"][0]
         for s in range(s_size):
             for t in range(t_size):
-                gt_disparity[s, t, :, :] = dH * f / (gt_depth[s, t] + eps)
+                gt_disparity[s, t, :, :] = dH * f / (gt_depth[s, t] + eps) - shift
         return gt_disparity
 
     def __len__(self):
