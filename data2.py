@@ -66,12 +66,32 @@ class UrbanLFSynDataset:
         )
         labels = np.flip(labels, axis=(0, 1))
         labels += 1
-        return LF, labels
+        disparities = np.stack(disparities).reshape(
+            n_apertures,
+            n_apertures,
+            u,
+            v,
+        )
+        disparities = np.flip(disparities, axis=(0, 1))
+        return LF, labels, disparities
 
 
 if __name__ == "__main__":
     dataset = UrbanLFSynDataset(
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
-    for LF, labels in dataset:
+    for LF, labels, disparity in dataset:
+        LightField(LF).show()
         visualize_segmentation_mask(labels)
+        disparity -= disparity.min()
+        disparity /= disparity.max()
+        disparity *= 255
+        disparity = disparity.astype(np.uint8)
+        disparity = np.stack(
+            [
+                disparity,
+            ]
+            * 3,
+            axis=-1,
+        )
+        LightField(disparity).show()
