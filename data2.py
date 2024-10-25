@@ -58,7 +58,7 @@ class HCIOldDataset:
 
 
 class UrbanLFSynDataset:
-    def __init__(self, data_path):
+    def __init__(self, data_path="UrbanLF_Syn/val"):
         self.data_path = data_path
         self.frames = sorted(
             [
@@ -123,7 +123,7 @@ class UrbanLFSynDataset:
 
 
 class UrbanLFRealDataset:
-    def __init__(self, data_path):
+    def __init__(self, data_path="UrbanLF_Real/val"):
         self.data_path = data_path
         self.frames = sorted(
             [
