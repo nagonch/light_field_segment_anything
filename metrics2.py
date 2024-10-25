@@ -33,6 +33,18 @@ class ConsistencyMetrics:
                     mask_projected[uv[:, 0], uv[:, 1]] = 1
                     self.masks_projected[i, s, t] = mask_projected
 
+    def labels_per_pixel(self):
+        """
+        Khan, N., Zhang, Q., Kasser, L., Stone, H., Kim, M. H., & Tompkin, J. (2019).
+        View-consistent 4D light field superpixel segmentation.
+        In Proceedings of the IEEE/CVF International Conference on Computer Vision (pp. 7811-7819).
+        """
+        n_labels_at_pixel = self.masks_projected.sum(axis=0).float()
+        n_labels_at_pixel = n_labels_at_pixel[
+            n_labels_at_pixel > 0
+        ]  # remove unsegmetned pixels
+        return n_labels_at_pixel.mean()
+
 
 if __name__ == "__main__":
     dataset = UrbanLFSynDataset(
@@ -42,5 +54,9 @@ if __name__ == "__main__":
         # visualize_segmentation_mask(labels)
         labels = np.stack([labels == i for i in np.unique(labels)])
         metrics = ConsistencyMetrics(labels, disparity)
-        labels_projected = masks_to_segments(metrics.masks_projected)
-        visualize_segmentation_mask(labels_projected.cpu().numpy())
+        result = metrics.masks_projected.sum(axis=0).float()
+        print(result[result > 0].mean())
+        print(metrics.labels_per_pixel())
+        # labels_projected = masks_to_segments(metrics.masks_projected)
+        # print(metrics.labels_per_pixel())
+        # visualize_segmentation_mask(labels_projected.cpu().numpy())
