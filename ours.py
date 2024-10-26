@@ -280,6 +280,8 @@ def sam_fast_LF_segmentation_dataset(
         result_segments = masks_to_segments(result_masks)
         torch.save(result_masks, masks_path)
         torch.save(result_segments, segments_path)
+        del result_masks
+        del result_segments
         torch.save(
             torch.tensor(computation_times),
             time_path,
