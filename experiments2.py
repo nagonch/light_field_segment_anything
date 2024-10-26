@@ -101,6 +101,10 @@ if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     method = get_method()
-    method(dataset, f"experiments/{EXP_CONFIG['exp-name']}", continue_progress=True)
+    method(
+        dataset,
+        f"experiments/{EXP_CONFIG['exp-name']}",
+        continue_progress=EXP_CONFIG["continue-progress"],
+    )
     if not EXP_CONFIG["dataset-name"] == "MMSPG":
         calculate_metrics(dataset)
