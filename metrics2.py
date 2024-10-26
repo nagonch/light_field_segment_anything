@@ -3,7 +3,7 @@ from utils import visualize_segmentation_mask
 from plenpy.lightfields import LightField
 import numpy as np
 import torch
-from LF_image_sam_seg import masks_to_segments
+from ours import masks_to_segments
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 

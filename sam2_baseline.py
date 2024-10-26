@@ -18,7 +18,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from plenpy.lightfields import LightField
-from LF_image_sam_seg import masks_to_segments
+from ours import masks_to_segments
 
 warnings.filterwarnings("ignore")
 with open("sam2_baseline_LF_segmentation.yaml") as f:
