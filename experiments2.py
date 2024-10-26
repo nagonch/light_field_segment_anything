@@ -81,6 +81,11 @@ def calculate_metrics(dataset):
         metrics_dict.update(accuracy_metrics.get_metrics_dict())
         metrics_dataframe.append(metrics_dict)
     metrics_dataframe = pd.DataFrame(metrics_dataframe)
+    metrics_dataframe["computational_time"] = (
+        torch.load(f"experiments/{EXP_CONFIG['exp-name']}/computation_times.pt")
+        .cpu()
+        .numpy()
+    )
     if hasattr(dataset, "scenes"):
         metrics_dataframe.index = dataset.scenes
     median_values = pd.DataFrame(metrics_dataframe.mean()).T

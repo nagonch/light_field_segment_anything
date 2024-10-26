@@ -88,5 +88,3 @@ def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
 
 if __name__ == "__main__":
     pass
-    # dataset = HCIOldDataset()
-    # sam2_baseline_LF_segmentation_dataset(dataset, "test_results")
