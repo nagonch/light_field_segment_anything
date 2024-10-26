@@ -3,7 +3,7 @@ from sam2_functions import (
     generate_image_masks,
     get_video_predictor,
 )
-from data2 import UrbanLFSynDataset
+from data2 import UrbanLFSynDataset, HCIOldDataset
 import warnings
 from utils import (
     visualize_segmentation_mask,
@@ -80,8 +80,13 @@ def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
         result_segments = masks_to_segments(result_masks)
         torch.save(result_masks, f"{save_folder}/{str(i).zfill(4)}_masks.pt")
         torch.save(result_segments, f"{save_folder}/{str(i).zfill(4)}_segments.pt")
-    return computation_times
+        torch.save(
+            torch.tensor(computation_times),
+            f"{save_folder}/computation_times.pt",
+        )
 
 
 if __name__ == "__main__":
     pass
+    # dataset = HCIOldDataset()
+    # sam2_baseline_LF_segmentation_dataset(dataset, "test_results")
