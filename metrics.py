@@ -1,33 +1,38 @@
-from data import HCIOldDataset, UrbanLFDataset
-import torch
-from matplotlib import pyplot as plt
-from scipy.io import savemat
-from collections import defaultdict
-from tqdm import tqdm
+from data import UrbanLFSynDataset, HCIOldDataset
 from utils import visualize_segmentation_mask
+from plenpy.lightfields import LightField
+import numpy as np
+import torch
+from ours import masks_to_segments
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from utils import remap_labels
 
 
 class ConsistencyMetrics:
-    def __init__(self, predictions, disparity):
-        predictions = torch.tensor(predictions).cuda()
-        disparity = torch.tensor(disparity).cuda()
-        s_size, t_size, u_size, v_size = predictions.shape
-        u_space, v_space = torch.meshgrid(
-            (torch.arange(u_size).cuda(), torch.arange(v_size).cuda())
-        )
-        self.labels_projected = torch.zeros_like(predictions).cuda()
-        for s in range(s_size):
-            for t in range(t_size):
-                disp = disparity[s, t]
-                l = predictions[s, t]
-                u_st = (u_space - disp[:, :, 0]).reshape(-1)
-                v_st = (v_space + disp[:, :, 1]).reshape(-1)
-                mask = (u_st >= 0) & (u_st < u_size) & (v_st >= 0) & (v_st < v_size)
-                self.labels_projected[s, t, u_st[mask].long(), v_st[mask].long()] = l[
-                    u_space.reshape(-1)[mask], v_space.reshape(-1)[mask]
-                ]
+    def __init__(self, predicted_masks, gt_disparity):
+        s_size, t_size = gt_disparity.shape[:2]
+        predictions = predicted_masks  # [n, s, t, u, v]
+        disparity = torch.tensor(gt_disparity.copy()).cuda()
+        self.masks_projected = torch.zeros_like(predictions).cuda()
+        for i, prediction in enumerate(predictions):
+            for s in range(s_size):
+                for t in range(t_size):
+                    prediction_st = prediction[s, t]
+                    st = torch.tensor([s - s_size // 2, t - t_size // 2]).float().cuda()
+                    uv_0 = torch.nonzero(prediction_st)
+                    disparities_uv = disparity[s, t][prediction_st].reshape(-1)
+                    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
+                    u = uv[:, 0]
+                    v = uv[:, 1]
+                    uv = uv[
+                        (u >= 0)
+                        & (v >= 0)
+                        & (u < prediction_st.shape[0])
+                        & (v < prediction_st.shape[1])
+                    ]
+                    mask_projected = torch.zeros_like(prediction_st)
+                    mask_projected[uv[:, 0], uv[:, 1]] = 1
+                    self.masks_projected[i, s, t] = mask_projected
 
     def labels_per_pixel(self):
         """
@@ -35,64 +40,38 @@ class ConsistencyMetrics:
         View-consistent 4D light field superpixel segmentation.
         In Proceedings of the IEEE/CVF International Conference on Computer Vision (pp. 7811-7819).
         """
-        s_size, t_size, u_size, v_size = self.labels_projected.shape
-        labels_projected = self.labels_projected.reshape(
-            s_size * t_size, u_size * v_size
-        ).T
-        labels_projected = labels_projected[
-            labels_projected[:, s_size * t_size // 2] != 0
-        ]
-        lengths = []
-        for label_set in labels_projected:
-            lengths.append(len(set(label_set.tolist())))
-        result = torch.tensor(lengths).cuda().float().mean().item()
-        return result
+        n_labels_at_pixel = self.masks_projected.sum(axis=0).float()
+        n_labels_at_pixel = n_labels_at_pixel[
+            n_labels_at_pixel > 0
+        ]  # remove unsegmetned pixels
+        return n_labels_at_pixel.mean().item()
 
-    def self_similarity(self, eps=1e-9):
+    def self_similarity(self):
         """
         Zhu, Hao, Qi Zhang, and Qing Wang.
         "4D light field superpixel and segmentation."
         Proceedings of the IEEE conference on computer vision and pattern recognition. 2017.
         """
-        labels_projected = self.labels_projected
-        results = []
-        for label_number in torch.unique(
-            labels_projected[
-                labels_projected.shape[0] // 2, labels_projected.shape[1] // 2
-            ]
-        )[1:]:
-            mask_filtered = (self.labels_projected == label_number).to(torch.int32)
-            masks = mask_filtered.reshape(
-                -1, mask_filtered.shape[-2], mask_filtered.shape[-1]
+        values = []
+        s_size, t_size = self.masks_projected.shape[1:3]
+        for i, mask in enumerate(self.masks_projected):
+            centroid_orig = (
+                torch.nonzero(mask[s_size // 2, t_size // 2]).float().mean(axis=0)
             )
-            masks_x, masks_y = torch.meshgrid(
-                (
-                    torch.arange(masks.shape[1]).cuda(),
-                    torch.arange(masks.shape[2]).cuda(),
-                ),
-                indexing="ij",
-            )
-            masks_x = masks_x.repeat(masks.shape[0], 1, 1)
-            masks_y = masks_y.repeat(masks.shape[0], 1, 1)
-            centroids_x = (masks_x * masks).sum(axis=(1, 2)) / (
-                masks.sum(axis=(1, 2)) + eps
-            )
-            centroids_y = (masks_y * masks).sum(axis=(1, 2)) / (
-                masks.sum(axis=(1, 2)) + eps
-            )
-            centroids = torch.stack((centroids_y, centroids_x)).T
-            main_centroid = centroids[centroids.shape[0] // 2]
-            centroids = torch.cat(
-                (
-                    centroids[: centroids.shape[0] // 2, :],
-                    centroids[centroids.shape[0] // 2 + 1 :, :],
-                ),
-                dim=0,
-            )
-            metric = torch.norm(centroids - main_centroid, p=2, dim=1)
-            metric_val = torch.median(metric)
-            results.append(metric_val)
-        return torch.tensor(results).median().item()
+            values_i = []
+            for s in range(s_size):
+                for t in range(t_size):
+                    if s == s_size // 2 and t == t_size // 2 or mask[s, t].sum() == 0:
+                        continue
+                    coords = torch.nonzero(mask[s, t])
+                    centroid = coords.float().mean(axis=0)
+                    values_i.append(torch.norm(centroid - centroid_orig))
+            values_i = torch.stack(values_i)
+            values_i = values_i[~torch.isnan(values_i)]
+            if values_i.shape[0] > 0:
+                values.append(values_i.mean())
+        values = torch.stack(values)
+        return values.mean().item()
 
     def get_metrics_dict(self):
         labels_per_pixel = self.labels_per_pixel()
@@ -105,13 +84,15 @@ class ConsistencyMetrics:
 
 
 class AccuracyMetrics:
-    def __init__(self, predictions, gt_labels, only_central_subview=False):
+    def __init__(self, predicted_segments, gt_segments, only_central_subview=False):
         if only_central_subview:
-            s, t, u, v = predictions.shape
-            predictions = predictions[s // 2, t // 2, :, :][None, None, :, :]
-            gt_labels = gt_labels[None, None, :, :]
-        self.predictions = torch.tensor(predictions).cuda()
-        self.gt_labels = torch.tensor(gt_labels).cuda()
+            s, t, u, v = predicted_segments.shape
+            predicpredicted_segmentstions = predicted_segments[s // 2, t // 2, :, :][
+                None, None, :, :
+            ]
+            gt_segments = gt_segments[None, None, :, :]
+        self.predictions = predicted_segments
+        self.gt_labels = torch.tensor(gt_segments.copy()).cuda()
         self.s, self.t, self.u, self.v = self.predictions.shape
         self.n_pixels = self.s * self.t * self.u * self.v
         self.boundary_d = 2
@@ -253,18 +234,4 @@ class AccuracyMetrics:
 
 
 if __name__ == "__main__":
-    dataset = HCIOldDataset()
-    LF, labels, disparity = dataset[3]
-    predictions = torch.tensor(torch.load("0003_result.pth")).cuda()
-    metrics = AccuracyMetrics(predictions, labels)
-    print(metrics.size_metrics())
-    # recall, visualization = acc_metrics.boundary_recall()
-    # print(recall)
-    # print(acc_metrics.undersegmentation_error())
-    # achievable_accuracy, predictions_modified = acc_metrics.achievable_accuracy()
-    # print(achievable_accuracy)
-    # # coverage = acc_metrics.coverage()
-    # visualize_segmentation_mask(labels.cpu().numpy(), None)
-    # visualize_segmentation_mask(predictions.cpu().numpy(), None)
-    # visualize_segmentation_mask(visualization.cpu().numpy(), None)
-    # visualize_segmentation_mask(predictions_modified.cpu().numpy(), None)
+    pass

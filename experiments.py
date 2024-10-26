@@ -1,16 +1,18 @@
-from data import HCIOldDataset, get_urban_real, get_urban_syn, MMSPG
+from data import HCIOldDataset, UrbanLFSynDataset, UrbanLFRealDataset, MMSPG
 import yaml
 import os
-from LF_SAM import get_sam
-from utils import SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG
-from LF_segment_merger import LF_segment_merger
 import torch
 from metrics import ConsistencyMetrics, AccuracyMetrics
 import pandas as pd
 import warnings
 from tqdm.auto import tqdm
+from sam2_functions import SAM2_CONFIG
+from sam2_baseline import sam2_baseline_LF_segmentation_dataset
+from ours import sam_fast_LF_segmentation_dataset
 
 warnings.filterwarnings("ignore")
+with open("experiment_config.yaml") as f:
+    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def prepare_exp():
@@ -27,8 +29,8 @@ def prepare_exp():
             raise FileExistsError(
                 f"experiments/{exp_name} exists. Continue progress or delete"
             )
-    filenames = ["sam_config.yaml", "merger_config.yaml", "experiment_config.yaml"]
-    configs = [SAM_CONFIG, MERGER_CONFIG, EXP_CONFIG]
+    filenames = ["sam2_config.yaml", "experiment_config.yaml"]
+    configs = [SAM2_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
         with open(f"experiments/{exp_name}/{filename}", "w") as outfile:
             yaml.dump(config, outfile, default_flow_style=False)
@@ -37,8 +39,8 @@ def prepare_exp():
 def get_datset():
     name_to_dataset = {
         "HCI": HCIOldDataset,
-        "URBAN_SYN": get_urban_syn,
-        "URBAN_REAL": get_urban_real,
+        "URBAN_SYN": UrbanLFSynDataset,
+        "URBAN_REAL": UrbanLFRealDataset,
         "MMSPG": MMSPG,
     }
     datset_name = EXP_CONFIG["dataset-name"]
@@ -48,57 +50,15 @@ def get_datset():
     return dataset
 
 
-def get_sam_data(dataset):
-    simple_sam = get_sam()
-    for idx in tqdm(range(len(dataset)), desc="sam segmenting", position=0, leave=True):
-        idx_padded = str(idx).zfill(4)
-        emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
-        sam_segments_filename = (
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
-        )
-        merged_segments_filename = (
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
-        )
-        if EXP_CONFIG["continue-progress"] and (
-            (os.path.exists(emb_filename) and os.path.exists(sam_segments_filename))
-            or os.path.exists(merged_segments_filename)
-        ):
-            continue
-        LF, _, _ = dataset[idx]
-        simple_sam.segment_LF(LF)
-        simple_sam.postprocess_data(
-            emb_filename,
-            sam_segments_filename,
-        )
-
-
-def get_merged_data(dataset):
-    for idx in tqdm(
-        range(len(dataset)), desc="segment merging", position=0, leave=True
-    ):
-        idx_padded = str(idx).zfill(4)
-        emb_filename = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_emb.pth"
-        sam_segments_filename = (
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_sam_seg.pth"
-        )
-        result_filename = (
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
-        )
-        if EXP_CONFIG["continue-progress"] and os.path.exists(result_filename):
-            continue
-        LF, _, _ = dataset[idx]
-        embeddings = torch.load(emb_filename)
-        segments = torch.load(sam_segments_filename).cuda()
-        merger = LF_segment_merger(segments, embeddings, LF)
-        merged_segments = merger.get_result_masks()
-        torch.save(
-            merged_segments,
-            result_filename,
-        )
-        del segments
-        del embeddings
-        del merger
-        del merged_segments
+def get_method():
+    name_to_method = {
+        "baseline": sam2_baseline_LF_segmentation_dataset,
+        "ours": sam_fast_LF_segmentation_dataset,
+    }
+    method = name_to_method.get(EXP_CONFIG["method-name"])
+    if not method:
+        raise ValueError(f"{EXP_CONFIG['method-name']} is not a valid method name")
+    return method
 
 
 def calculate_metrics(dataset):
@@ -108,24 +68,34 @@ def calculate_metrics(dataset):
     ):
         idx_padded = str(idx).zfill(4)
         _, labels, disparity = dataset[idx]
-        predictions = torch.load(
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_result.pth"
+        mask_predictions = torch.load(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_masks.pt"
+        )
+        segment_predictions = torch.load(
+            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_segments.pt"
         )
         metrics_dict = {}
         is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
         if not is_real:
-            consistensy_metrics = ConsistencyMetrics(predictions, disparity)
+            consistensy_metrics = ConsistencyMetrics(mask_predictions, disparity)
             metrics_dict.update(consistensy_metrics.get_metrics_dict())
         accuracy_metrics = AccuracyMetrics(
-            predictions, labels, only_central_subview=is_real
+            segment_predictions, labels, only_central_subview=is_real
         )
         metrics_dict.update(accuracy_metrics.get_metrics_dict())
         metrics_dataframe.append(metrics_dict)
     metrics_dataframe = pd.DataFrame(metrics_dataframe)
+    metrics_dataframe["computational_time"] = (
+        torch.load(f"experiments/{EXP_CONFIG['exp-name']}/computation_times.pt")[
+            : len(metrics_dataframe)
+        ]
+        .cpu()
+        .numpy()
+    )
     if hasattr(dataset, "scenes"):
         metrics_dataframe.index = dataset.scenes
-    median_values = pd.DataFrame(metrics_dataframe.median()).T
-    median_values.index = ["median"]
+    median_values = pd.DataFrame(metrics_dataframe.mean()).T
+    median_values.index = ["mean"]
     metrics_dataframe = pd.concat([metrics_dataframe, median_values])
     metrics_dataframe.to_csv(f"experiments/{EXP_CONFIG['exp-name']}/metrics.csv")
     print(metrics_dataframe)
@@ -134,7 +104,11 @@ def calculate_metrics(dataset):
 if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
-    get_sam_data(dataset)
-    get_merged_data(dataset)
+    method = get_method()
+    method(
+        dataset,
+        f"experiments/{EXP_CONFIG['exp-name']}",
+        continue_progress=EXP_CONFIG["continue-progress"],
+    )
     if not EXP_CONFIG["dataset-name"] == "MMSPG":
         calculate_metrics(dataset)

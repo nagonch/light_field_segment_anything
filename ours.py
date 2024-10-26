@@ -2,7 +2,7 @@ from sam2_functions import (
     get_auto_mask_predictor,
     generate_image_masks,
 )
-from data2 import HCIOldDataset, UrbanLFSynDataset
+from data import HCIOldDataset, UrbanLFSynDataset
 import warnings
 from utils import (
     visualize_segmentation_mask,

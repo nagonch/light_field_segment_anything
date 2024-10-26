@@ -3,7 +3,7 @@ from sam2_functions import (
     generate_image_masks,
     get_video_predictor,
 )
-from data2 import UrbanLFSynDataset, HCIOldDataset
+from data import UrbanLFSynDataset, HCIOldDataset
 import warnings
 from utils import (
     visualize_segmentation_mask,
