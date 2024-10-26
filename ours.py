@@ -1,16 +1,14 @@
 from sam2_functions import (
     get_auto_mask_predictor,
     generate_image_masks,
-    get_video_predictor,
 )
-from data import HCIOldDataset, UrbanLFDataset
+from data2 import HCIOldDataset, UrbanLFSynDataset
 import warnings
 from utils import (
     visualize_segmentation_mask,
     masks_iou,
-    save_LF_lawnmower,
-    lawnmower_indices,
 )
+from time import time
 import torch
 import yaml
 import os
@@ -20,7 +18,7 @@ from plenpy.lightfields import LightField
 
 warnings.filterwarnings("ignore")
 
-with open("LF_sam_image_seg.yaml") as f:
+with open("ours.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
@@ -202,7 +200,7 @@ def refine_image_sam(
     return refined_matched_masks, mask_ious
 
 
-def LF_image_sam_seg(mask_predictor, LF):
+def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
     print("generate_image_masks...", end="")
@@ -226,8 +224,9 @@ def LF_image_sam_seg(mask_predictor, LF):
         LF, masks_central, mask_disparities, disparities
     )
     del disparities
-    coarse_matched_segments = masks_to_segments(coarse_matched_masks)
-    visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
+    if visualize:
+        coarse_matched_segments = masks_to_segments(coarse_matched_masks)
+        visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
@@ -243,18 +242,45 @@ def LF_image_sam_seg(mask_predictor, LF):
     del coarse_matched_masks
     print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
     print("visualizing masks...")
-    refined_segments = masks_to_segments(refined_matched_masks)
-    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
+    if visualize:
+        refined_segments = masks_to_segments(refined_matched_masks)
+        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
 
 
-if __name__ == "__main__":
+def sam_fast_LF_segmentation_dataset(dataset, save_folder, continue_progress=True):
     mask_predictor = get_auto_mask_predictor()
-    image_predictor = mask_predictor.predictor
-    dataset = UrbanLFDataset("/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val")
+    time_path = f"{save_folder}/computation_times.pt"
+    computation_times = []
+    if continue_progress and os.path.exists(time_path):
+        computation_times = torch.load(time_path).tolist()
     for i, (LF, _, _) in enumerate(dataset):
-        print(f"starting LF {i}")
-        LF_image_sam_seg(
+        masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
+        segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
+        if (
+            all([os.path.exists(path) for path in [masks_path, segments_path]])
+            and continue_progress
+        ):
+            continue
+        print(f"segmenting lf {i}")
+        start_time = time()
+        result_masks = sam_fast_LF_segmentation(
             mask_predictor,
             LF,
         )
+        end_time = time()
+        computation_times.append(end_time - start_time)
+        result_segments = masks_to_segments(result_masks)
+        torch.save(result_masks, masks_path)
+        torch.save(result_segments, segments_path)
+        torch.save(
+            torch.tensor(computation_times),
+            time_path,
+        )
+
+
+if __name__ == "__main__":
+    dataset = UrbanLFSynDataset(
+        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    )
+    sam_fast_LF_segmentation_dataset(dataset, "test_result")
