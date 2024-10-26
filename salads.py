@@ -8,43 +8,49 @@ import numpy as np
 import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
 
-def reduce_masks(masks, offset):
+def sort_masks(masks):
     """
-    Convert [N, U, V] masks to [U, V] segments
-    The bigger the segment, the smaller the ID
+    Sort [N, U, V] masks by size
     TODO: move to utils
     """
     areas = masks.sum(dim=(1, 2))
-    masks_result = torch.zeros_like(masks[0]).long().cuda()
-    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
-        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
-    masks_result[masks_result != 0] += offset
-    return masks_result
+    masks = masks[torch.argsort(areas, descending=True)]
+    return masks
 
 
-def get_subview_segments(mask_predictor, LF):
-    "Get automatic semgents for each LF subview"
+def get_subview_masks(mask_predictor, LF):
+    "Get automatic masks for each LF subview"
     s_size, t_size, u_size, v_size = LF.shape[:-1]
-    result = torch.zeros((s_size, t_size, u_size, v_size)).long().cuda()
-    offset = 0
+    n_masks_min = None
+    result_masks = []
     for s in range(s_size):
         for t in range(t_size):
             print(f"getting segments for subview {s, t}...", end="")
             subview = LF[s, t]
             masks = generate_image_masks(mask_predictor, subview).bool().cuda()
-            masks = reduce_masks(
+            masks = sort_masks(
                 masks,
-                offset,
             )
-            offset = masks.max()
-            result[s][t] = masks
+            n_masks_min = (
+                min(n_masks_min, masks.shape[0]) if n_masks_min else masks.shape[0]
+            )
+            print(n_masks_min, masks.shape[0])
+            result_masks.append(masks)
             del masks
             print("done")
-    return result
+    result_masks = torch.stack([mask[:n_masks_min] for mask in result_masks]).reshape(
+        n_masks_min,
+        s_size,
+        t_size,
+        u_size,
+        v_size,
+    )
+    return result_masks
 
 
 @torch.no_grad()
@@ -64,7 +70,7 @@ def get_subview_embeddings(predictor_model, LF):
 
 
 @torch.no_grad()
-def get_segment_embeddings(subview_segments, subview_embeddings):
+def get_mask_embeddings(subview_masks, subview_embeddings):
     "Get embeddings for each segment"
     print("getting segment embeddings...", end="")
     s_size, t_size, u_size, v_size = subview_segments.shape
@@ -165,16 +171,14 @@ def greedy_matching(subview_segments, sim_adjacency_matrix):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_segments = get_subview_segments(mask_predictor, LF)
+    subview_masks = get_subview_masks(mask_predictor, LF)
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    segment_embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
+    segment_embeddings = get_segment_embeddings(subview_masks, subview_embeddings)
     del subview_embeddings
-    segment_centroids = get_segment_centroids(subview_segments)
-    sim_adjacency_matrix = get_sim_adjacency_matrix(
-        subview_segments, segment_embeddings
-    )
+    segment_centroids = get_segment_centroids(subview_masks)
+    sim_adjacency_matrix = get_sim_adjacency_matrix(subview_masks, segment_embeddings)
     del segment_embeddings
-    matched_segments = greedy_matching(subview_segments, sim_adjacency_matrix)
+    matched_segments = greedy_matching(subview_masks, sim_adjacency_matrix)
     return matched_segments
 
 
@@ -183,6 +187,8 @@ if __name__ == "__main__":
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
     for i, (LF, _, _) in enumerate(dataset):
+        if i == 0:
+            continue
         LF = LF[3:-3, 3:-3]
         segments = salads_LF_segmentation(
             mask_predictor,
