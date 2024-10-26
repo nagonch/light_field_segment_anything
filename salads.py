@@ -112,7 +112,7 @@ def get_sim_adjacency_matrix(subview_embeddings):
     return result
 
 
-def optimal_matching(adjacency_matrix):
+def optimal_matching(masks, adjacency_matrix):
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
     for s in range(s_size):
@@ -120,31 +120,31 @@ def optimal_matching(adjacency_matrix):
             if s == s_size // 2 and t == t_size // 2:
                 continue
             adjacency_matrix_st = adjacency_matrix[:, s, t, :].cpu().numpy()
-            _, assignment_st = torch.tensor(
-                linear_sum_assignment(adjacency_matrix_st, maximize=True)
+            row, assignment_st = torch.tensor(
+                linear_sum_assignment(adjacency_matrix_st, maximize=False)
             ).cuda()
+            print(row)
+            # for i, ind in enumerate(assignment_st):
+            #     plt.imshow(masks[ind, s_size // 2, t_size // 2].cpu().numpy())
+            #     plt.imshow(masks[i, s, t].cpu().numpy())
+            #     plt.show()
+            #     plt.close()
             result[:, s, t] = assignment_st
     return result
 
 
-# def greedy_matching(subview_segments, sim_adjacency_matrix):
-#     s_size, t_size = subview_segments.shape[:2]
-#     s_reference, t_reference = s_size // 2, t_size // 2
-#     ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
-#         1:
-#     ]  # exclude 0 (no segment)
-#     for segment_i in ref_segment_nums:
-#         for s in range(s_size):
-#             for t in range(t_size):
-#                 if s == s_reference and t == t_reference:
-#                     continue
-#                 st_unique_segments = torch.unique(subview_segments[s, t])[1:]
-#                 if len(st_unique_segments) == 0:
-#                     continue  # nothing left to match with in this subview
-#                 similarities = sim_adjacency_matrix[segment_i, st_unique_segments]
-#                 match_segment_id = st_unique_segments[torch.argmax(similarities)]
-#                 subview_segments[subview_segments == match_segment_id] = segment_i
-#     return subview_segments
+def merge_masks(match_indices, subview_masks):
+    result = torch.zeros_like(subview_masks)
+    n_masks, s_size, t_size = result.shape[:3]
+    for mask_i in range(n_masks):
+        mask = subview_masks[mask_i, s_size // 2, t_size // 2]
+        result[mask_i, s_size // 2, t_size // 2] = mask
+        for s in range(s_size):
+            for t in range(t_size):
+                if s == s_size // 2 and t == t_size // 2:
+                    continue
+                result[mask_i, s, t] = subview_masks[match_indices[mask_i, s, t], s, t]
+    return result
 
 
 def salads_LF_segmentation(mask_predictor, LF):
@@ -160,9 +160,13 @@ def salads_LF_segmentation(mask_predictor, LF):
     # mask_embeddings = torch.load("segment_embeddings.pt")
     # sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
     # torch.save(sim_adjacency_matrix, "sim_adjacency_matrix.pt")
+    subview_masks = torch.load("subview_masks.pt")
     sim_adjacency_matrix = torch.load("sim_adjacency_matrix.pt")
-    print(optimal_matching(sim_adjacency_matrix))
-    raise
+    match_indices = optimal_matching(subview_masks, sim_adjacency_matrix)
+    result_masks = merge_masks(match_indices, subview_masks)
+    result_segments = masks_to_segments(result_masks)
+    for mask_num in torch.unique(result_segments):
+        visualize_segmentation_mask((result_segments == mask_num).cpu().numpy(), LF)
     # del segment_embeddings
     # matched_segments = greedy_matching(subview_masks, sim_adjacency_matrix)
     # return matched_segments
