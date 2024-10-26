@@ -11,6 +11,7 @@ from utils import (
     save_LF_lawnmower,
     lawnmower_indices,
 )
+from time import time
 import torch
 import yaml
 import os
@@ -68,18 +69,19 @@ def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
 def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
     mask_predictor = get_auto_mask_predictor()
     video_predictor = get_video_predictor()
+    computation_times = []
     for i, (LF, _, _) in enumerate(dataset):
+        start_time = time()
         result_masks = sam2_baseline_LF_segmentation(
             LF, mask_predictor, video_predictor
         )
+        end_time = time()
+        computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
         torch.save(result_masks, f"{save_folder}/{str(i).zfill(4)}_masks.pt")
         torch.save(result_segments, f"{save_folder}/{str(i).zfill(4)}_segments.pt")
+    return computation_times
 
 
 if __name__ == "__main__":
     pass
-    # dataset = UrbanLFSynDataset(
-    #     "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    # )
-    # sam2_baseline_LF_segmentation_dataset(dataset, "results_test")
