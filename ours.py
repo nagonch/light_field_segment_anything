@@ -202,44 +202,7 @@ def refine_image_sam(
     return refined_matched_masks, mask_ious
 
 
-def refine_video_sam(LF, coarse_masks, video_predictor, point_prompts, box_prompts):
-    order_indices = lawnmower_indices(LF.shape[0], LF.shape[1])
-    s_size, t_size = LF.shape[0], LF.shape[1]
-    n_masks = coarse_masks.shape[0]
-    # results = torch.zeros_like((coarse_masks))
-    batch_size = CONFIG["tracking-batch-size"]
-    keyframes = [(0, 0), (s_size // 2, t_size // 2)]
-    for mask_start_idx in range(0, n_masks, batch_size):
-        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-            state = video_predictor.init_state(CONFIG["lf-subviews-folder"])
-            for frame_idx, (s, t) in enumerate(order_indices):
-                if (s, t) not in keyframes:
-                    continue
-                for obj_id, mask in enumerate(
-                    coarse_masks[mask_start_idx : mask_start_idx + batch_size, s, t]
-                ):
-                    video_predictor.add_new_mask(
-                        state,
-                        frame_idx=frame_idx,
-                        obj_id=obj_id,
-                        mask=mask,
-                    )
-            for (
-                frame_idx,
-                _,
-                out_mask_logits,
-            ) in video_predictor.propagate_in_video(state):
-                masks_result = out_mask_logits[:, 0, :, :] > 0.0
-                coarse_masks[
-                    mask_start_idx : mask_start_idx + batch_size,
-                    order_indices[frame_idx][0],
-                    order_indices[frame_idx][1],
-                ] = masks_result
-            video_predictor.reset_state(state)
-    return coarse_masks
-
-
-def LF_image_sam_seg(mask_predictor, LF, mode="image"):
+def LF_image_sam_seg(mask_predictor, LF):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
     print("generate_image_masks...", end="")
@@ -269,36 +232,19 @@ def LF_image_sam_seg(mask_predictor, LF, mode="image"):
     del mask_disparities
     del masks_central
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
-    if mode == "image":
-        refined_matched_masks, mask_ious = refine_image_sam(
-            LF,
-            mask_predictor.predictor,
-            coarse_matched_masks,
-            point_prompts,
-            box_prompts,
-        )
-        del mask_predictor
-        del coarse_matched_masks
-        print(
-            f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}"
-        )
-        print("visualizing masks...")
-        refined_segments = masks_to_segments(refined_matched_masks)
-        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
-    elif mode == "video":
-        del mask_predictor
-        del coarse_matched_segments
-        video_predictor = get_video_predictor()
-        save_LF_lawnmower(LF, CONFIG["lf-subviews-folder"])
-        refined_matched_masks = refine_video_sam(
-            LF,
-            coarse_matched_masks,
-            video_predictor,
-            point_prompts,
-            box_prompts,
-        )
-        refined_segments = masks_to_segments(refined_matched_masks)
-        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
+    refined_matched_masks, mask_ious = refine_image_sam(
+        LF,
+        mask_predictor.predictor,
+        coarse_matched_masks,
+        point_prompts,
+        box_prompts,
+    )
+    del mask_predictor
+    del coarse_matched_masks
+    print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
+    print("visualizing masks...")
+    refined_segments = masks_to_segments(refined_matched_masks)
+    visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
 
 
@@ -311,5 +257,4 @@ if __name__ == "__main__":
         LF_image_sam_seg(
             mask_predictor,
             LF,
-            mode="image",
         )
