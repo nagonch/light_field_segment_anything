@@ -4,10 +4,7 @@ from sam2_functions import (
 )
 from data import HCIOldDataset, UrbanLFSynDataset
 import warnings
-from utils import (
-    visualize_segmentation_mask,
-    masks_iou,
-)
+from utils import visualize_segmentation_mask, masks_iou, masks_to_segments
 from time import time
 import torch
 import yaml
@@ -20,22 +17,6 @@ warnings.filterwarnings("ignore")
 
 with open("ours.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-
-def masks_to_segments(masks):
-    """
-    Convert [n, s, t, u, v] masks to [s, t, u v] segments
-    The bigger the segment, the smaller the ID
-    TODO: move to utils
-    masks: torch.tensor [n, s, t, u, v] (torch.bool)
-    returns: torch.tensor [s, t, u, v] (torch.long)
-    """
-    s, t, u, v = masks.shape[1:]
-    areas = masks[:, s // 2, t // 2].cpu().sum(dim=(1, 2))
-    masks_result = torch.zeros((s, t, u, v), dtype=torch.long).cuda()
-    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
-        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
-    return masks_result
 
 
 def get_LF_disparities(LF):

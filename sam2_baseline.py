@@ -10,6 +10,7 @@ from utils import (
     masks_iou,
     save_LF_lawnmower,
     lawnmower_indices,
+    masks_to_segments,
 )
 from time import time
 import torch
@@ -18,7 +19,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from plenpy.lightfields import LightField
-from ours import masks_to_segments
 
 warnings.filterwarnings("ignore")
 with open("sam2_baseline_LF_segmentation.yaml") as f:

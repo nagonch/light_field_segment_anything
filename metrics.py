@@ -1,9 +1,8 @@
 from data import UrbanLFSynDataset, HCIOldDataset
-from utils import visualize_segmentation_mask
+from utils import visualize_segmentation_mask, masks_to_segments
 from plenpy.lightfields import LightField
 import numpy as np
 import torch
-from ours import masks_to_segments
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
