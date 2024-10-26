@@ -8,6 +8,7 @@ import numpy as np
 import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from scipy.optimize import linear_sum_assignment
 from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
@@ -111,78 +112,56 @@ def get_sim_adjacency_matrix(subview_embeddings):
     return result
 
 
-# @torch.no_grad()
-# def get_sim_adjacency_matrix(subview_segments, segment_embeddings):
-#     "Construct segment similarity matrix"
-#     print("getting adjacency matrix...", end="")
-#     s, t = subview_segments.shape[:2]
-#     s_reference, t_reference = s // 2, t // 2
-#     adjacency_inds = []
-#     adjacency_vals = []
-#     subview_segment_nums = torch.unique(subview_segments)[
-#         1:
-#     ]  # [1:] to exclude 0 (no segment)
-#     ref_subview_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
-#         1:
-#     ]
-#     n_segments = subview_segment_nums.shape[0]
-#     for segment_num_i in ref_subview_segment_nums:
-#         segment_num_i = segment_num_i.item()
-#         embedding_i = segment_embeddings[segment_num_i]
-#         embeddings_j = []
-#         for segment_num_j in subview_segment_nums:
-#             if segment_num_j in ref_subview_segment_nums:
-#                 continue
-#             segment_num_j = segment_num_j.item()
-#             embeddings_j.append(segment_embeddings[segment_num_j])
-#             adjacency_inds.append(torch.tensor([segment_num_i, segment_num_j]).cuda())
-#         embeddings_j = torch.stack(embeddings_j)
-#         embeddings_i = torch.repeat_interleave(
-#             embedding_i[None], embeddings_j.shape[0], dim=0
-#         )
-#         similarities = F.cosine_similarity(embeddings_i, embeddings_j)
-#         adjacency_vals.append(similarities)
-#     adjacency_inds = torch.stack(adjacency_inds).T.cuda()
-#     adjacency_vals = torch.cat(adjacency_vals, dim=0).to(torch.float32).cuda()
-#     adjacency_matrix = torch.sparse_coo_tensor(
-#         adjacency_inds, adjacency_vals, size=(n_segments + 1, n_segments + 1)
-#     ).to_dense()
-#     print("done")
-#     return adjacency_matrix
+def optimal_matching(adjacency_matrix):
+    n, s_size, t_size = adjacency_matrix.shape[:3]
+    result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
+    for s in range(s_size):
+        for t in range(t_size):
+            if s == s_size // 2 and t == t_size // 2:
+                continue
+            adjacency_matrix_st = adjacency_matrix[:, s, t, :].cpu().numpy()
+            _, assignment_st = torch.tensor(
+                linear_sum_assignment(adjacency_matrix_st, maximize=True)
+            ).cuda()
+            result[:, s, t] = assignment_st
+    return result
 
 
-def greedy_matching(subview_segments, sim_adjacency_matrix):
-    s_size, t_size = subview_segments.shape[:2]
-    s_reference, t_reference = s_size // 2, t_size // 2
-    ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
-        1:
-    ]  # exclude 0 (no segment)
-    for segment_i in ref_segment_nums:
-        for s in range(s_size):
-            for t in range(t_size):
-                if s == s_reference and t == t_reference:
-                    continue
-                st_unique_segments = torch.unique(subview_segments[s, t])[1:]
-                if len(st_unique_segments) == 0:
-                    continue  # nothing left to match with in this subview
-                similarities = sim_adjacency_matrix[segment_i, st_unique_segments]
-                match_segment_id = st_unique_segments[torch.argmax(similarities)]
-                subview_segments[subview_segments == match_segment_id] = segment_i
-    return subview_segments
+# def greedy_matching(subview_segments, sim_adjacency_matrix):
+#     s_size, t_size = subview_segments.shape[:2]
+#     s_reference, t_reference = s_size // 2, t_size // 2
+#     ref_segment_nums = torch.unique(subview_segments[s_reference, t_reference])[
+#         1:
+#     ]  # exclude 0 (no segment)
+#     for segment_i in ref_segment_nums:
+#         for s in range(s_size):
+#             for t in range(t_size):
+#                 if s == s_reference and t == t_reference:
+#                     continue
+#                 st_unique_segments = torch.unique(subview_segments[s, t])[1:]
+#                 if len(st_unique_segments) == 0:
+#                     continue  # nothing left to match with in this subview
+#                 similarities = sim_adjacency_matrix[segment_i, st_unique_segments]
+#                 match_segment_id = st_unique_segments[torch.argmax(similarities)]
+#                 subview_segments[subview_segments == match_segment_id] = segment_i
+#     return subview_segments
 
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
     # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    subview_masks = torch.load("subview_masks.pt")
-    subview_embeddings = torch.load("subview_embeddings.pt")
-    mask_embeddings, mask_centroids = get_mask_features(
-        subview_masks, subview_embeddings
-    )
-    del subview_embeddings
-    sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
-    print(sim_adjacency_matrix.shape)
+    # subview_masks = torch.load("subview_masks.pt")
+    # subview_embeddings = torch.load("subview_embeddings.pt")
+    # mask_embeddings, mask_centroids = get_mask_features(
+    #     subview_masks, subview_embeddings
+    # )
+    # del subview_embeddings
+    # mask_embeddings = torch.load("segment_embeddings.pt")
+    # sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
+    # torch.save(sim_adjacency_matrix, "sim_adjacency_matrix.pt")
+    sim_adjacency_matrix = torch.load("sim_adjacency_matrix.pt")
+    print(optimal_matching(sim_adjacency_matrix))
     raise
     # del segment_embeddings
     # matched_segments = greedy_matching(subview_masks, sim_adjacency_matrix)
