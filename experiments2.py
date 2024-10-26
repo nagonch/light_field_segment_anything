@@ -8,6 +8,7 @@ import warnings
 from tqdm.auto import tqdm
 from sam2_functions import SAM2_CONFIG
 from sam2_baseline import sam2_baseline_LF_segmentation_dataset
+from ours import sam_fast_LF_segmentation_dataset
 
 warnings.filterwarnings("ignore")
 with open("experiment_config.yaml") as f:
@@ -50,7 +51,10 @@ def get_datset():
 
 
 def get_method():
-    name_to_method = {"baseline": sam2_baseline_LF_segmentation_dataset}
+    name_to_method = {
+        "baseline": sam2_baseline_LF_segmentation_dataset,
+        "ours": sam_fast_LF_segmentation_dataset,
+    }
     method = name_to_method.get(EXP_CONFIG["method-name"])
     if not method:
         raise ValueError(f"{EXP_CONFIG['method-name']} is not a valid method name")

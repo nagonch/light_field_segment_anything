@@ -225,6 +225,7 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     )
     del disparities
     if visualize:
+        print("visualizing coarse segments...")
         coarse_matched_segments = masks_to_segments(coarse_matched_masks)
         visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
@@ -241,14 +242,19 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     del mask_predictor
     del coarse_matched_masks
     print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
-    print("visualizing masks...")
     if visualize:
+        print("visualizing segments...")
         refined_segments = masks_to_segments(refined_matched_masks)
         visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
     return refined_matched_masks
 
 
-def sam_fast_LF_segmentation_dataset(dataset, save_folder, continue_progress=True):
+def sam_fast_LF_segmentation_dataset(
+    dataset,
+    save_folder,
+    continue_progress=False,
+    visualize=False,
+):
     mask_predictor = get_auto_mask_predictor()
     time_path = f"{save_folder}/computation_times.pt"
     computation_times = []
@@ -267,6 +273,7 @@ def sam_fast_LF_segmentation_dataset(dataset, save_folder, continue_progress=Tru
         result_masks = sam_fast_LF_segmentation(
             mask_predictor,
             LF,
+            visualize=visualize,
         )
         end_time = time()
         computation_times.append(end_time - start_time)
@@ -283,4 +290,4 @@ if __name__ == "__main__":
     dataset = UrbanLFSynDataset(
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
-    sam_fast_LF_segmentation_dataset(dataset, "test_result")
+    sam_fast_LF_segmentation_dataset(dataset, "test_result", visualize=True)
