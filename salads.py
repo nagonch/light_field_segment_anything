@@ -70,42 +70,23 @@ def get_subview_embeddings(predictor_model, LF):
 
 
 @torch.no_grad()
-def get_mask_embeddings(subview_masks, subview_embeddings):
-    "Get embeddings for each mask"
+def get_mask_features(subview_masks, subview_embeddings):
+    "Get embeddings and centroids for each mask"
     print("getting mask embeddings...", end="")
     n_masks, s_size, t_size, u_size, v_size = subview_masks.shape
     mask_embeddings = torch.zeros((n_masks, s_size, t_size, 256)).cuda()
+    mask_centroids = torch.zeros((n_masks, s_size, t_size, 2)).cuda()
     for s in range(s_size):
         for t in range(t_size):
             embedding = subview_embeddings[s, t]
             embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
             for mask_ind in range(n_masks):
-                mask_x, mask_y = torch.where(subview_masks[mask_ind, s, t] == 1)
-                mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
+                mask_xy = torch.nonzero(subview_masks[mask_ind, s, t])
+                mask_centroids[mask_ind, s, t] = mask_xy.float().mean(axis=0)
+                mask_embedding = embedding[:, mask_xy[0], mask_xy[1]].mean(axis=1)
                 mask_embeddings[mask_ind, s, t] = mask_embedding
     print("done")
-    return mask_embeddings
-
-
-@torch.no_grad()
-def get_segment_centroids(subview_segments):
-    "Get an [s, t, u, v] centroid of each segment for EPI-based regularization"
-    print("getting segment centroids...", end="")
-    s_size, t_size, u_size, v_size = subview_segments.shape
-    segment_centroids = {}
-    for s in range(s_size):
-        for t in range(t_size):
-            unique_segments = torch.unique(subview_segments[s, t])[
-                1:
-            ]  # exclude 0 (no segment)
-            for segment_i in unique_segments:
-                mask = subview_segments[s, t] == segment_i
-                uv_centroid = torch.nonzero(mask, as_tuple=False).float().mean(dim=0)
-                st_centroid = torch.tensor([s, t]).float().cuda()
-                centroid = torch.cat((st_centroid, uv_centroid))
-                segment_centroids[segment_i.item()] = centroid
-    print("done")
-    return segment_centroids
+    return mask_embeddings, mask_centroids
 
 
 @torch.no_grad()
@@ -172,13 +153,12 @@ def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
     # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    # mask_embeddings = get_mask_embeddings(subview_masks, subview_embeddings)
     subview_masks = torch.load("subview_masks.pt")
     subview_embeddings = torch.load("subview_embeddings.pt")
-    mask_embeddings = torch.load("segment_embeddings.pt")
-    raise
+    mask_embeddings, mask_centroids = get_mask_features(
+        subview_masks, subview_embeddings
+    )
     del subview_embeddings
-    segment_centroids = get_segment_centroids(subview_masks)
     sim_adjacency_matrix = get_sim_adjacency_matrix(subview_masks, segment_embeddings)
     del segment_embeddings
     matched_segments = greedy_matching(subview_masks, sim_adjacency_matrix)
