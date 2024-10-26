@@ -5,15 +5,11 @@ from utils import visualize_segmentation_mask
 import torch
 from torchvision.transforms.functional import resize
 import numpy as np
-import yaml
 import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore")
-
-with open("matching_config.yaml") as f:
-    MATCHING_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def reduce_masks(masks, offset):
@@ -183,7 +179,6 @@ def salads_LF_segmentation(mask_predictor, LF):
 
 
 if __name__ == "__main__":
-    os.makedirs(MATCHING_CONFIG["files-folder"], exist_ok=True)
     mask_predictor = get_auto_mask_predictor()
     image_predictor = mask_predictor.predictor
     dataset = HCIOldDataset()
@@ -192,6 +187,5 @@ if __name__ == "__main__":
         segments = salads_LF_segmentation(
             mask_predictor,
             LF,
-            filename=str(i).zfill(4),
         )
         visualize_segmentation_mask(segments.cpu().numpy(), LF)
