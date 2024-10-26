@@ -114,7 +114,7 @@ def get_sim_adjacency_matrix(subview_embeddings):
     return result
 
 
-def optimal_matching(masks, adjacency_matrix):
+def optimal_matching(adjacency_matrix):
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
     for s in range(s_size):
@@ -152,7 +152,7 @@ def salads_LF_segmentation(mask_predictor, LF):
     )
     del subview_embeddings
     sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
-    match_indices = optimal_matching(subview_masks, sim_adjacency_matrix)
+    match_indices = optimal_matching(sim_adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
