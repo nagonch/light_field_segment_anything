@@ -80,7 +80,7 @@ def get_mask_embeddings(subview_masks, subview_embeddings):
             embedding = subview_embeddings[s, t]
             embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
             for mask_ind in range(n_masks):
-                mask_x, mask_y = torch.where(subview_masks[mask_ind, s, t] == mask_ind)
+                mask_x, mask_y = torch.where(subview_masks[mask_ind, s, t] == 1)
                 mask_embedding = embedding[:, mask_x, mask_y].mean(axis=1)
                 mask_embeddings[mask_ind, s, t] = mask_embedding
     print("done")
@@ -170,10 +170,12 @@ def greedy_matching(subview_segments, sim_adjacency_matrix):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
-    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    segment_embeddings = get_mask_embeddings(subview_masks, subview_embeddings)
-    print(segment_embeddings)
+    # subview_masks = get_subview_masks(mask_predictor, LF)
+    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    # mask_embeddings = get_mask_embeddings(subview_masks, subview_embeddings)
+    subview_masks = torch.load("subview_masks.pt")
+    subview_embeddings = torch.load("subview_embeddings.pt")
+    mask_embeddings = torch.load("segment_embeddings.pt")
     raise
     del subview_embeddings
     segment_centroids = get_segment_centroids(subview_masks)
