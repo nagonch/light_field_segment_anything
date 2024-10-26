@@ -82,7 +82,9 @@ def calculate_metrics(dataset):
         metrics_dataframe.append(metrics_dict)
     metrics_dataframe = pd.DataFrame(metrics_dataframe)
     metrics_dataframe["computational_time"] = (
-        torch.load(f"experiments/{EXP_CONFIG['exp-name']}/computation_times.pt")
+        torch.load(f"experiments/{EXP_CONFIG['exp-name']}/computation_times.pt")[
+            : len(metrics_dataframe)
+        ]
         .cpu()
         .numpy()
     )
@@ -99,6 +101,6 @@ if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     method = get_method()
-    method(dataset, f"experiments/{EXP_CONFIG['exp-name']}")
+    method(dataset, f"experiments/{EXP_CONFIG['exp-name']}", continue_progress=True)
     if not EXP_CONFIG["dataset-name"] == "MMSPG":
         calculate_metrics(dataset)

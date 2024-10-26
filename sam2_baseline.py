@@ -66,11 +66,23 @@ def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
     return result
 
 
-def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
+def sam2_baseline_LF_segmentation_dataset(
+    dataset, save_folder, continue_progress=False
+):
     mask_predictor = get_auto_mask_predictor()
     video_predictor = get_video_predictor()
+    time_path = f"{save_folder}/computation_times.pt"
     computation_times = []
+    if continue_progress and os.path.exists(time_path):
+        computation_times = torch.load(time_path).tolist()
     for i, (LF, _, _) in enumerate(dataset):
+        masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
+        segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
+        if (
+            all([os.path.exists(path) for path in [masks_path, segments_path]])
+            and continue_progress
+        ):
+            continue
         start_time = time()
         result_masks = sam2_baseline_LF_segmentation(
             LF, mask_predictor, video_predictor
@@ -78,11 +90,11 @@ def sam2_baseline_LF_segmentation_dataset(dataset, save_folder):
         end_time = time()
         computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
-        torch.save(result_masks, f"{save_folder}/{str(i).zfill(4)}_masks.pt")
-        torch.save(result_segments, f"{save_folder}/{str(i).zfill(4)}_segments.pt")
+        torch.save(result_masks, masks_path)
+        torch.save(result_segments, segments_path)
         torch.save(
             torch.tensor(computation_times),
-            f"{save_folder}/computation_times.pt",
+            time_path,
         )
 
 
