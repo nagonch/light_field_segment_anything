@@ -153,19 +153,6 @@ def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
     return result
 
 
-def best_matching(flat_adjac_matrix):
-    from_matches = []
-    to_matches = []
-    for _ in range(flat_adjac_matrix.shape[0]):
-        max_idx = torch.argmax(flat_adjac_matrix)
-        max_idx = torch.unravel_index(max_idx, flat_adjac_matrix.shape)
-        from_matches.append(max_idx[0])
-        to_matches.append(max_idx[1])
-        print(flat_adjac_matrix[max_idx])
-        flat_adjac_matrix[max_idx] = -torch.inf
-    return torch.stack(from_matches), torch.stack(to_matches)
-
-
 def optimal_matching(subview_masks, adjacency_matrix):
     adjacency_matrix = torch.clone(adjacency_matrix)
     n, s_size, t_size = adjacency_matrix.shape[:3]
