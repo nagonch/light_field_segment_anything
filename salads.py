@@ -145,11 +145,14 @@ def merge_masks(match_indices, subview_masks):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
+    # subview_masks = get_subview_masks(mask_predictor, LF)
+    subview_masks = torch.load("subview_masks.pt")
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings, mask_centroids = get_mask_features(
         subview_masks, subview_embeddings
     )
+    print(mask_centroids.shape)
+    raise
     del subview_embeddings
     sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
     del mask_embeddings

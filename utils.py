@@ -9,6 +9,7 @@ import logging
 from scipy import ndimage
 from skimage.segmentation import mark_boundaries
 import os
+from plenpy.lightfields import LightField
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
@@ -35,6 +36,17 @@ def masks_to_segments(masks):
     for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
         masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
     return masks_result
+
+
+def get_LF_disparities(LF):
+    """
+    Get disparities for subview [s//2, t//2]
+    LF: np.array [s, t, u, v, 3] (np.uint8)
+    returns: np.array [u, v] (np.float32)
+    """
+    LF = LightField(LF)
+    disp, _ = LF.get_disparity()
+    return disp
 
 
 def visualize_segmentation_mask(

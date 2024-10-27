@@ -11,23 +11,12 @@ import yaml
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-from plenpy.lightfields import LightField
+from utils import get_LF_disparities
 
 warnings.filterwarnings("ignore")
 
 with open("ours.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
-
-
-def get_LF_disparities(LF):
-    """
-    Get disparities for subview [s//2, t//2]
-    LF: np.array [s, t, u, v, 3] (np.uint8)
-    returns: np.array [u, v] (np.float32)
-    """
-    LF = LightField(LF)
-    disp, _ = LF.get_disparity()
-    return disp
 
 
 def get_mask_disparities(masks_central, disparities):
