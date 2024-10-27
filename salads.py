@@ -13,7 +13,7 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 1.0
+GEOM_WEIGHT = 0.0
 
 
 def sort_masks(masks):
@@ -158,20 +158,40 @@ def optimal_matching(subview_masks, adjacency_matrix):
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
     matching_certanties = torch.zeros((n, s_size, t_size))
-    for _ in range(n):
+    certainty_threshold = torch.flip(torch.linspace(0.6, 0.95, n), dims=(0,))
+    for mask_i in range(n):
         max_idx = torch.argmax(adjacency_matrix)
-        n_from, s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape)
-        # print(adjacency_matrix[n_from, s, t, n_to], n_from, s, t, n_to)
+        # find best match globaly
+        n_from, s_best, t_best, n_to = torch.unravel_index(
+            max_idx, adjacency_matrix.shape
+        )
         # plt.imshow(subview_masks[n_from, s_size // 2, t_size // 2].cpu().numpy())
         # plt.show()
         # plt.close()
-        # plt.imshow(subview_masks[n_to, s, t].cpu().numpy())
+        result[n_from, s_best, t_best] = n_to
+        matching_certanties[n_from, s_best, t_best] = adjacency_matrix[
+            n_from, s_best, t_best, n_to
+        ]
+        adjacency_matrix[n_from, s_best, t_best, :] = -torch.inf
+        adjacency_matrix[:, :, :, n_to] = -torch.inf
+        # plt.imshow(subview_masks[n_to, s_best, t_best].cpu().numpy())
         # plt.show()
         # plt.close()
-        result[n_from, s, t] = n_to
-        matching_certanties[n_from, s, t] = adjacency_matrix[n_from, s, t, n_to]
-        adjacency_matrix[n_from, s, t, :] = -torch.inf
-        adjacency_matrix[:, :, :, n_to] = -torch.inf
+        for s in range(s_size):
+            for t in range(t_size):
+                if (s, t) in [(s_size // 2, t_size // 2), (s_best, t_best)]:
+                    continue
+                max_idx = torch.argmax(adjacency_matrix[n_from])
+                s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape[1:])
+                if adjacency_matrix[n_from, s, t, n_to] >= 0.95:
+                    result[n_from, s, t] = n_to
+                    matching_certanties[n_from, s, t] = adjacency_matrix[
+                        n_from, s, t, n_to
+                    ]
+                    adjacency_matrix[n_from, s, t, :] = -torch.inf
+                    adjacency_matrix[:, :, :, n_to] = -torch.inf
+                else:
+                    result[n_from, s, t] = -1
     matching_certanties = matching_certanties.mean(dim=(1, 2))
     return result, matching_certanties
 
@@ -186,7 +206,10 @@ def merge_masks(adjacency_matrix, match_indices, subview_masks):
             for t in range(t_size):
                 if s == s_size // 2 and t == t_size // 2:
                     continue
-                result[mask_i, s, t] = subview_masks[match_indices[mask_i, s, t], s, t]
+                if match_indices[mask_i, s, t] >= 0:
+                    result[mask_i, s, t] = subview_masks[
+                        match_indices[mask_i, s, t], s, t
+                    ]
     return result
 
 
