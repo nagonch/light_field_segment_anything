@@ -13,7 +13,7 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 0.0
+GEOM_WEIGHT = 0.5
 
 
 def sort_masks(masks):
@@ -153,7 +153,7 @@ def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
     return result
 
 
-def optimal_matching(subview_masks, adjacency_matrix):
+def optimal_matching(adjacency_matrix):
     adjacency_matrix = torch.clone(adjacency_matrix)
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
@@ -165,38 +165,28 @@ def optimal_matching(subview_masks, adjacency_matrix):
         n_from, s_best, t_best, n_to = torch.unravel_index(
             max_idx, adjacency_matrix.shape
         )
-        # plt.imshow(subview_masks[n_from, s_size // 2, t_size // 2].cpu().numpy())
-        # plt.show()
-        # plt.close()
         result[n_from, s_best, t_best] = n_to
         matching_certanties[n_from, s_best, t_best] = adjacency_matrix[
             n_from, s_best, t_best, n_to
         ]
         adjacency_matrix[n_from, s_best, t_best, :] = -torch.inf
-        adjacency_matrix[:, :, :, n_to] = -torch.inf
-        # plt.imshow(subview_masks[n_to, s_best, t_best].cpu().numpy())
-        # plt.show()
-        # plt.close()
-        for s in range(s_size):
-            for t in range(t_size):
-                if (s, t) in [(s_size // 2, t_size // 2), (s_best, t_best)]:
-                    continue
-                max_idx = torch.argmax(adjacency_matrix[n_from])
-                s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape[1:])
-                if adjacency_matrix[n_from, s, t, n_to] >= 0.95:
-                    result[n_from, s, t] = n_to
-                    matching_certanties[n_from, s, t] = adjacency_matrix[
-                        n_from, s, t, n_to
-                    ]
-                    adjacency_matrix[n_from, s, t, :] = -torch.inf
-                    adjacency_matrix[:, :, :, n_to] = -torch.inf
-                else:
-                    result[n_from, s, t] = -1
+        adjacency_matrix[:, s_best, t_best, n_to] = -torch.inf
+        for n_subview in range(s_size * t_size - 2):
+            max_idx = torch.argmax(adjacency_matrix[n_from])
+            s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape[1:])
+            if adjacency_matrix[n_from, s, t, n_to] >= certainty_threshold[mask_i]:
+                result[n_from, s, t] = n_to
+                matching_certanties[n_from, s, t] = adjacency_matrix[n_from, s, t, n_to]
+            else:
+                result[n_from, s, t] = -1
+            adjacency_matrix[n_from, s, t, :] = -torch.inf
+            adjacency_matrix[:, s, t, n_to] = -torch.inf
+        adjacency_matrix[n_from, :, :, :] = -torch.inf
     matching_certanties = matching_certanties.mean(dim=(1, 2))
     return result, matching_certanties
 
 
-def merge_masks(adjacency_matrix, match_indices, subview_masks):
+def merge_masks(match_indices, subview_masks):
     result = torch.zeros_like(subview_masks)
     n_masks, s_size, t_size = result.shape[:3]
     for mask_i in range(n_masks):
@@ -215,9 +205,8 @@ def merge_masks(adjacency_matrix, match_indices, subview_masks):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    # subview_masks = get_subview_masks(mask_predictor, LF)
+    subview_masks = get_subview_masks(mask_predictor, LF)
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
-    subview_masks = torch.load("subview_masks.pt")
     mask_disparities = get_mask_disparities(subview_masks, disparity)
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings, mask_centroids = get_mask_features(
@@ -237,15 +226,6 @@ def salads_LF_segmentation(mask_predictor, LF):
     match_indices, match_certanties = optimal_matching(subview_masks, adjacency_matrix)
     result_masks = merge_masks(adjacency_matrix, match_indices, subview_masks)
     result_masks = result_masks[torch.argsort(match_certanties, descending=True)]
-    for mask, certainty in zip(
-        result_masks,
-        match_certanties[torch.argsort(match_certanties, descending=True)],
-    ):
-        print(certainty)
-        vis = get_mask_vis(mask)
-        plt.imshow(vis.cpu().numpy())
-        plt.show()
-        plt.close()
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
     return result_masks
