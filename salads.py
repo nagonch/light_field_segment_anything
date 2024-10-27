@@ -152,15 +152,12 @@ def salads_LF_segmentation(mask_predictor, LF):
     )
     del subview_embeddings
     sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
+    del mask_embeddings
     match_indices = optimal_matching(sim_adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
-    # for mask_num in torch.unique(result_segments):
-    #     visualize_segmentation_mask((result_segments == mask_num).cpu().numpy(), LF)
-    # del segment_embeddings
-    # matched_segments = greedy_matching(subview_masks, sim_adjacency_matrix)
-    # return matched_segments
+    return result_masks
 
 
 if __name__ == "__main__":
