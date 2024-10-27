@@ -13,6 +13,8 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
+GEOM_WEIGHT = 0.7
+
 
 def sort_masks(masks):
     """
@@ -126,8 +128,29 @@ def get_semantic_adjacency_matrix(mask_embeddings):
 
 
 @torch.no_grad()
-def get_epi_adjacency_matrix(mask_centroids, disparity):
-    pass
+def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
+    n_masks, s_size, t_size = mask_centroids.shape[:3]
+    _, _, u_size, v_size = LF.shape[:4]
+    max_point_dist = torch.norm(torch.tensor([u_size, v_size]).float())
+    result = torch.zeros((n_masks, s_size, t_size, n_masks)).cuda()
+    for mask_i in range(n_masks):
+        mask_disparity = mask_disparities[mask_i]
+        centroids_i = mask_centroids[mask_i, s_size // 2, t_size // 2]
+        for s in range(s_size):
+            for t in range(t_size):
+                if s == s_size // 2 and t == t_size // 2:
+                    continue
+                centroids = mask_centroids[:, s, t]
+                st = torch.tensor([s_size // 2 - s, t_size // 2 - t]).float().cuda()
+                centroids_projected = centroids + mask_disparity * st
+                distances = (
+                    torch.norm(centroids_projected - centroids_i, dim=1)
+                    / max_point_dist
+                )
+                distances = torch.clip(distances, min=0, max=1)
+                adjacencies = 1 - distances
+                result[:, s, t] = adjacencies
+    return result
 
 
 def optimal_matching(adjacency_matrix):
@@ -165,18 +188,21 @@ def salads_LF_segmentation(mask_predictor, LF):
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     subview_masks = torch.load("subview_masks.pt")
     mask_disparities = get_mask_disparities(subview_masks, disparity)
-    print(mask_disparities.shape)
-    raise
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings, mask_centroids = get_mask_features(
         subview_masks, subview_embeddings
     )
-    # print(mask_centroids.shape)
-    # raise
     del subview_embeddings
     semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
+    geometric_adjacency_matrix = get_geometric_adjacency(
+        LF, mask_centroids, mask_disparities
+    )
+    adjacency_matrix = (
+        semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
+        + geometric_adjacency_matrix * GEOM_WEIGHT
+    )
     del mask_embeddings
-    match_indices = optimal_matching(semantic_adjacency_matrix)
+    match_indices = optimal_matching(adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
