@@ -93,25 +93,30 @@ def get_mask_features(subview_masks, subview_embeddings):
 
 
 @torch.no_grad()
-def get_semantic_adjacency_matrix(subview_embeddings):
+def get_semantic_adjacency_matrix(mask_embeddings):
     """
     [n, s, t, n] Get mask cosine similarities matrix
     Logic: [mask_from, s, t, mask_to]
     """
-    n_masks, s_size, t_size = subview_embeddings.shape[:3]
+    n_masks, s_size, t_size = mask_embeddings.shape[:3]
     result = torch.zeros((n_masks, s_size, t_size, n_masks)).cuda()
     for mask_i in range(n_masks):
         mask_embedding = torch.repeat_interleave(
-            subview_embeddings[mask_i, s_size // 2, t_size // 2][None], n_masks, dim=0
+            mask_embeddings[mask_i, s_size // 2, t_size // 2][None], n_masks, dim=0
         )
         for s in range(s_size):
             for t in range(t_size):
                 if s == s_size // 2 and t == t_size // 2:
                     continue
-                embeddings = subview_embeddings[:, s, t]
+                embeddings = mask_embeddings[:, s, t]
                 sim = F.cosine_similarity(mask_embedding, embeddings)
                 result[mask_i, s, t, :] = sim
     return result
+
+
+@torch.no_grad()
+def get_epi_adjacency_matrix(mask_centroids, disparity):
+    pass
 
 
 def optimal_matching(adjacency_matrix):
