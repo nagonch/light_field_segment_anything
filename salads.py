@@ -10,10 +10,12 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.optimize import linear_sum_assignment
 from utils import masks_to_segments
+from salads2 import LF_segment_merger
 
 warnings.filterwarnings("ignore")
 
 GEOM_WEIGHT = 0.5
+CERTAINTY_THRESH = 0.8
 
 
 def sort_masks(masks):
@@ -170,7 +172,9 @@ def optimal_matching(adjacency_matrix):
         for n_subview in range(s_size * t_size - 2):
             max_idx = torch.argmax(adjacency_matrix[n_from])
             s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape[1:])
-            result[n_from, s, t] = n_to
+            result[n_from, s, t] = (
+                n_to if adjacency_matrix[n_from, s, t, n_to] >= CERTAINTY_THRESH else -1
+            )
             adjacency_matrix[n_from, s, t, :] = -torch.inf
             adjacency_matrix[:, s, t, n_to] = -torch.inf
         adjacency_matrix[n_from, :, :, :] = -torch.inf
@@ -195,37 +199,85 @@ def merge_masks(match_indices, subview_masks):
     return result
 
 
+def convert_masks(subview_masks):
+    n_masks, s_size, t_size, u_size, v_size = subview_masks.shape
+    result = torch.zeros((s_size, t_size, u_size, v_size)).cuda()
+    i_mask = 1
+    for mask_i in range(n_masks):
+        for s in range(s_size):
+            for t in range(t_size):
+                result[s, t][subview_masks[mask_i, s, t]] += i_mask
+                i_mask += 1
+    return result
+
+
+def filter_masks(subview_masks):
+    s, t, u, v = subview_masks.shape
+    for i in torch.unique(subview_masks)[1:]:
+        if (subview_masks == i).sum() <= u * v * 0.01:
+            subview_masks[subview_masks == i] = 0
+    return subview_masks
+
+
+def get_segment_embeddings(subview_segments, subview_embeddings):
+    result_embeddings = {}
+    s_size, t_size, u_size, v_size = subview_segments.shape[:4]
+    for i in torch.unique(subview_segments)[1:]:
+        mask = (subview_segments == i).sum(axis=(0, 1))
+        s, t = torch.unravel_index(
+            torch.argmax((subview_segments == i).sum(axis=(2, 3))), (s_size, t_size)
+        )
+        embedding = subview_embeddings[s, t]
+        embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
+        x, y = torch.where(mask == 1)
+        result_embeddings[i.item()] = (embedding[:, x, y].mean(axis=1), None)
+    return result_embeddings
+
+
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
     subview_masks = torch.load("subview_masks.pt")
-    disparity = torch.tensor(get_LF_disparities(LF)).cuda()
-    mask_disparities = get_mask_disparities(subview_masks, disparity)
+    subview_segments = convert_masks(subview_masks)
+    subview_segments = filter_masks(subview_segments)
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    mask_embeddings, mask_centroids = get_mask_features(
-        subview_masks, subview_embeddings
-    )
-    del subview_embeddings
-    semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
-    geometric_adjacency_matrix = get_geometric_adjacency(
-        LF, mask_centroids, mask_disparities
-    )
-    adjacency_matrix = (
-        semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
-        + geometric_adjacency_matrix * GEOM_WEIGHT
-    )
+    embeddings = get_segment_embeddings(subview_segments, subview_embeddings)
+    merger = LF_segment_merger(subview_segments, embeddings, LF)
+    segments = merger.get_result_masks().long()
+    # print(segments, torch.unique(segments))
+    # for mask_i in torch.unique(segments)[1:]:
+    #     plt.imshow(get_mask_vis(segments == mask_i).cpu().numpy())
+    #     plt.show()
+    #     plt.close()
+    visualize_segmentation_mask(segments.cpu().numpy(), LF)
+    # disparity = torch.tensor(get_LF_disparities(LF)).cuda()
+    # mask_disparities = get_mask_disparities(subview_masks, disparity)
+    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    # mask_embeddings, mask_centroids = get_mask_features(
+    #     subview_masks, subview_embeddings
+    # )
+    # del subview_embeddings
+    # semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
+    # geometric_adjacency_matrix = get_geometric_adjacency(
+    #     LF, mask_centroids, mask_disparities
+    # )
+    # adjacency_matrix = (
+    #     semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
+    #     + geometric_adjacency_matrix * GEOM_WEIGHT
+    # )
 
-    del mask_embeddings
-    match_indices, order = optimal_matching(adjacency_matrix)
-    result_masks = merge_masks(match_indices, subview_masks)[order]
-    for mask in result_masks:
-        plt.imshow(get_mask_vis(mask).cpu().numpy())
-        plt.show()
-        plt.close()
-    raise
-    result_segments = masks_to_segments(result_masks)
-    visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
-    return result_masks
+    # del mask_embeddings
+    # match_indices, order = optimal_matching(adjacency_matrix)
+    # result_masks = merge_masks(match_indices, subview_masks)[order]
+    # torch.save(result_masks, "result_masks.pt")
+    # for mask in result_masks:
+    #     plt.imshow(get_mask_vis(mask).cpu().numpy())
+    #     plt.show()
+    #     plt.close()
+    # raise
+    # result_segments = masks_to_segments(result_masks)
+    # visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
+    # return result_masks
 
 
 if __name__ == "__main__":
@@ -235,7 +287,7 @@ if __name__ == "__main__":
     for i, (LF, _, _) in enumerate(dataset):
         if i == 0:
             continue
-        LF = LF[3:-3, 3:-3]
+        LF = LF[2:-2, 2:-2]
         segments = salads_LF_segmentation(
             mask_predictor,
             LF,
