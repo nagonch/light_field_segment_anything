@@ -55,6 +55,17 @@ def get_subview_masks(mask_predictor, LF):
 
 
 @torch.no_grad()
+def get_mask_disparities(subview_masks, disparity):
+    n, s, t = subview_masks.shape[:3]
+    result = torch.zeros((n,)).cuda()
+    for mask_i, mask in enumerate(subview_masks):
+        mask = mask[s // 2, t // 2]
+        disparities_i = disparity[mask]
+        result[mask_i] = disparities_i[~torch.isnan(disparities_i)].mean()
+    return result
+
+
+@torch.no_grad()
 def get_subview_embeddings(predictor_model, LF):
     "[s, t, 64, 64, 256] Get image embeddings for each LF subview"
     print("getting subview embeddings...", end="")
@@ -151,8 +162,11 @@ def merge_masks(match_indices, subview_masks):
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
-    disparity = get_LF_disparities(LF)
+    disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     subview_masks = torch.load("subview_masks.pt")
+    mask_disparities = get_mask_disparities(subview_masks, disparity)
+    print(mask_disparities.shape)
+    raise
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings, mask_centroids = get_mask_features(
         subview_masks, subview_embeddings
