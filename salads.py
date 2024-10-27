@@ -1,7 +1,7 @@
 from sam2_functions import get_auto_mask_predictor, generate_image_masks
 from data import HCIOldDataset
 import warnings
-from utils import visualize_segmentation_mask
+from utils import visualize_segmentation_mask, get_LF_disparities
 import torch
 from torchvision.transforms.functional import resize
 import numpy as np
@@ -93,7 +93,7 @@ def get_mask_features(subview_masks, subview_embeddings):
 
 
 @torch.no_grad()
-def get_sim_adjacency_matrix(subview_embeddings):
+def get_semantic_adjacency_matrix(subview_embeddings):
     """
     [n, s, t, n] Get mask cosine similarities matrix
     Logic: [mask_from, s, t, mask_to]
@@ -146,17 +146,18 @@ def merge_masks(match_indices, subview_masks):
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
+    disparity = get_LF_disparities(LF)
     subview_masks = torch.load("subview_masks.pt")
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings, mask_centroids = get_mask_features(
         subview_masks, subview_embeddings
     )
-    print(mask_centroids.shape)
-    raise
+    # print(mask_centroids.shape)
+    # raise
     del subview_embeddings
-    sim_adjacency_matrix = get_sim_adjacency_matrix(mask_embeddings)
+    semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
     del mask_embeddings
-    match_indices = optimal_matching(sim_adjacency_matrix)
+    match_indices = optimal_matching(semantic_adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
