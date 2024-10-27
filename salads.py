@@ -157,8 +157,6 @@ def optimal_matching(adjacency_matrix):
     adjacency_matrix = torch.clone(adjacency_matrix)
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
-    matching_certanties = torch.zeros((n, s_size, t_size))
-    certainty_threshold = torch.flip(torch.linspace(0.6, 0.95, n), dims=(0,))
     for mask_i in range(n):
         max_idx = torch.argmax(adjacency_matrix)
         # find best match globaly
@@ -166,24 +164,16 @@ def optimal_matching(adjacency_matrix):
             max_idx, adjacency_matrix.shape
         )
         result[n_from, s_best, t_best] = n_to
-        matching_certanties[n_from, s_best, t_best] = adjacency_matrix[
-            n_from, s_best, t_best, n_to
-        ]
         adjacency_matrix[n_from, s_best, t_best, :] = -torch.inf
         adjacency_matrix[:, s_best, t_best, n_to] = -torch.inf
         for n_subview in range(s_size * t_size - 2):
             max_idx = torch.argmax(adjacency_matrix[n_from])
             s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape[1:])
-            if adjacency_matrix[n_from, s, t, n_to] >= certainty_threshold[mask_i]:
-                result[n_from, s, t] = n_to
-                matching_certanties[n_from, s, t] = adjacency_matrix[n_from, s, t, n_to]
-            else:
-                result[n_from, s, t] = -1
+            result[n_from, s, t] = n_to
             adjacency_matrix[n_from, s, t, :] = -torch.inf
             adjacency_matrix[:, s, t, n_to] = -torch.inf
         adjacency_matrix[n_from, :, :, :] = -torch.inf
-    matching_certanties = matching_certanties.mean(dim=(1, 2))
-    return result, matching_certanties
+    return result
 
 
 def merge_masks(match_indices, subview_masks):
@@ -205,7 +195,8 @@ def merge_masks(match_indices, subview_masks):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
+    # subview_masks = get_subview_masks(mask_predictor, LF)
+    subview_masks = torch.load("subview_masks.pt")
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     mask_disparities = get_mask_disparities(subview_masks, disparity)
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
@@ -223,9 +214,13 @@ def salads_LF_segmentation(mask_predictor, LF):
     )
 
     del mask_embeddings
-    match_indices, match_certanties = optimal_matching(subview_masks, adjacency_matrix)
-    result_masks = merge_masks(adjacency_matrix, match_indices, subview_masks)
-    result_masks = result_masks[torch.argsort(match_certanties, descending=True)]
+    match_indices = optimal_matching(adjacency_matrix)
+    result_masks = merge_masks(match_indices, subview_masks)
+    for mask in result_masks:
+        plt.imshow(get_mask_vis(mask).cpu().numpy())
+        plt.show()
+        plt.close()
+    raise
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
     return result_masks
