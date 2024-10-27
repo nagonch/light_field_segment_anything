@@ -83,6 +83,13 @@ def visualize_segmentation_mask(
     return vis
 
 
+def get_mask_vis(mask):
+    s, t, u, v = mask.shape
+    mask = mask.permute(0, 2, 1, 3)
+    mask = mask.reshape(s * u, t * v)
+    return mask
+
+
 def visualize_segments(segments, filename):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)

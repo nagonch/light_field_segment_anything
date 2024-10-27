@@ -1,7 +1,7 @@
 from sam2_functions import get_auto_mask_predictor, generate_image_masks
 from data import HCIOldDataset
 import warnings
-from utils import visualize_segmentation_mask, get_LF_disparities
+from utils import visualize_segmentation_mask, get_LF_disparities, get_mask_vis
 import torch
 from torchvision.transforms.functional import resize
 import numpy as np
@@ -13,7 +13,7 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 0.7
+GEOM_WEIGHT = 1.0
 
 
 def sort_masks(masks):
@@ -153,22 +153,40 @@ def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
     return result
 
 
-def optimal_matching(adjacency_matrix):
+def best_matching(flat_adjac_matrix):
+    from_matches = []
+    to_matches = []
+    for _ in range(flat_adjac_matrix.shape[0]):
+        max_idx = torch.argmax(flat_adjac_matrix)
+        max_idx = torch.unravel_index(max_idx, flat_adjac_matrix.shape)
+        from_matches.append(max_idx[0])
+        to_matches.append(max_idx[1])
+        print(flat_adjac_matrix[max_idx])
+        flat_adjac_matrix[max_idx] = -torch.inf
+    return torch.stack(from_matches), torch.stack(to_matches)
+
+
+def optimal_matching(subview_masks, adjacency_matrix):
+    adjacency_matrix = torch.clone(adjacency_matrix)
     n, s_size, t_size = adjacency_matrix.shape[:3]
     result = torch.zeros((n, s_size, t_size), dtype=torch.int32).cuda()
-    for s in range(s_size):
-        for t in range(t_size):
-            if s == s_size // 2 and t == t_size // 2:
-                continue
-            adjacency_matrix_st = adjacency_matrix[:, s, t, :].cpu().numpy()
-            _, assignment_st = torch.tensor(
-                linear_sum_assignment(adjacency_matrix_st, maximize=True)
-            ).cuda()
-            result[:, s, t] = assignment_st
+    for _ in range(n):
+        max_idx = torch.argmax(adjacency_matrix)
+        n_from, s, t, n_to = torch.unravel_index(max_idx, adjacency_matrix.shape)
+        # print(adjacency_matrix[n_from, s, t, n_to], n_from, s, t, n_to)
+        # plt.imshow(subview_masks[n_from, s_size // 2, t_size // 2].cpu().numpy())
+        # plt.show()
+        # plt.close()
+        # plt.imshow(subview_masks[n_to, s, t].cpu().numpy())
+        # plt.show()
+        # plt.close()
+        result[n_from, s, t] = n_to
+        adjacency_matrix[n_from, s, t, :] = -torch.inf
+        adjacency_matrix[:, :, :, n_to] = -torch.inf
     return result
 
 
-def merge_masks(match_indices, subview_masks):
+def merge_masks(adjacency_matrix, match_indices, subview_masks):
     result = torch.zeros_like(subview_masks)
     n_masks, s_size, t_size = result.shape[:3]
     for mask_i in range(n_masks):
@@ -201,9 +219,15 @@ def salads_LF_segmentation(mask_predictor, LF):
         semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
         + geometric_adjacency_matrix * GEOM_WEIGHT
     )
+
     del mask_embeddings
-    match_indices = optimal_matching(adjacency_matrix)
-    result_masks = merge_masks(match_indices, subview_masks)
+    match_indices = optimal_matching(subview_masks, adjacency_matrix)
+    result_masks = merge_masks(adjacency_matrix, match_indices, subview_masks)
+    for mask in result_masks:
+        vis = get_mask_vis(mask)
+        plt.imshow(vis.cpu().numpy())
+        plt.show()
+        plt.close()
     result_segments = masks_to_segments(result_masks)
     visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
     return result_masks
