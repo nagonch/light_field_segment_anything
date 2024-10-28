@@ -2,6 +2,7 @@ from sam2_functions import (
     get_auto_mask_predictor,
     generate_image_masks,
     get_video_predictor,
+    get_sam_1_auto_mask_predictor,
 )
 from data import UrbanLFSynDataset, HCIOldDataset
 import warnings
@@ -69,7 +70,11 @@ def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
 def sam2_baseline_LF_segmentation_dataset(
     dataset, save_folder, continue_progress=False
 ):
-    mask_predictor = get_auto_mask_predictor()
+    mask_predictor = (
+        get_auto_mask_predictor()
+        if CONFIG["sam-version"] == 2
+        else get_sam_1_auto_mask_predictor
+    )
     video_predictor = get_video_predictor()
     time_path = f"{save_folder}/computation_times.pt"
     computation_times = []

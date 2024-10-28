@@ -195,7 +195,11 @@ def sam_fast_LF_segmentation_dataset(
     continue_progress=False,
     visualize=False,
 ):
-    mask_predictor = get_auto_mask_predictor()
+    mask_predictor = (
+        get_auto_mask_predictor()
+        if CONFIG["sam-version"] == 2
+        else get_sam_1_auto_mask_predictor
+    )
     time_path = f"{save_folder}/computation_times.pt"
     computation_times = []
     if continue_progress and os.path.exists(time_path):
