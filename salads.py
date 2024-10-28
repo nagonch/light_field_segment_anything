@@ -249,11 +249,8 @@ def salads_LF_segmentation_dataset(
             torch.tensor(computation_times),
             time_path,
         )
-        raise
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
+    dataset = UrbanLFSynDataset("UrbanLF_Syn/val")
     salads_LF_segmentation_dataset(dataset, "salads_test", visualize=True)
