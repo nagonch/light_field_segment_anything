@@ -9,12 +9,12 @@ import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from scipy.optimize import linear_sum_assignment
-from utils import masks_to_segments
+from utils import masks_to_segments, predict_mask_subview_position, masks_iou
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 0.0
-CERTAINTY_THRESH = 0.7
+GEOM_WEIGHT = 0.5
+CERTAINTY_THRESH = 0.8
 
 
 def sort_masks(masks):
@@ -138,24 +138,21 @@ def get_semantic_adjacency_matrix(mask_embeddings):
 
 
 @torch.no_grad()
-def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
-    n_masks, s_size, t_size = mask_centroids.shape[:3]
+def get_geometric_adjacency(LF, masks, disparity):
+    n_masks, s_size, t_size = masks.shape[:3]
     _, _, u_size, v_size = LF.shape[:4]
-    result = torch.zeros((n_masks, s_size, t_size, n_masks)).cuda()
+    result = torch.zeros((n_masks, s_size, t_size, n_masks), dtype=torch.float64).cuda()
     for mask_i in range(n_masks):
-        mask_disparity = mask_disparities[mask_i]
-        centroid_i = mask_centroids[mask_i, s_size // 2, t_size // 2]
+        mask_target = masks[mask_i, s_size // 2, t_size // 2]
         for s in range(s_size):
             for t in range(t_size):
                 if s == s_size // 2 and t == t_size // 2:
                     continue
-                centroids = mask_centroids[:, s, t]
-                st = torch.tensor([s - s_size // 2, t - t_size // 2]).float().cuda()
-                centroid_i_st = centroid_i + st * mask_disparity
-                distances = torch.norm(centroid_i_st - centroids, dim=1)
-                result[:, s, t] = distances
-    result = (result - result.min()) / (result.max() + 1e-9)
-    result = 1 - result
+                mask_shifted = predict_mask_subview_position(
+                    mask_target, disparity, s - s_size // 2, t - t_size // 2
+                )
+                ious = masks_iou(masks[:, s, t], mask_shifted)
+                result[mask_i, s, t, :] = ious
     return result
 
 
@@ -206,7 +203,7 @@ def merge_masks(match_indices, subview_masks):
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     # subview_masks = get_subview_masks(mask_predictor, LF)
-    subview_masks = torch.load("subview_masks.pt")
+    subview_masks = torch.load("subview_masks.pt").cuda()
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     mask_disparities = get_mask_disparities(subview_masks, disparity)
@@ -216,9 +213,7 @@ def salads_LF_segmentation(mask_predictor, LF):
     )
     del subview_embeddings
     semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
-    geometric_adjacency_matrix = get_geometric_adjacency(
-        LF, mask_centroids, mask_disparities
-    )
+    geometric_adjacency_matrix = get_geometric_adjacency(LF, subview_masks, disparity)
     adjacency_matrix = (
         semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
         + geometric_adjacency_matrix * GEOM_WEIGHT
@@ -228,7 +223,7 @@ def salads_LF_segmentation(mask_predictor, LF):
     match_indices, order = optimal_matching(adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)[order]
     torch.save(result_masks, "result_masks.pt")
-    result_segments = stack_segments(result_masks)
+    result_segments = stack_segments(result_masks.cpu().numpy())
     torch.save(result_segments, "result_segments.pth")
     visualize_segmentation_mask(result_segments)
     return result_masks
