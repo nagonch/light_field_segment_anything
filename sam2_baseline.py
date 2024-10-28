@@ -68,12 +68,15 @@ def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
 
 
 def sam2_baseline_LF_segmentation_dataset(
-    dataset, save_folder, continue_progress=False
+    dataset,
+    save_folder,
+    continue_progress=False,
+    visualize=False,
 ):
     mask_predictor = (
         get_auto_mask_predictor()
         if CONFIG["sam-version"] == 2
-        else get_sam_1_auto_mask_predictor
+        else get_sam_1_auto_mask_predictor()
     )
     video_predictor = get_video_predictor()
     time_path = f"{save_folder}/computation_times.pt"
@@ -95,6 +98,8 @@ def sam2_baseline_LF_segmentation_dataset(
         end_time = time()
         computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
+        if visualize:
+            visualize_segmentation_mask(result_segments.cpu().numpy(), LF)
         torch.save(result_masks, masks_path)
         torch.save(result_segments, segments_path)
         torch.save(
@@ -104,4 +109,7 @@ def sam2_baseline_LF_segmentation_dataset(
 
 
 if __name__ == "__main__":
-    pass
+    dataset = UrbanLFSynDataset(
+        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    )
+    sam2_baseline_LF_segmentation_dataset(dataset, "test_result", visualize=True)
