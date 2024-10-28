@@ -13,8 +13,8 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 0.3
-CERTAINTY_THRESH = 0.5
+GEOM_WEIGHT = 0.5
+CERTAINTY_THRESH = 0.6
 
 
 def sort_masks(masks):
@@ -27,6 +27,17 @@ def sort_masks(masks):
     return masks
 
 
+def stack_segments(segments):
+    s, t, u, v = segments[0].shape
+    segments_result = np.zeros((s, t, u, v)).astype(np.int32)
+    segment_num = 0
+    for segment in segments:
+        segments_result[segment] = segment_num + 1
+        segment_num += 1
+    segments = segments_result
+    return segments_result
+
+
 def get_subview_masks(mask_predictor, LF):
     "[N, s, t, u, v] Get automatic masks for each LF subview"
     s_size, t_size, u_size, v_size = LF.shape[:-1]
@@ -37,19 +48,9 @@ def get_subview_masks(mask_predictor, LF):
             print(f"getting masks for subview {s, t}...", end="")
             subview = LF[s, t]
             masks = generate_image_masks(mask_predictor, subview).bool().cuda()
-            plt.imshow(
-                masks_to_segments(masks[:, None, None, :, :])[0][0].cpu().numpy()
-            )
-            plt.show()
-            plt.close()
             masks = sort_masks(
                 masks,
             )
-            plt.imshow(
-                masks_to_segments(masks[:, None, None, :, :])[0][0].cpu().numpy()
-            )
-            plt.show()
-            plt.close()
             n_masks_min = (
                 min(n_masks_min, masks.shape[0]) if n_masks_min else masks.shape[0]
             )
@@ -208,38 +209,36 @@ def merge_masks(match_indices, subview_masks):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
-    torch.save(subview_masks, "subview_masks.pt")
-    # subview_masks = torch.load("subview_masks.pt").bool()
-    visualize_segmentation_mask(masks_to_segments(subview_masks).cpu().numpy())
-    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    # disparity = torch.tensor(get_LF_disparities(LF)).cuda()
-    # mask_disparities = get_mask_disparities(subview_masks, disparity)
-    # subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-    # mask_embeddings, mask_centroids = get_mask_features(
-    #     subview_masks, subview_embeddings
-    # )
-    # del subview_embeddings
-    # semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
-    # geometric_adjacency_matrix = get_geometric_adjacency(
-    #     LF, mask_centroids, mask_disparities
-    # )
-    # adjacency_matrix = (
-    #     semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
-    #     + geometric_adjacency_matrix * GEOM_WEIGHT
-    # )
+    # subview_masks = get_subview_masks(mask_predictor, LF)
+    # torch.save(subview_masks, "subview_masks.pt")
+    subview_masks = torch.load("subview_masks.pt").bool()
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    disparity = torch.tensor(get_LF_disparities(LF)).cuda()
+    mask_disparities = get_mask_disparities(subview_masks, disparity)
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    mask_embeddings, mask_centroids = get_mask_features(
+        subview_masks, subview_embeddings
+    )
+    del subview_embeddings
+    semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
+    geometric_adjacency_matrix = get_geometric_adjacency(
+        LF, mask_centroids, mask_disparities
+    )
+    adjacency_matrix = (
+        semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
+        + geometric_adjacency_matrix * GEOM_WEIGHT
+    )
 
-    # del mask_embeddingsresult_segments
-    # match_indices, order = optimal_matching(adjacency_matrix)
-    # result_masks = merge_masks(match_indices, subview_masks)[order]
-    # torch.save(result_masks, "result_masks.pt")
-    # # for mask in result_masks:
-    # #     plt.imshow(get_mask_vis(mask).cpu().numpy())
-    # #     plt.show()
-    # #     plt.close()
-    # result_segments = masks_to_segments(result_masks)
-    # torch.save(result_segments, "new_salad_0003.pth")
-    result_segments = torch.load("new_salad_0003.pth")
+    del mask_embeddings
+    match_indices, order = optimal_matching(adjacency_matrix)
+    result_masks = merge_masks(match_indices, subview_masks)[order]
+    torch.save(result_masks, "result_masks.pt")
+    # for mask in result_masks:
+    #     plt.imshow(get_mask_vis(mask).cpu().numpy())
+    #     plt.show()
+    #     plt.close()
+    result_segments = masks_to_segments(result_masks)
+    torch.save(result_segments, "new_salad_0003.pth")
     visualize_segmentation_mask(result_segments.cpu().numpy())
     raise
     return result_masks
