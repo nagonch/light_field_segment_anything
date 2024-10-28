@@ -1,2 +1,3 @@
-geom-weight: 0.5 # weight of geometric features in the graph
-thresh-tolerance: 0.1 # difference between iou and best iou to cutoff the match
+geom-weight: 0.3 # weight of geometric features in the graph
+thresh-tolerance: 1 # difference between iou and best iou to cutoff the match
+tmp-folder: /tmp/SALADS

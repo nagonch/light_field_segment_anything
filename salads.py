@@ -39,11 +39,10 @@ def stack_segments(segments):
     return segments_result
 
 
-def get_subview_masks(mask_predictor, LF):
+def segment_subviews(mask_predictor, LF):
     "[N, s, t, u, v] Get automatic masks for each LF subview"
-    s_size, t_size, u_size, v_size = LF.shape[:-1]
+    s_size, t_size, _, _ = LF.shape[:-1]
     n_masks_min = None
-    result_masks = []
     for s in range(s_size):
         for t in range(t_size):
             print(f"getting masks for subview {s, t}...", end="")
@@ -55,15 +54,22 @@ def get_subview_masks(mask_predictor, LF):
             n_masks_min = (
                 min(n_masks_min, masks.shape[0]) if n_masks_min else masks.shape[0]
             )
-            print(n_masks_min)
-            result_masks.append(((s, t), masks))
+            torch.save(masks, f'{CONFIG["tmp-folder"]}/{s}_{t}.pt')
             del masks
             print("done")
+    return n_masks_min
+
+
+def gather_masks(LF, n_masks_min):
+    s_size, t_size, u_size, v_size = LF.shape[:4]
     result = torch.zeros(
-        (n_masks_min, s_size, t_size, u_size, v_size), dtype=torch.bool
-    ).cuda()
-    for ind, masks in result_masks:
-        result[:, ind[0], ind[1]] = masks[:n_masks_min]
+        (n_masks_min, s_size, t_size, u_size, v_size), dtype=torch.bool, device="cuda"
+    )
+    for s in range(s_size):
+        for t in range(t_size):
+            result[:, s, t] = torch.load(f'{CONFIG["tmp-folder"]}/{s}_{t}.pt')[
+                :n_masks_min
+            ]
     return result
 
 
@@ -191,13 +197,14 @@ def merge_masks(match_indices, subview_masks):
     return result
 
 
-def salads_LF_segmentation(mask_predictor, LF):
+def salads_LF_segmentation(LF):
+    mask_predictor = get_sam_1_auto_mask_predictor()
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
-    # subview_masks = torch.load("subview_masks.pt").cuda()
+    n_masks_min = segment_subviews(mask_predictor, LF)
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+    del mask_predictor
+    subview_masks = gather_masks(LF, n_masks_min)
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
-    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     mask_embeddings = get_mask_features(subview_masks, subview_embeddings)
     del subview_embeddings
     semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
@@ -214,14 +221,12 @@ def salads_LF_segmentation(mask_predictor, LF):
 
 
 def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False):
-    mask_predictor = get_sam_1_auto_mask_predictor()
+    os.makedirs(CONFIG["tmp-folder"], exist_ok=True)
     time_path = f"{save_folder}/computation_times.pt"
     computation_times = []
     if continue_progress and os.path.exists(time_path):
         computation_times = torch.load(time_path).tolist()
     for i, (LF, _, _) in enumerate(dataset):
-        if i == 0:
-            continue
         masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
         segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
         if (
@@ -230,11 +235,11 @@ def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False
         ):
             continue
         start_time = time()
-        result_masks = salads_LF_segmentation(mask_predictor, LF[3:-3, 3:-3])
+        result_masks = salads_LF_segmentation(LF[3:-3, 3:-3])
         end_time = time()
         computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
-        # visualize_segmentation_mask(result_segments.cpu().numpy())
+        visualize_segmentation_mask(result_segments.cpu().numpy())
         torch.save(result_masks, masks_path)
         torch.save(result_segments, segments_path)
         torch.save(
