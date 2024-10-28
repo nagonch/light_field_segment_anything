@@ -4,7 +4,12 @@ from sam2_functions import (
 )
 from data import HCIOldDataset, UrbanLFSynDataset
 import warnings
-from utils import visualize_segmentation_mask, masks_iou, masks_to_segments
+from utils import (
+    visualize_segmentation_mask,
+    masks_iou,
+    masks_to_segments,
+    predict_mask_subview_position,
+)
 from time import time
 import torch
 import yaml
@@ -32,26 +37,6 @@ def get_mask_disparities(masks_central, disparities):
         disparities_i = disparities_i[~torch.any(disparities_i.isnan())]
         mask_disparities[i] = torch.median(disparities[mask_i]).item()
     return mask_disparities
-
-
-def predict_mask_subview_position(mask, disparities, s, t):
-    """
-    Use mask's disparity to predict its position in (s, t)
-    mask: torch.tensor [u, v] (torch.bool)
-    disparity: float
-    s, t: float
-    returns: torch.tensor [u, v] (torch.bool)
-    """
-    st = torch.tensor([s, t]).float().cuda()
-    uv_0 = torch.nonzero(mask)
-    disparities_uv = disparities[mask].reshape(-1)
-    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
-    u = uv[:, 0]
-    v = uv[:, 1]
-    uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
-    mask_result = torch.zeros_like(mask)
-    mask_result[uv[:, 0], uv[:, 1]] = 1
-    return mask_result
 
 
 def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
