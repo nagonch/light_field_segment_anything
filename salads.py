@@ -229,26 +229,30 @@ def salads_LF_segmentation_dataset(
     if continue_progress and os.path.exists(time_path):
         computation_times = torch.load(time_path).tolist()
     for i, (LF, _, _) in enumerate(dataset):
-        masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
-        segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
-        if (
-            all([os.path.exists(path) for path in [masks_path, segments_path]])
-            and continue_progress
-        ):
+        try:
+            masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
+            segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
+            if (
+                all([os.path.exists(path) for path in [masks_path, segments_path]])
+                and continue_progress
+            ):
+                continue
+            start_time = time()
+            result_masks = salads_LF_segmentation(LF)
+            end_time = time()
+            computation_times.append(end_time - start_time)
+            result_segments = masks_to_segments(result_masks)
+            if visualize:
+                visualize_segmentation_mask(result_segments.cpu().numpy())
+            torch.save(result_masks, masks_path)
+            torch.save(result_segments, segments_path)
+            torch.save(
+                torch.tensor(computation_times),
+                time_path,
+            )
+        except RuntimeError as e:
+            print(f"\n{i} ERROR: {e}")
             continue
-        start_time = time()
-        result_masks = salads_LF_segmentation(LF)
-        end_time = time()
-        computation_times.append(end_time - start_time)
-        result_segments = masks_to_segments(result_masks)
-        if visualize:
-            visualize_segmentation_mask(result_segments.cpu().numpy())
-        torch.save(result_masks, masks_path)
-        torch.save(result_segments, segments_path)
-        torch.save(
-            torch.tensor(computation_times),
-            time_path,
-        )
 
 
 if __name__ == "__main__":
