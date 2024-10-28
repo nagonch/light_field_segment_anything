@@ -1,5 +1,6 @@
 from sam2_functions import (
     get_auto_mask_predictor,
+    get_sam_1_auto_mask_predictor,
     generate_image_masks,
 )
 from data import HCIOldDataset, UrbanLFSynDataset
@@ -110,7 +111,6 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
     """
     s_size, t_size = LF.shape[:2]
     n = coarse_masks.shape[0]
-    mask_ious = torch.zeros((n, s_size, t_size), dtype=torch.float)
     for s in range(s_size):
         for t in range(t_size):
             if s == s_size // 2 and t == t_size // 2:
@@ -138,21 +138,10 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
                 ious = masks_iou(fine_segment_result, coarse_masks_st[segment_i])
                 if ious.max() > 0.5:
                     match_idx = torch.argmax(ious)
-                    mask_ious[segment_i, s, t] = ious[match_idx]
                     coarse_masks[segment_i, s, t] = fine_segment_result[
                         match_idx
                     ]  # replacing coarse masks with fine ones
-    return coarse_masks, mask_ious
-
-
-def refine_image_sam(
-    LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
-):
-    print("get_fine_matching...", end="")
-    refined_matched_masks, mask_ious = get_refined_matching(
-        LF, image_predictor, coarse_matched_masks, point_prompts, box_prompts
-    )
-    return refined_matched_masks, mask_ious
+    return coarse_masks
 
 
 def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
@@ -187,16 +176,12 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     del mask_disparities
     del masks_central
     point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
-    refined_matched_masks, mask_ious = refine_image_sam(
-        LF,
-        mask_predictor.predictor,
-        coarse_matched_masks,
-        point_prompts,
-        box_prompts,
+    refined_matched_masks = get_refined_matching(
+        LF, mask_predictor.predictor, coarse_matched_masks, point_prompts, box_prompts
     )
     del mask_predictor
     del coarse_matched_masks
-    print(f"done, shape: {refined_matched_masks.shape}, mean_iou: {mask_ious.mean()}")
+    print(f"done, shape: {refined_matched_masks.shape}")
     if visualize:
         print("visualizing segments...")
         refined_segments = masks_to_segments(refined_matched_masks)
