@@ -7,8 +7,12 @@ import pandas as pd
 import warnings
 from tqdm.auto import tqdm
 from sam2_functions import SAM2_CONFIG
-from sam2_baseline import sam2_baseline_LF_segmentation_dataset
-from ours import sam_fast_LF_segmentation_dataset
+from sam2_baseline import (
+    sam2_baseline_LF_segmentation_dataset,
+    CONFIG as BASELINE_CONFIG,
+)
+from salads import salads_LF_segmentation_dataset, CONFIG as SALADS_CONFIG
+from ours import sam_fast_LF_segmentation_dataset, CONFIG as OURS_CONFIG
 
 warnings.filterwarnings("ignore")
 with open("experiment_config.yaml") as f:
@@ -54,7 +58,21 @@ def get_method():
     name_to_method = {
         "baseline": sam2_baseline_LF_segmentation_dataset,
         "ours": sam_fast_LF_segmentation_dataset,
+        "salads": salads_LF_segmentation_dataset,
     }
+    config_to_method = {
+        "baseline": BASELINE_CONFIG,
+        "ours": OURS_CONFIG,
+        "salads": SALADS_CONFIG,
+    }
+    with open(
+        f"experiments/{EXP_CONFIG['exp-name']}/method_config.yaml", "w"
+    ) as outfile:
+        yaml.dump(
+            config_to_method.get(EXP_CONFIG["method-name"]),
+            outfile,
+            default_flow_style=False,
+        )
     method = name_to_method.get(EXP_CONFIG["method-name"])
     if not method:
         raise ValueError(f"{EXP_CONFIG['method-name']} is not a valid method name")
