@@ -1,2 +1,2 @@
 geom-weight: 0.5 # weight of geometric features in the graph
-thresh-tolerance: 0.05 # difference between iou and best iou to cutoff the match
+thresh-tolerance: 0.1 # difference between iou and best iou to cutoff the match

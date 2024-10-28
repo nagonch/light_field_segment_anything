@@ -2,6 +2,7 @@ from sam2.build_sam import build_sam2_video_predictor, build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator, SAM2ImagePredictor
 import torch
 import yaml
+from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 
 with open("sam2_config.yaml") as f:
     SAM2_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
@@ -32,6 +33,25 @@ def get_auto_mask_predictor(sam2_img_model=None):
         pred_iou_thresh=SAM2_CONFIG["pred-iou-thresh"],
         min_mask_region_area=SAM2_CONFIG["min-mask-area"],
         box_nms_thresh=SAM2_CONFIG["box-nms-thresh"],
+        min_mask_area=SAM2_CONFIG["min-mask-area"],
+        stability_score_offset=SAM2_CONFIG["stability-score-offset"],
+        stability_score_thresh=SAM2_CONFIG["stability-score-thresh"],
+    )
+    return predictor
+
+
+def get_sam_1_auto_mask_predictor():
+    sam = sam_model_registry["vit_h"](checkpoint="SAM_model/sam_vit_h.pth")
+    sam = sam.to(device="cuda")
+    predictor = SamAutomaticMaskGenerator(
+        sam,
+        points_per_side=SAM2_CONFIG["points-per-side"],
+        points_per_batch=SAM2_CONFIG["points-per-batch"],
+        pred_iou_thresh=SAM2_CONFIG["pred-iou-thresh"],
+        stability_score_thresh=SAM2_CONFIG["stability-score-thresh"],
+        stability_score_offset=SAM2_CONFIG["stability-score-offset"],
+        box_nms_thresh=SAM2_CONFIG["box-nms-thresh"],
+        min_mask_region_area=SAM2_CONFIG["min-mask-area"],
     )
     return predictor
 
