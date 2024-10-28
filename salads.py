@@ -13,8 +13,8 @@ from utils import masks_to_segments
 
 warnings.filterwarnings("ignore")
 
-GEOM_WEIGHT = 0.5
-CERTAINTY_THRESH = 0.6
+GEOM_WEIGHT = 0.0
+CERTAINTY_THRESH = 0.7
 
 
 def sort_masks(masks):
@@ -237,9 +237,9 @@ def salads_LF_segmentation(mask_predictor, LF):
     #     plt.imshow(get_mask_vis(mask).cpu().numpy())
     #     plt.show()
     #     plt.close()
-    result_segments = masks_to_segments(result_masks)
+    result_segments = stack_segments(result_masks)
     torch.save(result_segments, "new_salad_0003.pth")
-    visualize_segmentation_mask(result_segments.cpu().numpy())
+    visualize_segmentation_mask(result_segments)
     raise
     return result_masks
 
