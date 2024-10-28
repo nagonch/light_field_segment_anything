@@ -235,7 +235,7 @@ def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False
         ):
             continue
         start_time = time()
-        result_masks = salads_LF_segmentation(LF[3:-3, 3:-3])
+        result_masks = salads_LF_segmentation(LF)
         end_time = time()
         computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
