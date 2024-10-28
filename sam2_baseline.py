@@ -91,6 +91,7 @@ def sam2_baseline_LF_segmentation_dataset(
             and continue_progress
         ):
             continue
+        print(f"segmenting lf {i}")
         start_time = time()
         result_masks = sam2_baseline_LF_segmentation(
             LF, mask_predictor, video_predictor

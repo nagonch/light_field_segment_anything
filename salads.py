@@ -237,6 +237,7 @@ def salads_LF_segmentation_dataset(
                 and continue_progress
             ):
                 continue
+            print(f"segmenting lf {i}")
             start_time = time()
             result_masks = salads_LF_segmentation(LF)
             end_time = time()
