@@ -1,5 +1,5 @@
-from sam2_functions import get_auto_mask_predictor, generate_image_masks
-from data import HCIOldDataset
+from sam2_functions import get_sam_1_auto_mask_predictor, generate_image_masks
+from data import HCIOldDataset, UrbanLFSynDataset
 import warnings
 from utils import visualize_segmentation_mask, get_LF_disparities
 import torch
@@ -7,12 +7,14 @@ from torchvision.transforms.functional import resize
 import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from utils import predict_mask_subview_position, masks_iou
+from utils import predict_mask_subview_position, masks_iou, masks_to_segments
 import yaml
+from time import time
+import os
 
 
 warnings.filterwarnings("ignore")
-with open("experiment_config.yaml") as f:
+with open("salads_config.yaml") as f:
     CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
@@ -53,13 +55,13 @@ def get_subview_masks(mask_predictor, LF):
             n_masks_min = (
                 min(n_masks_min, masks.shape[0]) if n_masks_min else masks.shape[0]
             )
-
+            print(n_masks_min)
             result_masks.append(((s, t), masks))
             del masks
             print("done")
     result = torch.zeros(
         (n_masks_min, s_size, t_size, u_size, v_size), dtype=torch.bool
-    )
+    ).cuda()
     for ind, masks in result_masks:
         result[:, ind[0], ind[1]] = masks[:n_masks_min]
     return result
@@ -208,20 +210,42 @@ def salads_LF_segmentation(mask_predictor, LF):
     del mask_embeddings
     match_indices, order = optimal_matching(adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)[order]
-    result_segments = stack_segments(result_masks.cpu().numpy())
-    visualize_segmentation_mask(result_segments)
     return result_masks
 
 
-if __name__ == "__main__":
-    mask_predictor = get_auto_mask_predictor()
-    image_predictor = mask_predictor.predictor
-    dataset = HCIOldDataset()
+def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False):
+    mask_predictor = get_sam_1_auto_mask_predictor()
+    time_path = f"{save_folder}/computation_times.pt"
+    computation_times = []
+    if continue_progress and os.path.exists(time_path):
+        computation_times = torch.load(time_path).tolist()
     for i, (LF, _, _) in enumerate(dataset):
-        if i != 3:
+        if i == 0:
             continue
-        segments = salads_LF_segmentation(
-            mask_predictor,
-            LF,
+        masks_path = f"{save_folder}/{str(i).zfill(4)}_masks.pt"
+        segments_path = f"{save_folder}/{str(i).zfill(4)}_segments.pt"
+        if (
+            all([os.path.exists(path) for path in [masks_path, segments_path]])
+            and continue_progress
+        ):
+            continue
+        start_time = time()
+        result_masks = salads_LF_segmentation(mask_predictor, LF[3:-3, 3:-3])
+        end_time = time()
+        computation_times.append(end_time - start_time)
+        result_segments = masks_to_segments(result_masks)
+        # visualize_segmentation_mask(result_segments.cpu().numpy())
+        torch.save(result_masks, masks_path)
+        torch.save(result_segments, segments_path)
+        torch.save(
+            torch.tensor(computation_times),
+            time_path,
         )
-        visualize_segmentation_mask(segments.cpu().numpy(), LF)
+        raise
+
+
+if __name__ == "__main__":
+    dataset = UrbanLFSynDataset(
+        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
+    )
+    salads_LF_segmentation_dataset(dataset, "salads_test")
