@@ -2,26 +2,71 @@ import numpy as np
 import imgviz
 from PIL import Image
 import yaml
-import cv2
 import torch
 from scipy.io import savemat
 from plenpy.lightfields import LightField
 import logging
-from k_means import k_means
-from typing import Tuple
 from scipy import ndimage
 from skimage.segmentation import mark_boundaries
+import os
+from plenpy.lightfields import LightField
 
 logging.getLogger("plenpy").setLevel(logging.WARNING)
 
-with open("sam_config.yaml") as f:
-    SAM_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
-with open("merger_config.yaml") as f:
-    MERGER_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+def masks_iou(predicted_masks, target_mask):
+    target_mask = target_mask[None]
+    intersection = (predicted_masks & target_mask).sum(dim=(1, 2))
+    union = (predicted_masks | target_mask).sum(dim=(1, 2))
+    ious = intersection / (union + 1e-9)
+    return ious
 
-with open("experiment_config.yaml") as f:
-    EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
+
+def predict_mask_subview_position(mask, disparities, s, t):
+    """
+    Use mask's disparity to predict its position in (s, t)
+    mask: torch.tensor [u, v] (torch.bool)
+    disparity: float
+    s, t: float
+    returns: torch.tensor [u, v] (torch.bool)
+    """
+    st = torch.tensor([s, t]).float().cuda()
+    uv_0 = torch.nonzero(mask)
+    disparities_uv = disparities[mask].reshape(-1)
+    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
+    u = uv[:, 0]
+    v = uv[:, 1]
+    uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
+    mask_result = torch.zeros_like(mask)
+    mask_result[uv[:, 0], uv[:, 1]] = 1
+    return mask_result
+
+
+def masks_to_segments(masks):
+    """
+    Convert [n, s, t, u, v] masks to [s, t, u v] segments
+    The bigger the segment, the smaller the ID
+    TODO: move to utils
+    masks: torch.tensor [n, s, t, u, v] (torch.bool)
+    returns: torch.tensor [s, t, u, v] (torch.long)
+    """
+    s, t, u, v = masks.shape[1:]
+    areas = masks[:, s // 2, t // 2].cpu().sum(dim=(1, 2))
+    masks_result = torch.zeros((s, t, u, v), dtype=torch.long).cuda()
+    for i, mask_i in enumerate(torch.argsort(areas, descending=True)):
+        masks_result[masks[mask_i]] = i  # smaller segments on top of bigger ones
+    return masks_result
+
+
+def get_LF_disparities(LF):
+    """
+    Get disparities for subview [s//2, t//2]
+    LF: np.array [s, t, u, v, 3] (np.uint8)
+    returns: np.array [u, v] (np.float32)
+    """
+    LF = LightField(LF)
+    disp, _ = LF.get_disparity()
+    return disp
 
 
 def visualize_segmentation_mask(
@@ -58,6 +103,13 @@ def visualize_segmentation_mask(
     return vis
 
 
+def get_mask_vis(mask):
+    s, t, u, v = mask.shape
+    mask = mask.permute(0, 2, 1, 3)
+    mask = mask.reshape(s * u, t * v)
+    return mask
+
+
 def visualize_segments(segments, filename):
     s, t, u, v = segments.shape
     segments = np.transpose(segments, (0, 2, 1, 3)).reshape(s * u, t * v)
@@ -85,118 +137,6 @@ def remap_labels(labels):
     return labels_remapped
 
 
-def stack_segments(segments):
-    s, t, u, v = segments[0].shape
-    segments_result = np.zeros((s, t, u, v)).astype(np.int32)
-    segment_num = 0
-    for segment in segments:
-        segments_result[segment] = segment_num + 1
-        segment_num += 1
-    segments = segments_result
-    return segments_result
-
-
-def unravel_index(
-    indices: torch.LongTensor,
-    shape: Tuple[int, ...],
-) -> torch.LongTensor:
-    r"""Converts flat indices into unraveled coordinates in a target shape.
-
-    This is a `torch` implementation of `numpy.unravel_index`.
-
-    Args:
-        indices: A tensor of (flat) indices, (*, N).
-        shape: The targeted shape, (D,).
-
-    Returns:
-        The unraveled coordinates, (*, N, D).
-    """
-
-    coord = []
-
-    for dim in reversed(shape):
-        coord.append(indices % dim)
-        indices = indices // dim
-
-    coord = torch.stack(coord[::-1], dim=-1).cuda()
-
-    return coord
-
-
-def resize_LF(LF, new_u, new_v):
-    s, t, u, v, _ = LF.shape
-    results = []
-    for s_i in range(s):
-        for t_i in range(t):
-            subview = Image.fromarray(LF[s_i, t_i]).resize((new_v, new_u))
-            subview = np.array(subview)
-            results.append(subview)
-    return np.stack(results).reshape(s, t, new_u, new_v, 3)
-
-
-def save_LF_image(LF_image, filename="LF.jpeg", ij=None, resize_to=None):
-    if isinstance(LF_image, torch.Tensor):
-        LF_image = LF_image.detach().cpu().numpy()
-    LF_image = (LF_image - LF_image.min()) / (LF_image.max() - LF_image.min())
-    LF_image = (LF_image * 255).astype(np.uint8)
-    S, T, U, V, _ = LF_image.shape
-    if ij is None:
-        LF = LF_image.transpose(0, 2, 1, 3, 4).reshape(S * U, V * T, 3)
-    else:
-        i, j = ij
-        LF = LF_image[i][j]
-    im = np.array(LF)
-    if resize_to is not None:
-        resize_to = max(LF.shape[2], resize_to)
-        if ij is None:
-            resize_to *= S
-        im = cv2.resize(
-            im,
-            (
-                resize_to,
-                resize_to,
-            ),
-            interpolation=cv2.INTER_NEAREST,
-        )
-    im = Image.fromarray(im)
-    im.save(filename)
-
-
-def get_subview_indices(s_size, t_size, remove_central=False):
-    rows = torch.arange(s_size).unsqueeze(1).repeat(1, t_size).flatten()
-    cols = torch.arange(t_size).repeat(s_size)
-
-    indices = torch.stack((rows, cols), dim=-1).cuda()
-    if remove_central:
-        indices = torch.stack(
-            [
-                element
-                for element in indices
-                if (element != torch.tensor([s_size // 2, t_size // 2]).cuda()).any()
-            ]
-        )
-    return indices
-
-
-def get_process_to_segments_dict(
-    embeddings_dict, n_processes=MERGER_CONFIG["n-parallel-processes"]
-):
-    segment_nums = torch.Tensor(list(embeddings_dict.keys())).cuda().long()
-    classes = (
-        torch.stack([torch.tensor(emb[1]) for emb in embeddings_dict.values()])
-        .cuda()
-        .long()
-    )
-    embeddings = torch.stack([emb[0] for emb in embeddings_dict.values()]).cuda()
-    _, cluster_nums, _ = k_means(
-        embeddings.T, classes, k=n_processes, dist="cosine", init="kmeanspp"
-    )
-    result_mapping = {}
-    for cluster_num in torch.unique(cluster_nums):
-        corresponding_segments = segment_nums[torch.where(cluster_nums == cluster_num)]
-        result_mapping[cluster_num.item()] = corresponding_segments
-    return result_mapping
-
 def LF_lawnmower(LF):
     result_LF = []
     rows, cols, u, v, _ = LF.shape
@@ -210,16 +150,36 @@ def LF_lawnmower(LF):
     result_LF = np.stack(result_LF)
     return result_LF
 
-def vis_to_gif(vis, filename):
-    lawnmower = LF_lawnmower(vis)
-    # print(lawnmower.shape)
-    # raise
-    imgs = [Image.fromarray(img).convert('RGBA', dither=None, palette='WEB') for img in lawnmower]
-    imgs[0].save(filename.split('.')[0] + '.png')
-    imgs[0].save(filename, save_all=True, append_images=imgs[1:], duration=50, loop=0)
+
+def lawnmower_indices(s, t, reverse=False):
+    indices = []
+    for i in range(s):
+        if i % 2 == 0:
+            for j in range(t):
+                indices.append([i, j])
+        else:
+            for j in range(t - 1, -1, -1):
+                indices.append([i, j])
+    if reverse:
+        indices = list(reversed(indices))
+    return indices
+
+
+def save_LF_lawnmower(LF, folder, prev_frame_last_subview=None, reverse=False):
+    os.makedirs(folder, exist_ok=True)
+    shape = LF.shape
+    s, t = shape[:2]
+    indices = lawnmower_indices(s, t, reverse)
+    frame_n = 0
+    if prev_frame_last_subview is not None:
+        Image.fromarray(prev_frame_last_subview).save(
+            f"{folder}/{str(frame_n).zfill(4)}.jpeg"
+        )
+        frame_n += 1
+    for i, j in indices:
+        Image.fromarray(LF[i, j]).save(f"{folder}/{str(frame_n).zfill(4)}.jpeg")
+        frame_n += 1
 
 
 if __name__ == "__main__":
     pass
-    # segments = torch.load("merged.pt").detach().cpu().numpy()
-    # visualize_segmentation_mask(segments, "segments.mat")

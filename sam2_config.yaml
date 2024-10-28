@@ -1,0 +1,9 @@
+sam-checkpoint: sam2_checkpoints/sam2.1_hiera_tiny.pt
+sam-config: sam2.1_hiera_t.yaml
+min-mask-area: 0
+points-per-side: 64
+points-per-batch: 64
+pred-iou-thresh: 0.88
+stability-score-offset: 1.0
+stability-score-thresh: 0.95
+box-nms-thresh: 0.7

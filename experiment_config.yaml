@@ -1,3 +1,4 @@
-exp-name: HCI_TEST # experiment identifier
-dataset-name: HCI # dataset to use. options: [HCI, URBAN_REAL, URBAN_SYN, MMSPG]
+exp-name: TEST_EXP # experiment identifier
+dataset-name: URBAN_SYN # dataset to use. options: [HCI, URBAN_REAL, URBAN_SYN, MMSPG]
+method-name: ours # [ours, baseline, salads]
 continue-progress: True # continue from the file saved in in 'exp-name' folder
