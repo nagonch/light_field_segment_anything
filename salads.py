@@ -193,6 +193,7 @@ def merge_masks(match_indices, subview_masks):
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
     subview_masks = get_subview_masks(mask_predictor, LF)
+    # subview_masks = torch.load("subview_masks.pt").cuda()
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
@@ -208,7 +209,8 @@ def salads_LF_segmentation(mask_predictor, LF):
     del mask_embeddings
     match_indices, order = optimal_matching(adjacency_matrix)
     result_masks = merge_masks(match_indices, subview_masks)[order]
-    # result_segments = stack_segments(result_masks.cpu().numpy())
+    result_segments = stack_segments(result_masks.cpu().numpy())
+    visualize_segmentation_mask(result_segments)
     return result_masks
 
 
