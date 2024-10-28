@@ -141,25 +141,21 @@ def get_semantic_adjacency_matrix(mask_embeddings):
 def get_geometric_adjacency(LF, mask_centroids, mask_disparities):
     n_masks, s_size, t_size = mask_centroids.shape[:3]
     _, _, u_size, v_size = LF.shape[:4]
-    max_point_dist = torch.norm(torch.tensor([u_size, v_size]).float())
     result = torch.zeros((n_masks, s_size, t_size, n_masks)).cuda()
     for mask_i in range(n_masks):
         mask_disparity = mask_disparities[mask_i]
-        centroids_i = mask_centroids[mask_i, s_size // 2, t_size // 2]
+        centroid_i = mask_centroids[mask_i, s_size // 2, t_size // 2]
         for s in range(s_size):
             for t in range(t_size):
                 if s == s_size // 2 and t == t_size // 2:
                     continue
                 centroids = mask_centroids[:, s, t]
-                st = torch.tensor([s_size // 2 - s, t_size // 2 - t]).float().cuda()
-                centroids_projected = centroids + mask_disparity * st
-                distances = (
-                    torch.norm(centroids_projected - centroids_i, dim=1)
-                    / max_point_dist
-                )
-                distances = torch.clip(distances, min=0, max=1)
-                adjacencies = 1 - distances
-                result[:, s, t] = adjacencies
+                st = torch.tensor([s - s_size // 2, t - t_size // 2]).float().cuda()
+                centroid_i_st = centroid_i + st * mask_disparity
+                distances = torch.norm(centroid_i_st - centroids, dim=1)
+                result[:, s, t] = distances
+    result = (result - result.min()) / (result.max() + 1e-9)
+    result = 1 - result
     return result
 
 
@@ -209,7 +205,8 @@ def merge_masks(match_indices, subview_masks):
 
 def salads_LF_segmentation(mask_predictor, LF):
     "LF segmentation using greedy matching"
-    subview_masks = get_subview_masks(mask_predictor, LF)
+    # subview_masks = get_subview_masks(mask_predictor, LF)
+    subview_masks = torch.load("subview_masks.pt")
     subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     disparity = torch.tensor(get_LF_disparities(LF)).cuda()
     mask_disparities = get_mask_disparities(subview_masks, disparity)
