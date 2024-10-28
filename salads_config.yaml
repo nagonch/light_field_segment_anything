@@ -1,11 +1,2 @@
-min-similarity: 0.75
-lambda-reg: 0.3
-k-cutoff: 4
-
-verbose: False
-top-n-segments-visualization: 10
-n-parallel-processes: 1
-k-means-reg-parameter: 0.01
-k-means-n-iterations: 100
-min-central-segments-for-parallel: 50
-min-avg-labels-gt-merger: 100
+geom-weight: 0.5 # weight of geometric features in the graph
+thresh-tolerance: 0.05 # difference between iou and best iou to cutoff the match

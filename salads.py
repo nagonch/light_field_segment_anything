@@ -1,20 +1,19 @@
 from sam2_functions import get_auto_mask_predictor, generate_image_masks
 from data import HCIOldDataset
 import warnings
-from utils import visualize_segmentation_mask, get_LF_disparities, get_mask_vis
+from utils import visualize_segmentation_mask, get_LF_disparities
 import torch
 from torchvision.transforms.functional import resize
 import numpy as np
-import os
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from scipy.optimize import linear_sum_assignment
-from utils import masks_to_segments, predict_mask_subview_position, masks_iou
+from utils import predict_mask_subview_position, masks_iou
+import yaml
+
 
 warnings.filterwarnings("ignore")
-
-GEOM_WEIGHT = 0.5
-THRESH_TOLERANCE = 0.05
+with open("experiment_config.yaml") as f:
+    CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
 def sort_masks(masks):
@@ -163,7 +162,7 @@ def optimal_matching(adjacency_matrix):
             result[n_from, s, t] = (
                 n_to
                 if adjacency_matrix[n_from, s, t, n_to]
-                >= (cert_threshold - THRESH_TOLERANCE)
+                >= (cert_threshold - CONFIG["thresh-tolerance"])
                 else -1
             )
             adjacency_matrix[n_from, s, t, :] = -torch.inf
@@ -202,8 +201,8 @@ def salads_LF_segmentation(mask_predictor, LF):
     semantic_adjacency_matrix = get_semantic_adjacency_matrix(mask_embeddings)
     geometric_adjacency_matrix = get_geometric_adjacency(LF, subview_masks, disparity)
     adjacency_matrix = (
-        semantic_adjacency_matrix * (1 - GEOM_WEIGHT)
-        + geometric_adjacency_matrix * GEOM_WEIGHT
+        semantic_adjacency_matrix * (1 - CONFIG["geom-weight"])
+        + geometric_adjacency_matrix * CONFIG["geom-weight"]
     )
 
     del mask_embeddings
