@@ -220,7 +220,9 @@ def salads_LF_segmentation(LF):
     return result_masks
 
 
-def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False):
+def salads_LF_segmentation_dataset(
+    dataset, save_folder, continue_progress=False, visualize=False
+):
     os.makedirs(CONFIG["tmp-folder"], exist_ok=True)
     time_path = f"{save_folder}/computation_times.pt"
     computation_times = []
@@ -239,7 +241,8 @@ def salads_LF_segmentation_dataset(dataset, save_folder, continue_progress=False
         end_time = time()
         computation_times.append(end_time - start_time)
         result_segments = masks_to_segments(result_masks)
-        visualize_segmentation_mask(result_segments.cpu().numpy())
+        if visualize:
+            visualize_segmentation_mask(result_segments.cpu().numpy())
         torch.save(result_masks, masks_path)
         torch.save(result_segments, segments_path)
         torch.save(
@@ -253,4 +256,4 @@ if __name__ == "__main__":
     dataset = UrbanLFSynDataset(
         "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
     )
-    salads_LF_segmentation_dataset(dataset, "salads_test")
+    salads_LF_segmentation_dataset(dataset, "salads_test", visualize=True)
