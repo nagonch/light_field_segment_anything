@@ -65,6 +65,22 @@ def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
     return result
 
 
+@torch.no_grad()
+def get_subview_embeddings(predictor_model, LF):
+    "[s, t, 64, 64, 256] Get image embeddings for each LF subview"
+    print("getting subview embeddings...", end="")
+    s_size, t_size, _, _ = LF.shape[:-1]
+    results = []
+    for s in range(s_size):
+        for t in range(t_size):
+            predictor_model.set_image(LF[s, t])
+            embedding = predictor_model.get_image_embedding()
+            results.append(embedding[0].permute(1, 2, 0))
+    results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
+    print("done")
+    return results
+
+
 def get_prompts_for_masks(coarse_masks):
     """
     Calculate prompts from coarse masks
@@ -149,6 +165,7 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
 
     print("generate_image_masks...", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
+    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     print(f"done, shape: {masks_central.shape}")
 
     print("get_LF_disparities...", end="")
@@ -233,7 +250,5 @@ def sam_fast_LF_segmentation_dataset(
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
+    dataset = UrbanLFSynDataset("UrbanLF_Syn/val")
     sam_fast_LF_segmentation_dataset(dataset, "test_result", visualize=True)
