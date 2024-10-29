@@ -92,11 +92,15 @@ def calculate_metrics(dataset):
     ):
         idx_padded = str(idx).zfill(4)
         _, labels, disparity = dataset[idx]
+        mask_file = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_masks.pt"
+        segment_file = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_segments.pt"
+        if not (os.path.exists(mask_file) and os.path.exists(segment_file)):
+            continue
         mask_predictions = torch.load(
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_masks.pt"
+            segment_file
         )
         segment_predictions = torch.load(
-            f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_segments.pt"
+            segment_file
         )
         metrics_dict = {}
         is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
