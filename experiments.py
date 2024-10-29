@@ -97,7 +97,7 @@ def calculate_metrics(dataset):
         if not (os.path.exists(mask_file) and os.path.exists(segment_file)):
             continue
         mask_predictions = torch.load(
-            segment_file
+            mask_file
         )
         segment_predictions = torch.load(
             segment_file
