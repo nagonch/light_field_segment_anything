@@ -2,6 +2,6 @@ files-folder: LF_sam_image_seg
 lf-subviews-folder: /tmp/LF
 tracking-batch-size: 5
 iou-thresh: 0.5
-sam-version: 2
+sam-version: 1
 use-semantic: True
 semantic-sim-thresh: 0.7
