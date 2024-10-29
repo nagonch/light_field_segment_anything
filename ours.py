@@ -17,6 +17,8 @@ import yaml
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+from torchvision.transforms.functional import resize
+import torch.nn.functional as F
 from utils import get_LF_disparities
 
 warnings.filterwarnings("ignore")
@@ -79,6 +81,35 @@ def get_subview_embeddings(predictor_model, LF):
     results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
     print("done")
     return results
+
+
+@torch.no_grad()
+def refine_coarse_masks_semantic(
+    subview_embeddings, coarse_masks, sim_threshold=CONFIG["semantic-sim-thresh"]
+):
+    n_masks, s_size, t_size, u_size, v_size = coarse_masks.shape
+    for mask_i in range(n_masks):
+        mask = coarse_masks[mask_i, s_size // 2, t_size // 2]
+        embedding = subview_embeddings[s_size // 2, t_size // 2]
+        embedding = resize(embedding.permute(2, 0, 1), (u_size, v_size))
+        mask_embedding = embedding[:, (mask == 1)].mean(axis=1)
+        for s in range(s_size):
+            for t in range(t_size):
+                if s == s_size // 2 and t == t_size // 2:
+                    continue
+                mask_st = coarse_masks[mask_i, s, t]
+                embeddings_st = subview_embeddings[s, t]
+                embeddings_st = resize(embeddings_st.permute(2, 0, 1), (u_size, v_size))
+                embeddings_st = embeddings_st[:, mask_st]
+                similarities = F.cosine_similarity(
+                    embeddings_st.T, mask_embedding[:, None].T
+                )
+                similarities = similarities > sim_threshold
+                coarse_masks[mask_i, s, t][mask_st == 1] = similarities
+                del similarities
+                del embeddings_st
+                del mask_st
+    return coarse_masks
 
 
 def get_prompts_for_masks(coarse_masks):
@@ -183,6 +214,9 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     print("get_coarse_matching...", end="")
     coarse_matched_masks = get_coarse_matching(
         LF, masks_central, mask_disparities, disparities
+    )
+    coarse_matched_masks = refine_coarse_masks_semantic(
+        subview_embeddings, coarse_matched_masks
     )
     del disparities
     if visualize:
