@@ -13,9 +13,15 @@ from sam2_baseline import (
 )
 from salads import salads_LF_segmentation_dataset, CONFIG as SALADS_CONFIG
 from ours import sam_fast_LF_segmentation_dataset, CONFIG as OURS_CONFIG
+import argparse
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("filename", type=str)
+args = parser.parse_args()
 
 warnings.filterwarnings("ignore")
-with open("experiment_config.yaml") as f:
+with open(args.filename) as f:
     EXP_CONFIG = yaml.load(f, Loader=yaml.FullLoader)
 
 
