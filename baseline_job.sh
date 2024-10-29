@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N LF_SAM2
+#PBS -N LF_SAM2_baseline
 #PBS -P io92
 #PBS -q gpuvolta
 #PBS -l walltime=10:30:00
