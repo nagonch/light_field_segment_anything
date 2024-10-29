@@ -42,6 +42,22 @@ def get_mask_disparities(masks_central, disparities):
     return mask_disparities
 
 
+@torch.no_grad()
+def get_subview_embeddings(predictor_model, LF):
+    "[s, t, 64, 64, 256] Get image embeddings for each LF subview"
+    print("getting subview embeddings...", end="")
+    s_size, t_size, _, _ = LF.shape[:-1]
+    results = []
+    for s in range(s_size):
+        for t in range(t_size):
+            predictor_model.set_image(LF[s, t])
+            embedding = predictor_model.get_image_embedding()
+            results.append(embedding[0].permute(1, 2, 0))
+    results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
+    print("done")
+    return results
+
+
 def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
     """
     Predict subview masks using disparities
@@ -65,22 +81,6 @@ def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
                 result_st == 1, result[:, s, t], torch.zeros_like(result[:, s, t])
             )  # deal with occlusion
     return result
-
-
-@torch.no_grad()
-def get_subview_embeddings(predictor_model, LF):
-    "[s, t, 64, 64, 256] Get image embeddings for each LF subview"
-    print("getting subview embeddings...", end="")
-    s_size, t_size, _, _ = LF.shape[:-1]
-    results = []
-    for s in range(s_size):
-        for t in range(t_size):
-            predictor_model.set_image(LF[s, t])
-            embedding = predictor_model.get_image_embedding()
-            results.append(embedding[0].permute(1, 2, 0))
-    results = torch.stack(results).reshape(s_size, t_size, 64, 64, 256).cuda()
-    print("done")
-    return results
 
 
 @torch.no_grad()
@@ -196,7 +196,6 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
 
     print("generate_image_masks...", end="")
     masks_central = generate_image_masks(mask_predictor, LF[s_central, t_central])
-    subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
     print(f"done, shape: {masks_central.shape}")
 
     print("get_LF_disparities...", end="")
@@ -215,9 +214,11 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     coarse_matched_masks = get_coarse_matching(
         LF, masks_central, mask_disparities, disparities
     )
-    coarse_matched_masks = refine_coarse_masks_semantic(
-        subview_embeddings, coarse_matched_masks
-    )
+    if CONFIG["use-semantic"]:
+        subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+        coarse_matched_masks = refine_coarse_masks_semantic(
+            subview_embeddings, coarse_matched_masks
+        )
     del disparities
     if visualize:
         print("visualizing coarse segments...")
