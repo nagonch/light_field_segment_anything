@@ -62,6 +62,7 @@ def track_masks(LF, start_masks, video_predictor):
 
 def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
     start_masks = generate_image_masks(mask_predictor, LF[0, 0])
+    print('start masks shape: ', start_masks.shape)
     save_LF_lawnmower(LF, CONFIG["lf-subview-folder"])
     result = track_masks(LF, start_masks, video_predictor)
     return result
@@ -107,6 +108,8 @@ def sam2_baseline_LF_segmentation_dataset(
             torch.tensor(computation_times),
             time_path,
         )
+        del result_masks
+        del result_segments
 
 
 if __name__ == "__main__":
