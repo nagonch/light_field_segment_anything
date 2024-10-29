@@ -39,7 +39,7 @@ def prepare_exp():
             raise FileExistsError(
                 f"experiments/{exp_name} exists. Continue progress or delete"
             )
-    filenames = ["sam_config.yaml", "experiment_config.yaml"]
+    filenames = ["sam_config.yaml", args.filename]
     configs = [SAM2_CONFIG, EXP_CONFIG]
     for config, filename in zip(configs, filenames):
         with open(f"experiments/{exp_name}/{filename}", "w") as outfile:
