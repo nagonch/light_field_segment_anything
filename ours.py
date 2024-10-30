@@ -106,6 +106,9 @@ def refine_coarse_masks_semantic(
                 similarities = F.cosine_similarity(
                     embeddings_st.T, mask_embedding[:, None].T
                 )
+                similarities = (
+                    similarities * (similarities > CONFIG["sim-thresh"]).float()
+                )
                 coarse_masks[mask_i, s, t][mask_st == 1] = similarities.to(
                     torch.float16
                 )
