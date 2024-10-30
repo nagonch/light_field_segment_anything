@@ -99,18 +99,22 @@ def calculate_metrics(dataset):
         mask_predictions = torch.load(
             mask_file
         )
-        segment_predictions = torch.load(
-            segment_file
-        )
         metrics_dict = {}
         is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
         if not is_real:
             consistensy_metrics = ConsistencyMetrics(mask_predictions, disparity)
             metrics_dict.update(consistensy_metrics.get_metrics_dict())
+        del mask_predictions
+        del consistensy_metrics
+        segment_predictions = torch.load(
+            segment_file
+        )
         accuracy_metrics = AccuracyMetrics(
             segment_predictions, labels, only_central_subview=is_real
         )
         metrics_dict.update(accuracy_metrics.get_metrics_dict())
+        del segment_predictions
+        del accuracy_metrics
         metrics_dataframe.append(metrics_dict)
     metrics_dataframe = pd.DataFrame(metrics_dataframe)
     metrics_dataframe["computational_time"] = (
@@ -133,10 +137,10 @@ if __name__ == "__main__":
     prepare_exp()
     dataset = get_datset()
     method = get_method()
-    method(
-        dataset,
-        f"experiments/{EXP_CONFIG['exp-name']}",
-        continue_progress=EXP_CONFIG["continue-progress"],
-    )
+    # method(
+    #     dataset,
+    #     f"experiments/{EXP_CONFIG['exp-name']}",
+    #     continue_progress=EXP_CONFIG["continue-progress"],
+    # )
     if not EXP_CONFIG["dataset-name"] == "MMSPG":
         calculate_metrics(dataset)
