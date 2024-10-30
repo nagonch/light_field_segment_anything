@@ -226,7 +226,6 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
 
     print("get_mask_disparities...", end="")
     mask_disparities = get_mask_disparities(masks_central, disparities)
-
     mask_depth_order = torch.argsort(mask_disparities)
     masks_central = masks_central[mask_depth_order]
     mask_disparities = mask_disparities[mask_depth_order]
@@ -236,6 +235,10 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     coarse_matched_masks = get_coarse_matching(
         LF, masks_central, mask_disparities, disparities
     )
+    if visualize:
+        print("visualizing segments...")
+        coarse_segments = masks_to_segments(coarse_matched_masks)
+        visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
@@ -253,10 +256,10 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     refined_matched_masks = get_refined_matching(
         LF, mask_predictor.predictor, coarse_matched_masks, point_prompts, box_prompts
     )
+    print(f"done, shape: {refined_matched_masks.shape}")
     del mask_predictor
     del coarse_matched_masks
     refined_matched_masks = filter_final_masks(refined_matched_masks)
-    print(f"done, shape: {refined_matched_masks.shape}")
     if visualize:
         print("visualizing segments...")
         refined_segments = masks_to_segments(refined_matched_masks)
