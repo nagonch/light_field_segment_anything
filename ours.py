@@ -204,6 +204,15 @@ def get_refined_matching(LF, image_predictor, coarse_masks, point_prompts, box_p
     return coarse_masks
 
 
+def filter_final_masks(masks, relative_area_min=CONFIG["relative-min-area"]):
+    result = []
+    _, _, _, u, v = masks.shape
+    for mask in masks:
+        if mask.sum(dim=(2, 3)).float().mean() / float(u * v) >= relative_area_min:
+            result.append(mask)
+    return torch.stack(result)
+
+
 def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     s_central, t_central = LF.shape[0] // 2, LF.shape[1] // 2
 
@@ -246,6 +255,7 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     )
     del mask_predictor
     del coarse_matched_masks
+    refined_matched_masks = filter_final_masks(refined_matched_masks)
     print(f"done, shape: {refined_matched_masks.shape}")
     if visualize:
         print("visualizing segments...")

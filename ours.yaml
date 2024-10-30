@@ -1,3 +1,4 @@
 iou-thresh: 0.5
 sam-version: 2
 use-semantic: True
+relative-min-area: 0.001
