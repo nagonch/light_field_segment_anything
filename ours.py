@@ -88,6 +88,7 @@ def refine_coarse_masks_semantic(
     subview_embeddings, coarse_masks, sim_threshold=CONFIG["semantic-sim-thresh"]
 ):
     n_masks, s_size, t_size, u_size, v_size = coarse_masks.shape
+    coarse_masks = coarse_masks.to(torch.float16)
     for mask_i in range(n_masks):
         mask = coarse_masks[mask_i, s_size // 2, t_size // 2]
         embedding = subview_embeddings[s_size // 2, t_size // 2]
@@ -100,12 +101,13 @@ def refine_coarse_masks_semantic(
                 mask_st = coarse_masks[mask_i, s, t]
                 embeddings_st = subview_embeddings[s, t]
                 embeddings_st = resize(embeddings_st.permute(2, 0, 1), (u_size, v_size))
-                embeddings_st = embeddings_st[:, mask_st]
+                embeddings_st = embeddings_st[:, mask_st == 1]
                 similarities = F.cosine_similarity(
                     embeddings_st.T, mask_embedding[:, None].T
                 )
-                similarities = similarities > sim_threshold
-                coarse_masks[mask_i, s, t][mask_st == 1] = similarities
+                coarse_masks[mask_i, s, t][mask_st == 1] = similarities.to(
+                    torch.float16
+                )
                 del similarities
                 del embeddings_st
                 del mask_st
@@ -138,7 +140,17 @@ def get_prompts_for_masks(coarse_masks):
                         point_prompts_i[:, 1].max(),
                     ]
                 ).cuda()
-                point_prompts_i_centroid = point_prompts_i.float().mean(axis=0)
+                if CONFIG["use-semantic"]:
+                    point_prompts_i_centroid = (
+                        (
+                            point_prompts_i.float()
+                            * mask[point_prompts_i[:, 1], point_prompts_i[:, 0]][None].T
+                        )
+                        .mean(axis=0)
+                        .float()
+                    )
+                else:
+                    point_prompts_i_centroid = point_prompts_i.float().mean(axis=0)
                 distances = torch.norm(
                     point_prompts_i - point_prompts_i_centroid, dim=1
                 )
@@ -214,20 +226,20 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     coarse_matched_masks = get_coarse_matching(
         LF, masks_central, mask_disparities, disparities
     )
-    if CONFIG["use-semantic"]:
-        subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
-        coarse_matched_masks = refine_coarse_masks_semantic(
-            subview_embeddings, coarse_matched_masks
-        )
-    del disparities
-    if visualize:
-        print("visualizing coarse segments...")
-        coarse_matched_segments = masks_to_segments(coarse_matched_masks)
-        visualize_segmentation_mask(coarse_matched_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
-    point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
+    del disparities
+    if CONFIG["use-semantic"]:
+        subview_embeddings = get_subview_embeddings(mask_predictor.predictor, LF)
+        weighted_coarse_masks = refine_coarse_masks_semantic(
+            subview_embeddings, coarse_matched_masks
+        )
+        point_prompts, box_prompts = get_prompts_for_masks(weighted_coarse_masks)
+        del weighted_coarse_masks
+    else:
+        point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
+    print("get_coarse_matching...", end="")
     refined_matched_masks = get_refined_matching(
         LF, mask_predictor.predictor, coarse_matched_masks, point_prompts, box_prompts
     )
