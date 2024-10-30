@@ -240,7 +240,7 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
         del weighted_coarse_masks
     else:
         point_prompts, box_prompts = get_prompts_for_masks(coarse_matched_masks)
-    print("get_coarse_matching...", end="")
+    print("get_fine_matching...", end="")
     refined_matched_masks = get_refined_matching(
         LF, mask_predictor.predictor, coarse_matched_masks, point_prompts, box_prompts
     )
