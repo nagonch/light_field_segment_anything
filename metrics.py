@@ -158,18 +158,11 @@ class AccuracyMetrics:
 
     def get_metrics_dict(self):
         achievable_accuracy, _ = self.achievable_accuracy()
-        boundary_recall, _ = self.boundary_recall()
         coverage = self.coverage()
-        mean_superpixel_size, superpixel_to_gt_segment_ratio = self.size_metrics()
-        compactness = self.compactness()
         undersegmentation_error = self.undersegmentation_error()
         result = {
             "achievable_accuracy": achievable_accuracy,
-            "boundary_recall": boundary_recall,
             "coverage": coverage,
-            "mean_superpixel_size": mean_superpixel_size,
-            "superpixel_to_gt_segment_ratio": superpixel_to_gt_segment_ratio,
-            "compactness": compactness,
             "undersegmentation_error": undersegmentation_error,
         }
         return result
