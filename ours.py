@@ -76,10 +76,6 @@ def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
                 result[i][s][t] = predict_mask_subview_position(
                     mask, disparities, s - s_size // 2, t - t_size // 2
                 )
-            result_st = torch.cumsum(result[:, s, t], dim=0)
-            result[:, s, t] = torch.where(
-                result_st == 1, result[:, s, t], torch.zeros_like(result[:, s, t])
-            )  # deal with occlusion
     return result
 
 
@@ -256,11 +252,10 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     print(f"done, shape: {refined_matched_masks.shape}")
     del mask_predictor
     del coarse_matched_masks
-    refined_matched_masks = filter_final_masks(refined_matched_masks)
     if visualize:
         print("visualizing segments...")
         refined_segments = masks_to_segments(refined_matched_masks)
-        visualize_segmentation_mask(refined_segments.cpu().numpy(), LF)
+        visualize_segmentation_mask(refined_segments.cpu().numpy())
     return refined_matched_masks
 
 
