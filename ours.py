@@ -85,7 +85,8 @@ def get_coarse_matching(LF, masks_central, mask_disparities, disparities):
 
 @torch.no_grad()
 def refine_coarse_masks_semantic(
-    subview_embeddings, coarse_masks, sim_threshold=CONFIG["semantic-sim-thresh"]
+    subview_embeddings,
+    coarse_masks,
 ):
     n_masks, s_size, t_size, u_size, v_size = coarse_masks.shape
     coarse_masks = coarse_masks.to(torch.float16)

@@ -3,5 +3,4 @@ lf-subviews-folder: /tmp/LF
 tracking-batch-size: 5
 iou-thresh: 0.5
 sam-version: 2
-use-semantic: True
-semantic-sim-thresh: 0.7
+use-semantic: False
