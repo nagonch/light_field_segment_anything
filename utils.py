@@ -33,7 +33,7 @@ def predict_mask_subview_position(mask, disparities, s, t):
     st = torch.tensor([s, t]).float().cuda()
     uv_0 = torch.nonzero(mask)
     disparities_uv = disparities[mask].reshape(-1)
-    uv = (uv_0 - disparities_uv.unsqueeze(1) * st).long()
+    uv = (uv_0 - disparities_uv.mean() * st).long()
     u = uv[:, 0]
     v = uv[:, 1]
     uv = uv[(u >= 0) & (v >= 0) & (u < mask.shape[0]) & (v < mask.shape[1])]
@@ -65,7 +65,7 @@ def get_LF_disparities(LF):
     returns: np.array [u, v] (np.float32)
     """
     LF = LightField(LF)
-    disp, _ = LF.get_disparity()
+    disp, _ = LF.get_disparity(vmin=-10, vmax=10)
     return disp
 
 
