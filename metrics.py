@@ -68,11 +68,6 @@ class ConsistencyMetrics:
                     coords = torch.nonzero(mask[s, t])
                     centroid = coords.float().mean(axis=0)
                     values_i.append(torch.norm(centroid - centroid_orig))
-                    print(
-                        masks_iou(
-                            mask[s, t][None], mask[s_size // 2, t_size // 2]
-                        ).shape
-                    )
                     ious_i.append(
                         masks_iou(mask[s, t][None], mask[s_size // 2, t_size // 2])[0]
                     )
