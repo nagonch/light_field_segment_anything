@@ -12,7 +12,7 @@ class ConsistencyMetrics:
         s_size, t_size = gt_disparity.shape[:2]
         predictions = predicted_masks  # [n, s, t, u, v]
         disparity = torch.tensor(gt_disparity.copy()).cuda()
-        self.masks_projected = torch.zeros_like(predictions).cuda()
+        self.masks_projected = torch.zeros_like(predictions, dtype=torch.bool).cuda()
         for i, prediction in enumerate(predictions):
             for s in range(s_size):
                 for t in range(t_size):
@@ -30,7 +30,7 @@ class ConsistencyMetrics:
                         & (v < prediction_st.shape[1])
                     ]
                     mask_projected = torch.zeros_like(prediction_st)
-                    mask_projected[uv[:, 0], uv[:, 1]] = 1
+                    mask_projected[uv[:, 0], uv[:, 1]] = True
                     self.masks_projected[i, s, t] = mask_projected
 
     def labels_per_pixel(self):
@@ -39,11 +39,11 @@ class ConsistencyMetrics:
         View-consistent 4D light field superpixel segmentation.
         In Proceedings of the IEEE/CVF International Conference on Computer Vision (pp. 7811-7819).
         """
-        n_labels_at_pixel = self.masks_projected.sum(axis=0).float()
+        n_labels_at_pixel = self.masks_projected.sum(axis=0)
         n_labels_at_pixel = n_labels_at_pixel[
             n_labels_at_pixel > 0
         ]  # remove unsegmetned pixels
-        return n_labels_at_pixel.mean().item()
+        return n_labels_at_pixel.float().mean().item()
 
     def self_similarity(self):
         """
@@ -65,6 +65,8 @@ class ConsistencyMetrics:
                     coords = torch.nonzero(mask[s, t])
                     centroid = coords.float().mean(axis=0)
                     values_i.append(torch.norm(centroid - centroid_orig))
+            if len(values_i) == 0:
+                continue
             values_i = torch.stack(values_i)
             values_i = values_i[~torch.isnan(values_i)]
             if values_i.shape[0] > 0:
