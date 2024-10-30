@@ -98,7 +98,12 @@ def sam2_baseline_LF_segmentation_dataset(
             LF, mask_predictor, video_predictor
         )
         end_time = time()
-        computation_times.append(end_time - start_time)
+        computation_times.append(
+            (end_time - start_time)
+            / float(
+                result_masks.shape[0] * result_masks.shape[1] * result_masks.shape[2]
+            )
+        )
         result_segments = masks_to_segments(result_masks)
         if visualize:
             visualize_segmentation_mask(result_segments.cpu().numpy(), LF)

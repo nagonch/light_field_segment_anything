@@ -294,7 +294,12 @@ def sam_fast_LF_segmentation_dataset(
             visualize=visualize,
         )
         end_time = time()
-        computation_times.append(end_time - start_time)
+        computation_times.append(
+            (end_time - start_time)
+            / float(
+                result_masks.shape[0] * result_masks.shape[1] * result_masks.shape[2]
+            )
+        )
         result_segments = masks_to_segments(result_masks)
         torch.save(result_masks, masks_path)
         torch.save(result_segments, segments_path)
