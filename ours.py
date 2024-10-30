@@ -142,14 +142,11 @@ def get_prompts_for_masks(coarse_masks):
                     ]
                 ).cuda()
                 if CONFIG["use-semantic"]:
+                    weights = mask[point_prompts_i[:, 1], point_prompts_i[:, 0]].float()
                     point_prompts_i_centroid = (
-                        (
-                            point_prompts_i.float()
-                            * mask[point_prompts_i[:, 1], point_prompts_i[:, 0]][None].T
-                        )
-                        .mean(axis=0)
-                        .float()
-                    )
+                        point_prompts_i.float().T @ weights[:, None]
+                    ) / weights.sum()
+                    point_prompts_i_centroid = point_prompts_i_centroid[:, 0]
                 else:
                     point_prompts_i_centroid = point_prompts_i.float().mean(axis=0)
                 distances = torch.norm(
@@ -244,6 +241,7 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
         weighted_coarse_masks = refine_coarse_masks_semantic(
             subview_embeddings, coarse_matched_masks
         )
+        del subview_embeddings
         point_prompts, box_prompts = get_prompts_for_masks(weighted_coarse_masks)
         del weighted_coarse_masks
     else:
