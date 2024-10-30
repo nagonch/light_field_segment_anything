@@ -140,79 +140,8 @@ class AccuracyMetrics:
         )  # label 0 is considered "unsegmented region" outside of the coverage for our method
         return result, predictions_modified
 
-    def boundary_recall(self):
-        """
-        P. Neubert, P. Protzel.
-        Superpixel benchmark and comparison.
-        Forum Bildverarbeitung, 2012.
-        """
-        true_positives = 0
-        totals = 0
-        visualization = torch.zeros_like(self.predictions)
-        for s in range(self.gt_labels.shape[0]):
-            for t in range(self.gt_labels.shape[1]):
-                gradient_x_gt, gradient_y_gt = torch.gradient(
-                    self.gt_labels[s, t].float()
-                )
-                edges_gt = (torch.sqrt(gradient_x_gt**2 + gradient_y_gt**2) > 0).long()
-                gradient_x, gradient_y = torch.gradient(self.predictions[s, t].float())
-                edges_pred = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-                kernel = torch.ones((1, 1, 5, 5)).cuda()
-                d_map = F.conv2d(
-                    F.pad(edges_pred, (2, 2, 2, 2), value=0)[None][None].float(),
-                    kernel.float(),
-                )
-                d_map = (d_map > 0).long()[0, 0]
-                result_values = d_map[edges_gt == 1]
-                visualization[s, t] = 2 * d_map + (edges_gt == 1).long()
-                true_positives += result_values.sum().item()
-                totals += result_values.shape[0]
-        return true_positives / totals, visualization
-
     def coverage(self):
         return (self.predictions >= 1).float().mean().item()
-
-    def size_metrics(self, eps=1e-9):
-        s, t, u, v = self.predictions.shape
-        superpixel_sizes = []
-        gt_segment_sizes = []
-        for label in torch.unique(self.predictions)[1:]:
-            mask = self.predictions == label
-            gt_labels = self.gt_labels[mask]
-            gt_label = torch.mode(gt_labels).values.long()
-            gt_mask = self.gt_labels == gt_label
-            mask_size = mask.sum() / (s * t)
-            gt_mask_size = gt_mask.sum() / (s * t)
-            superpixel_sizes.append(mask_size)
-            gt_segment_sizes.append(gt_mask_size)
-        superpixel_sizes = torch.tensor(superpixel_sizes).cuda().float()
-        gt_segment_sizes = torch.tensor(gt_segment_sizes).cuda().float()
-        mean_superpixel_size = superpixel_sizes.mean().item()
-        superpixel_to_gt_segment_ratio = (
-            (superpixel_sizes / (gt_segment_sizes + eps)).mean().item()
-        )
-        return mean_superpixel_size, superpixel_to_gt_segment_ratio
-
-    def compactness(self, eps=1e-9):
-        """
-        A. Schick, M. Fischer, R. Stiefelhagen.
-        Measuring and evaluating the compactness of superpixels.
-        International Conference on Pattern Recognition, 2012, pp. 930-934.
-        """
-        result = 0
-        for label in torch.unique(self.predictions)[1:]:
-            mask = self.predictions == label
-            s, t, u, v = mask.shape
-            for s_i in range(s):
-                for t_i in range(t):
-                    area = mask[s_i, t_i].sum()
-                    gradient_x, gradient_y = torch.gradient(mask[s_i, t_i].float())
-                    edges = (torch.sqrt(gradient_x**2 + gradient_y**2) > 0).long()
-                    perim = edges.sum()
-                    Q_s = 4 * torch.pi * area / (perim**2 + eps)
-                    result += Q_s * area / (u * v)
-        result = result / (s * t)
-        return result.item()
 
     def undersegmentation_error(self):
         """
@@ -254,9 +183,6 @@ class AccuracyMetrics:
 if __name__ == "__main__":
     data = UrbanLFSynDataset("UrbanLF_Syn/val")
     LF, labels, disp = data[0]
-    ours = torch.load("experiments/ours/0000_masks.pt")
-    metrics = ConsistencyMetrics(ours[:, 3:-3, 3:-3], disp[3:-3, 3:-3])
-    # visualize_segmentation_mask(
-    #     masks_to_segments(metrics.masks_projected).cpu().numpy()
-    # )
-    print(metrics.self_similarity())
+    ours = torch.load("experiments/ours/0000_segments.pt")
+    metrics = AccuracyMetrics(ours[3:-3, 3:-3], labels[3:-3, 3:-3])
+    print(metrics.boundary_recall())
