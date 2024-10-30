@@ -235,10 +235,6 @@ def sam_fast_LF_segmentation(mask_predictor, LF, visualize=False):
     coarse_matched_masks = get_coarse_matching(
         LF, masks_central, mask_disparities, disparities
     )
-    if visualize:
-        print("visualizing segments...")
-        coarse_segments = masks_to_segments(coarse_matched_masks)
-        visualize_segmentation_mask(coarse_segments.cpu().numpy(), LF)
     print(f"done, shape: {coarse_matched_masks.shape}")
     del mask_disparities
     del masks_central
