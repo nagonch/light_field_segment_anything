@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from utils import masks_iou
 
 
 class ConsistencyMetrics:
@@ -52,12 +53,14 @@ class ConsistencyMetrics:
         Proceedings of the IEEE conference on computer vision and pattern recognition. 2017.
         """
         values = []
+        ious = []
         s_size, t_size = self.masks_projected.shape[1:3]
         for i, mask in enumerate(self.masks_projected):
             centroid_orig = (
                 torch.nonzero(mask[s_size // 2, t_size // 2]).float().mean(axis=0)
             )
             values_i = []
+            ious_i = []
             for s in range(s_size):
                 for t in range(t_size):
                     if s == s_size // 2 and t == t_size // 2 or mask[s, t].sum() == 0:
@@ -65,21 +68,35 @@ class ConsistencyMetrics:
                     coords = torch.nonzero(mask[s, t])
                     centroid = coords.float().mean(axis=0)
                     values_i.append(torch.norm(centroid - centroid_orig))
-            if len(values_i) == 0:
+                    print(
+                        masks_iou(
+                            mask[s, t][None], mask[s_size // 2, t_size // 2]
+                        ).shape
+                    )
+                    ious_i.append(
+                        masks_iou(mask[s, t][None], mask[s_size // 2, t_size // 2])[0]
+                    )
+            if len(values_i) == 0 or len(ious_i) == 0:
                 continue
             values_i = torch.stack(values_i)
             values_i = values_i[~torch.isnan(values_i)]
             if values_i.shape[0] > 0:
                 values.append(values_i.mean())
+            ious_i = torch.stack(ious_i)
+            ious_i = ious_i[~torch.isnan(ious_i)]
+            if ious_i.shape[0] > 0:
+                ious.append(ious_i.mean())
+        ious = torch.stack(ious)
         values = torch.stack(values)
-        return values.mean().item()
+        return values.mean().item(), ious.mean().item()
 
     def get_metrics_dict(self):
         labels_per_pixel = self.labels_per_pixel()
-        self_similarity = self.self_similarity()
+        self_similarity, self_iou = self.self_similarity()
         result = {
             "labels_per_pixel": labels_per_pixel,
             "self_similarity": self_similarity,
+            "self_iou": self_iou,
         }
         return result
 
@@ -235,4 +252,11 @@ class AccuracyMetrics:
 
 
 if __name__ == "__main__":
-    pass
+    data = UrbanLFSynDataset("UrbanLF_Syn/val")
+    LF, labels, disp = data[0]
+    ours = torch.load("experiments/ours/0000_masks.pt")
+    metrics = ConsistencyMetrics(ours[:, 3:-3, 3:-3], disp[3:-3, 3:-3])
+    # visualize_segmentation_mask(
+    #     masks_to_segments(metrics.masks_projected).cpu().numpy()
+    # )
+    print(metrics.self_similarity())
