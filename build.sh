@@ -6,6 +6,3 @@ mv sam2_repo/sam2 sam2
 mv sam2_repo/checkpoints sam2_checkpoints
 yes | rm -r sam2_repo
 cp sam2/configs/sam2.1/* sam2
-
-mkdir SAM_model
-wget "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth" -O SAM_model/sam_vit_h.pth
