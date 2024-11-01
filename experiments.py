@@ -11,7 +11,6 @@ from sam2_baseline import (
     sam2_baseline_LF_segmentation_dataset,
     CONFIG as BASELINE_CONFIG,
 )
-from salads import salads_LF_segmentation_dataset, CONFIG as SALADS_CONFIG
 from ours import sam_fast_LF_segmentation_dataset, CONFIG as OURS_CONFIG
 import argparse
 
@@ -64,12 +63,10 @@ def get_method():
     name_to_method = {
         "baseline": sam2_baseline_LF_segmentation_dataset,
         "ours": sam_fast_LF_segmentation_dataset,
-        "salads": salads_LF_segmentation_dataset,
     }
     config_to_method = {
         "baseline": BASELINE_CONFIG,
         "ours": OURS_CONFIG,
-        "salads": SALADS_CONFIG,
     }
     with open(
         f"experiments/{EXP_CONFIG['exp-name']}/method_config.yaml", "w"
@@ -96,9 +93,7 @@ def calculate_metrics(dataset):
         segment_file = f"experiments/{EXP_CONFIG['exp-name']}/{idx_padded}_segments.pt"
         if not (os.path.exists(mask_file) and os.path.exists(segment_file)):
             continue
-        mask_predictions = torch.load(
-            mask_file
-        )
+        mask_predictions = torch.load(mask_file)
         metrics_dict = {}
         is_real = EXP_CONFIG["dataset-name"] == "URBAN_REAL"
         if not is_real:
@@ -106,9 +101,7 @@ def calculate_metrics(dataset):
             metrics_dict.update(consistensy_metrics.get_metrics_dict())
         del mask_predictions
         del consistensy_metrics
-        segment_predictions = torch.load(
-            segment_file
-        )
+        segment_predictions = torch.load(segment_file)
         accuracy_metrics = AccuracyMetrics(
             segment_predictions, labels, only_central_subview=is_real
         )
