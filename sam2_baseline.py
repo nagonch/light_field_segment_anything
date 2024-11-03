@@ -62,7 +62,7 @@ def track_masks(LF, start_masks, video_predictor):
 
 def sam2_baseline_LF_segmentation(LF, mask_predictor, video_predictor):
     start_masks = generate_image_masks(mask_predictor, LF[0, 0])
-    print('start masks shape: ', start_masks.shape)
+    print("start masks shape: ", start_masks.shape)
     save_LF_lawnmower(LF, CONFIG["lf-subview-folder"])
     result = track_masks(LF, start_masks, video_predictor)
     return result
@@ -118,7 +118,5 @@ def sam2_baseline_LF_segmentation_dataset(
 
 
 if __name__ == "__main__":
-    dataset = UrbanLFSynDataset(
-        "/home/nagonch/repos/LF_object_tracking/UrbanLF_Syn/val"
-    )
+    dataset = UrbanLFSynDataset("UrbanLF_Syn/val")
     sam2_baseline_LF_segmentation_dataset(dataset, "test_result", visualize=True)
