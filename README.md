@@ -1,3 +1,14 @@
+# Light Field Segment Anything
+Segment Anything in Light Fields for Real-Time Applications via Constrained Prompting
+
+Project Page: [roboticimaging.org/Projects/LFSAM/](https://roboticimaging.org/Projects/LFSAM/)
+
+Authors: [Nikolai Goncharov](https://www.linkedin.com/in/nikolai-goncharov-2931a31a5/), [Donald G. Dansereau](https://www.linkedin.com/in/donald-dansereau/);
+
+Published at: Proceedings of the Winter Conference on Applications of Computer Vision (WACV) Workshops, 2025, pp. 1490-1496
+
+Paper [link](https://openaccess.thecvf.com/content/WACV2025W/WACI/html/Goncharov_Segment_Anything_in_Light_Fields_for_Real-Time_Applications_via_Constrained_WACVW_2025_paper.html)
+
 # Installing
 
 Create **virtual environment** and run the **requirements**:
